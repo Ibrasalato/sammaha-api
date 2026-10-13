@@ -27,7 +27,7 @@ jobs:
       - run: dotnet restore Sammha.slnx
       - run: dotnet build Sammha.slnx -c Release --no-restore
       - name: Test (real SQL Server)
-        run: dotnet test Sammha.slnx -c Release --no-build --logger "console;verbosity=normal"
+        run: dotnet test Sammha.slnx -c Release --no-build --logger "console;verbosity=normal" --logger GitHubActions
         env:
           SAMMHA_TEST_DB: "Server=localhost,1433;User Id=sa;Password=Sammha_dev_2026!;TrustServerCertificate=True"
       - name: Publish for IIS
