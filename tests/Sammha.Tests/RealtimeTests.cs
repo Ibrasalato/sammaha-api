@@ -114,6 +114,6 @@ public class RealtimeTests(TestApp app) : IClassFixture<TestApp>
     {
         await using var c = Hub();
         await c.StartAsync();
-        await Assert.ThrowsAsync<HubException>(() => c.InvokeAsync("Join", "not-a-guid"));
+        await Assert.ThrowsAsync<Microsoft.AspNetCore.SignalR.HubException>(() => c.InvokeAsync("Join", "not-a-guid"));
     }
 }
