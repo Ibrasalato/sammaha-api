@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Sammha.Domain\Sammha.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- the Application layer queries through IAppDbContext (DbSet/IQueryable); no provider-specific code here -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sammha.Tests" />
+  </ItemGroup>
+</Project>

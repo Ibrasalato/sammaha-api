@@ -1,0 +1,93 @@
+using Microsoft.EntityFrameworkCore;
+using Sammha.Application.Common;
+using Sammha.Application.Engine;
+using Sammha.Domain;
+
+namespace Sammha.Application.Features;
+
+/// <summary>Public pages: auctions, the name registry, availability checks, events and certificate verification.</summary>
+public class CatalogService(IAppDbContext db, TimeProvider clock, Mapper map, Matching matching, Sweeper sweeper)
+{
+    private DateTimeOffset Now => clock.GetUtcNow();
+
+    public async Task<PublicStatsDto> StatsAsync(CancellationToken ct)
+    {
+        var now = Now;
+        return new PublicStatsDto(
+            await db.Auctions.CountAsync(a => a.StartsAt <= now && a.EndsAt > now, ct),
+            await db.Auctions.CountAsync(a => a.StartsAt > now, ct),
+            await db.ReservedNames.CountAsync(ct),
+            await db.ReservedNames.Select(r => r.OwnerName).Distinct().CountAsync(ct));
+    }
+
+    public async Task<List<AuctionDto>> ListAuctionsAsync(AuctionFilter f, CancellationToken ct)
+    {
+        var now = Now;
+        var q = db.Auctions.AsNoTracking();
+        q = f.Phase switch
+        {
+            "live" => q.Where(a => a.StartsAt <= now && a.EndsAt > now),
+            "scheduled" => q.Where(a => a.StartsAt > now),
+            "ended" => q.Where(a => a.EndsAt <= now),
+            _ => q,
+        };
+        if (NameTypes.IsValid(f.Type)) q = q.Where(a => a.Type == f.Type);
+        var list = await q.OrderByDescending(a => a.EndsAt).Take(500).ToListAsync(ct);
+        if (!string.IsNullOrWhiteSpace(f.Q))
+        {
+            var n = NameMatcher.Normalize(f.Q);
+            list = list.Where(a => NameMatcher.Normalize(a.Name).Contains(n)).ToList();
+        }
+        int Order(Auction a) => a.PhaseAt(now) switch { "live" => 0, "scheduled" => 1, _ => 2 };
+        list = list.OrderBy(Order)
+            .ThenBy(a => a.PhaseAt(now) == "ended" ? -a.EndsAt.ToUnixTimeSeconds() : a.PhaseAt(now) == "scheduled" ? a.StartsAt.ToUnixTimeSeconds() : a.EndsAt.ToUnixTimeSeconds())
+            .ToList();
+        return await map.AuctionsAsync(list, ct);
+    }
+
+    public async Task<AuctionViewDto> GetAuctionAsync(Guid id, CancellationToken ct)
+    {
+        var a = await db.Auctions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("المزاد غير موجود");
+        if (!a.Settled && a.EndsAt <= Now)
+        {
+            // settle on demand so the page never waits for the next sweep
+            await sweeper.SettleOneAsync(id, ct);
+            a = await db.Auctions.AsNoTracking().FirstAsync(x => x.Id == id, ct);
+        }
+        return await map.ViewAsync(a, ct);
+    }
+
+    public async Task<List<ReservedNameDto>> ListReservedAsync(string? q, string? type, CancellationToken ct)
+    {
+        var query = db.ReservedNames.AsNoTracking();
+        if (NameTypes.IsValid(type)) query = query.Where(r => r.Type == type);
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var n = NameMatcher.Normalize(q);
+            var raw = q.Trim();
+            query = query.Where(r => r.Normalized.Contains(n) || r.OwnerName.Contains(raw));
+        }
+        var list = await query.OrderByDescending(r => r.AcquiredAt).Take(1000).ToListAsync(ct);
+        var ownerIds = list.Where(r => r.OwnerId != null).Select(r => r.OwnerId!.Value).Distinct().ToList();
+        var avatars = await db.Users.AsNoTracking().Where(u => ownerIds.Contains(u.Id) && u.ShowAvatar && u.AvatarUrl != null)
+            .ToDictionaryAsync(u => u.Id, u => u.AvatarUrl, ct);
+        return list.Select(r => Mapper.Reserved(r, r.OwnerId is { } o ? avatars.GetValueOrDefault(o) : null)).ToList();
+    }
+
+    public async Task<List<NameCheckDto>> CheckNamesAsync(List<string> names, CancellationToken ct)
+    {
+        if (names.Count > 10) throw new DomainException("عدد الأسماء كبير");
+        var checks = await matching.CheckAsync(names, null, ct);
+        return checks.Select(c => new NameCheckDto(c.Name, c.Normalized, c.Verdict, c.Message, Mapper.Hits(c.Hits))).ToList();
+    }
+
+    public async Task<List<CamelEventDto>> EventsAsync(CancellationToken ct) =>
+        (await db.Events.AsNoTracking().OrderBy(e => e.StartsOn).ToListAsync(ct)).Select(Mapper.Event).ToList();
+
+    public async Task<ReservedNameDto?> VerifyAsync(string code, CancellationToken ct)
+    {
+        var c = (code ?? "").Trim().ToUpperInvariant();
+        var r = await db.ReservedNames.AsNoTracking().FirstOrDefaultAsync(x => x.CertCode == c, ct);
+        return r == null ? null : Mapper.Reserved(r);
+    }
+}

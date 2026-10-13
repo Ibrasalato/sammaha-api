@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sammha.Domain/Sammha.Domain.csproj" />
+    <Project Path="src/Sammha.Infrastructure/Sammha.Infrastructure.csproj" />
+    <Project Path="src/Sammha.Application/Sammha.Application.csproj" />
+    <Project Path="src/Sammha.Api/Sammha.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sammha.Tests/Sammha.Tests.csproj" />
+  </Folder>
+</Solution>

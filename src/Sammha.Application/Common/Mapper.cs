@@ -1,0 +1,149 @@
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Sammha.Domain;
+
+namespace Sammha.Application.Common;
+
+/// <summary>Entity → DTO, with the computed flags the UI relies on (cancellable, withdrawable, masked names…).</summary>
+public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
+{
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private DateTimeOffset Now => clock.GetUtcNow();
+
+    public static UserDto User(User u) => new(u.Id, u.FullName, u.Phone, u.Email, u.NationalId, u.Role, u.CreatedAt, u.AvatarUrl, u.ShowAvatar ? true : null, u.Active);
+
+    public static List<SimilarHitDto> Hits(string json) =>
+        string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<List<SimilarHitDto>>(json, Json) ?? [];
+    public static string HitsJson(IEnumerable<SimilarHit> hits) =>
+        JsonSerializer.Serialize(hits.Select(h => new SimilarHitDto(h.Name, h.Type, h.Source, h.Score)), Json);
+    public static List<SimilarHitDto> Hits(IEnumerable<SimilarHit> hits) => hits.Select(h => new SimilarHitDto(h.Name, h.Type, h.Source, h.Score)).ToList();
+
+    // ───── requests ─────
+    /// <summary>Owner may cancel before review, or after acceptance while none of its auctions has started.</summary>
+    public static bool Cancellable(LogoRequest r, IReadOnlyDictionary<Guid, Auction> auctions, DateTimeOffset now)
+    {
+        if (r.Status is RequestStatuses.PendingPayment or RequestStatuses.UnderReview) return true;
+        if (r.Status != RequestStatuses.Accepted || r.Kind == RequestKinds.Compound) return false;
+        return r.Candidates.All(c => c.AuctionId is not { } aid || !auctions.TryGetValue(aid, out var a) || (now < a.StartsAt && a.BidCount == 0));
+    }
+
+    /// <summary>A name can be withdrawn while pending or accepted and its auction (if any) has not started.</summary>
+    public static bool Withdrawable(LogoRequest r, Candidate c, IReadOnlyDictionary<Guid, Auction> auctions, DateTimeOffset now)
+    {
+        if (r.Status is not (RequestStatuses.PendingPayment or RequestStatuses.UnderReview or RequestStatuses.Accepted)) return false;
+        if (r.Kind == RequestKinds.Compound) return false;
+        if (c.Status is not (CandidateStatuses.Pending or CandidateStatuses.Accepted)) return false;
+        return c.AuctionId is not { } aid || !auctions.TryGetValue(aid, out var a) || (now < a.StartsAt && a.BidCount == 0);
+    }
+
+    public async Task<Dictionary<Guid, Auction>> AuctionsOfAsync(IEnumerable<LogoRequest> requests, CancellationToken ct)
+    {
+        var ids = requests.SelectMany(r => r.Candidates).Where(c => c.AuctionId != null).Select(c => c.AuctionId!.Value).Distinct().ToList();
+        if (ids.Count == 0) return [];
+        return await db.Auctions.AsNoTracking().Where(a => ids.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct);
+    }
+
+    public CandidateDto Candidate(LogoRequest r, Candidate c, IReadOnlyDictionary<Guid, Auction> auctions) =>
+        new(c.Id, c.Name, c.Normalized, c.Status, Hits(c.SimilarJson), c.RejectReason, c.AuctionId, c.WithdrawnAt, Withdrawable(r, c, auctions, Now));
+
+    public RequestDto Request(LogoRequest r, IReadOnlyDictionary<Guid, Auction> auctions) =>
+        new(r.Id, r.Number, r.UserId, r.User?.FullName ?? "", r.Type, r.Candidates.OrderBy(c => c.Position).Select(c => Candidate(r, c, auctions)).ToList(), r.Status,
+            r.DepositAmount, r.DepositPaid, r.DepositState, r.CreatedAt, r.SubmittedAt, r.ReviewedAt, r.ReviewerName, r.ReviewNote, Cancellable(r, auctions, Now),
+            r.CancelledAt, r.CancelledBy, r.CancelReason, r.Kind, r.BaseName, r.BaseReservedId);
+
+    public async Task<RequestDto> RequestAsync(LogoRequest r, CancellationToken ct) => Request(r, await AuctionsOfAsync([r], ct));
+
+    public async Task<List<RequestDto>> RequestsAsync(List<LogoRequest> list, CancellationToken ct)
+    {
+        var auctions = await AuctionsOfAsync(list, ct);
+        return list.Select(r => Request(r, auctions)).ToList();
+    }
+
+    // ───── auctions ─────
+    public async Task<Dictionary<Guid, string>> NamesAsync(IEnumerable<Guid?> ids, CancellationToken ct)
+    {
+        var set = ids.Where(x => x != null).Select(x => x!.Value).Distinct().ToList();
+        if (set.Count == 0) return [];
+        return await db.Users.AsNoTracking().Where(u => set.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+    }
+
+    public static AuctionDto Auction(Auction a, IReadOnlyDictionary<Guid, string> names) =>
+        new(a.Id, a.RequestId, a.CandidateId, a.Name, a.Type, a.RequesterId, a.OpeningPrice, a.MinIncrement, a.StartsAt, a.EndsAt, a.CurrentPrice, a.BidCount,
+            a.LeaderId, a.LeaderId is { } l && names.TryGetValue(l, out var ln) ? NameMatcher.MaskName(ln) : null, a.Settled,
+            a.WinnerId, a.WinnerId is { } w && names.TryGetValue(w, out var wn) ? wn : null, a.FinalPrice, a.WonByRequester,
+            a.Extensions > 0 ? a.Extensions : null, a.IsInvestment ? true : null, a.ListingId, a.BidDeposit);
+
+    public async Task<List<AuctionDto>> AuctionsAsync(List<Auction> list, CancellationToken ct)
+    {
+        var names = await NamesAsync(list.SelectMany(a => new[] { a.LeaderId, a.WinnerId }), ct);
+        return list.Select(a => Auction(a, names)).ToList();
+    }
+
+    public async Task<AuctionDto> AuctionAsync(Auction a, CancellationToken ct) => (await AuctionsAsync([a], ct))[0];
+
+    public async Task<AuctionViewDto> ViewAsync(Auction a, CancellationToken ct)
+    {
+        var bids = await db.Bids.AsNoTracking().Where(b => b.AuctionId == a.Id).OrderByDescending(b => b.Amount).ThenByDescending(b => b.CreatedAt).ToListAsync(ct);
+        var names = await NamesAsync(bids.Select(b => (Guid?)b.UserId).Concat([a.LeaderId, a.WinnerId]), ct);
+        AuctionMineDto? mine = null;
+        if (me.Id is { } uid)
+        {
+            var watching = await db.Watches.AnyAsync(w => w.AuctionId == a.Id && w.UserId == uid, ct);
+            var auto = await db.AutoBids.Where(x => x.AuctionId == a.Id && x.UserId == uid).Select(x => (decimal?)x.Max).FirstOrDefaultAsync(ct);
+            var dep = await db.BidDeposits.AnyAsync(d => d.AuctionId == a.Id && d.UserId == uid && d.State == BidDepositStates.Held, ct);
+            mine = new AuctionMineDto(watching, auto, dep ? true : null);
+        }
+        return new AuctionViewDto(Auction(a, names),
+            bids.Select(b => new BidDto(b.Id, b.AuctionId, b.UserId, NameMatcher.MaskName(names.GetValueOrDefault(b.UserId)), b.Amount, b.CreatedAt, b.Auto ? true : null)).ToList(),
+            mine);
+    }
+
+    // ───── registry ─────
+    public static ReservedNameDto Reserved(ReservedName r, string? avatar = null, Guid? listingId = null) =>
+        new(r.Id, r.Name, r.Normalized, r.Type, r.OwnerId, r.OwnerName, r.Price, r.AcquiredAt, r.Source, r.BaseName, avatar, listingId);
+
+    // ───── money ─────
+    public static WalletTxDto Tx(WalletTx t) => new(t.Id, t.UserId, t.Amount, t.Kind, t.Note, t.CreatedAt);
+
+    public static InvoiceDto Invoice(Invoice i, User buyer) =>
+        new(i.Id, i.Number, i.UserId, buyer.FullName, buyer.Phone, i.AuctionId ?? i.ListingId, i.Name, i.Type, i.Total, i.Vat, i.Subtotal, i.DepositApplied,
+            i.AmountDue, i.Status, i.IssuedAt, i.PaidAt, i.OwnerShare, i.OwnerShareTo, i.OwnerShare != null ? i.OwnerSharePaid : null, i.ListingId);
+
+    public async Task<List<InvoiceDto>> InvoicesAsync(List<Invoice> list, CancellationToken ct)
+    {
+        var ids = list.Select(i => i.UserId).Distinct().ToList();
+        var users = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, ct);
+        return list.Select(i => Invoice(i, users[i.UserId])).ToList();
+    }
+
+    public async Task<InvoiceDto> InvoiceAsync(Invoice i, CancellationToken ct) => (await InvoicesAsync([i], ct))[0];
+
+    // ───── listings ─────
+    public async Task<List<ListingDto>> ListingsAsync(List<NameListing> list, CancellationToken ct)
+    {
+        var aids = list.Where(l => l.AuctionId != null).Select(l => l.AuctionId!.Value).ToList();
+        var auctions = aids.Count == 0 ? [] : await db.Auctions.AsNoTracking().Where(a => aids.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct);
+        return list.Select(l =>
+        {
+            var own = me.Id == l.SellerId;
+            Auction? a = l.AuctionId is { } id ? auctions.GetValueOrDefault(id) : null;
+            return new ListingDto(l.Id, l.Number, l.ReservedId, l.Name, l.Type, own ? l.SellerId : null, l.Mode, l.Price, l.CommissionRate, l.Status, l.CreatedAt,
+                l.StartsAt, l.EndsAt, l.AuctionId, l.SoldPrice, l.SoldAt, own ? l.Payout : null, own ? l.PayoutPaid : null, a?.CurrentPrice ?? l.Price, a?.BidCount);
+        }).ToList();
+    }
+
+    public async Task<ListingDto> ListingAsync(NameListing l, CancellationToken ct) => (await ListingsAsync([l], ct))[0];
+
+    // ───── misc ─────
+    public static CamelEventDto Event(CamelEvent e) =>
+        new(e.Id, e.Title, e.TitleEn, e.Kind, e.StartsOn, e.EndsOn, e.Approx, e.City, e.Country, e.Description, e.Url, e.CityEn, e.CountryEn, e.DescriptionEn);
+
+    public static NotificationDto Notification(Notification n) => new(n.Id, n.UserId, n.Kind, n.Title, n.Body, n.Link, n.CreatedAt, n.Read);
+
+    /// <summary>customer view hides staff-only notes and the assignee</summary>
+    public static TicketDto Ticket(Ticket t, bool staff) =>
+        new(t.Id, t.Number, t.Kind, t.Topic, t.Subject, t.Name, t.Phone, t.Email, t.RefNumber, t.Message, t.UserId, t.Status, t.Priority,
+            staff ? t.Assignee : null,
+            t.Messages.Where(m => staff || !m.Internal).OrderBy(m => m.CreatedAt).Select(m => new TicketMessageDto(m.Id, m.By, m.Author, m.Body, m.Internal ? true : null, m.CreatedAt)).ToList(),
+            t.CreatedAt, t.UpdatedAt);
+}
