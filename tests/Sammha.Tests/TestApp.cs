@@ -30,6 +30,7 @@ public class TestApp : WebApplicationFactory<Program>
         b.UseSetting("Seed:Demo", "true");
         b.UseSetting("RateLimit:AuthPerMinute", "100000");
         b.UseSetting("RateLimit:CheckPerMinute", "100000");
+        b.UseSetting("RateLimit:RefreshPerMinute", "100000");
         b.UseSetting("Payments:Simulate", "true");
         b.UseSetting("Integrations:TicketWebhookUrl", "");
         b.UseSetting("Integrations:NotifyWebhookUrl", "");
@@ -69,6 +70,7 @@ public class TestApp : WebApplicationFactory<Program>
         var ch = await api.Post<JsonElement>("/api/auth/signin", new { login, password, portal });
         var res = await api.Post<JsonElement>("/api/auth/signin/complete", new { challenge = ch.GetProperty("challenge").GetString(), code = "4321" });
         api.Token = res.GetProperty("token").GetString();
+        api.Refresh = res.GetProperty("refreshToken").GetString();
         return api;
     }
 
@@ -86,6 +88,7 @@ public class Api(HttpClient http)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public string? Token { get; set; }
+    public string? Refresh { get; set; }
 
     private async Task<T> Send<T>(HttpMethod method, string url, object? body)
     {

@@ -13,6 +13,27 @@ public class User
     public string? AvatarUrl { get; set; }
     public bool ShowAvatar { get; set; }
     public bool Active { get; set; } = true;
+    /// <summary>changes on password change or suspension; access tokens carrying an old stamp stop working at once</summary>
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
+}
+
+/// <summary>Long-lived token that buys new access tokens. Only its SHA-256 hash is stored; each use rotates it.</summary>
+public class RefreshToken
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string TokenHash { get; set; } = "";
+    /// <summary>all tokens rotated from one sign-in share a family; reuse of a rotated token revokes the whole family</summary>
+    public Guid FamilyId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public string? RevokedReason { get; set; }
+    public Guid? ReplacedById { get; set; }
+    public string? CreatedByIp { get; set; }
+    public string? UserAgent { get; set; }
+
+    public bool IsActive(DateTimeOffset now) => RevokedAt == null && now < ExpiresAt;
 }
 
 public class LogoRequest

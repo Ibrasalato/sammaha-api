@@ -27,14 +27,19 @@ public class AuthController(ISender mediator) : ControllerBase
     [HttpPost("otp/resend"), EnableRateLimiting("auth")]
     public Task<OtpChallengeDto> Resend(ChallengeBody b, CancellationToken ct) => mediator.Send(new ResendOtpCommand(b.Challenge), ct);
 
+    /// <summary>signs every other device out and returns a new session for this one</summary>
     [HttpPost("password"), Authorize]
-    public async Task<IActionResult> Password(PasswordBody b, CancellationToken ct)
+    public Task<AuthResult> Password(PasswordBody b, CancellationToken ct) => mediator.Send(new ChangePasswordCommand(b.Current, b.Next), ct);
+
+    /// <summary>refresh token → new access token + new refresh token (the old one stops working)</summary>
+    [HttpPost("refresh"), EnableRateLimiting("refresh")]
+    public Task<AuthResult> Refresh(RefreshBody b, CancellationToken ct) => mediator.Send(new RefreshSessionCommand(b.RefreshToken), ct);
+
+    /// <summary>revokes this device's refresh token (or every session with everywhere=true)</summary>
+    [HttpPost("signout")]
+    public async Task<IActionResult> SignOutUser(SignOutBody b, CancellationToken ct)
     {
-        await mediator.Send(new ChangePasswordCommand(b.Current, b.Next), ct);
+        await mediator.Send(new SignOutCommand(b.RefreshToken, b.Everywhere), ct);
         return NoContent();
     }
-
-    /// <summary>tokens are stateless; the client forgets it</summary>
-    [HttpPost("signout")]
-    public IActionResult SignOutUser() => NoContent();
 }

@@ -133,3 +133,18 @@ SAMMHA_TEST_DB="Server=localhost,1433;User Id=sa;Password=Sammha_dev_2026!;Trust
 - إعادة البيع في المزاد.
 
 وتعمل في كل رفع على GitHub Actions.
+
+
+## Swagger
+
+- الواجهة: `https://<server>/swagger` ، والوثيقة: `/openapi/v1.json`.
+- للتجربة: نفّذ `POST /api/auth/signin` ثم `POST /api/auth/signin/complete` (الرمز التجريبي 4321 في بيئة التطوير)، وانسخ `token` إلى زر **Authorize**.
+- تُعطَّل في الإنتاج بالإعداد `Swagger__Enabled=false` إن رغبت.
+
+## JWT
+
+- رمز وصول (Access token) صالح 15 دقيقة (`Jwt:AccessMinutes`) ورمز تجديد (Refresh token) صالح 30 يومًا (`Jwt:RefreshDays`) يُخزَّن مُجزّأً (SHA-256) في جدول RefreshTokens.
+- `POST /api/auth/refresh` يدوّر الرمز؛ وإعادة استخدام رمز قديم تُلغي جلسات تلك العائلة كلها.
+- `POST /api/auth/signout` يلغي الرمز، ومع `everywhere: true` يخرج من كل الأجهزة.
+- تغيير كلمة المرور أو الدور أو إيقاف الحساب يغيّر SecurityStamp فتسقط كل الرموز السابقة فورًا.
+- المفتاح `Jwt__Key` (32 حرفًا على الأقل) يوضع في متغيرات البيئة على IIS ولا يُحفظ في المستودع.

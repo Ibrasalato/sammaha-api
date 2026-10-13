@@ -12,35 +12,59 @@ public class JwtOptions
 {
     public string Issuer { get; set; } = "sammha";
     public string Audience { get; set; } = "sammha-web";
-    /// <summary>at least 32 characters; keep it in user-secrets or an environment variable, never in source control</summary>
+    /// <summary>HMAC-SHA256 signing key, at least 32 characters; keep it in user-secrets or an environment variable, never in source control</summary>
     public string Key { get; set; } = "";
-    public int Hours { get; set; } = 12;
+    /// <summary>access token lifetime; the client refreshes silently before it ends</summary>
+    public int AccessMinutes { get; set; } = 15;
+    /// <summary>refresh token lifetime (sliding: every refresh issues a new one)</summary>
+    public int RefreshDays { get; set; } = 30;
 }
 
-/// <summary>uses the real clock (not the app TimeProvider) so tokens stay valid for the JWT middleware</summary>
+public static class SammhaClaims
+{
+    public const string Stamp = "stamp";
+}
+
+/// <summary>
+/// Signs short-lived access tokens: sub (user id), role, stamp (security stamp), jti, iat.
+/// Uses the real clock so tokens stay valid for the JWT middleware.
+/// </summary>
 public class JwtTokenIssuer(IOptions<JwtOptions> opt) : ITokenIssuer
 {
-    public string Issue(User user)
+    public TimeSpan RefreshLifetime => TimeSpan.FromDays(Math.Max(1, opt.Value.RefreshDays));
+
+    public AccessToken Issue(User user)
     {
         var o = opt.Value;
         var creds = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(o.Key)), SecurityAlgorithms.HmacSha256);
         var now = DateTime.UtcNow;
+        var expires = now.AddMinutes(Math.Max(1, o.AccessMinutes));
         var token = new JwtSecurityToken(o.Issuer, o.Audience,
-            [new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()), new Claim(ClaimTypes.Role, user.Role)],
-            notBefore: now, expires: now.AddHours(o.Hours), signingCredentials: creds);
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        [
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new Claim(JwtRegisteredClaimNames.Iat, new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new Claim(ClaimTypes.Role, user.Role),
+            new Claim(SammhaClaims.Stamp, user.SecurityStamp),
+        ], notBefore: now, expires: expires, signingCredentials: creds);
+        return new AccessToken(new JwtSecurityTokenHandler().WriteToken(token), new DateTimeOffset(expires));
     }
 }
 
 public class HttpCurrentUser(IHttpContextAccessor http) : ICurrentUser
 {
+    private ClaimsPrincipal? Principal => http.HttpContext?.User;
+
     public Guid? Id
     {
         get
         {
-            var u = http.HttpContext?.User;
-            var sub = u?.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? u?.FindFirstValue(ClaimTypes.NameIdentifier);
+            var sub = Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
             return Guid.TryParse(sub, out var id) ? id : null;
         }
     }
+
+    public string? Stamp => Principal?.FindFirstValue(SammhaClaims.Stamp);
+    public string? Ip => http.HttpContext?.Connection.RemoteIpAddress?.ToString();
+    public string? UserAgent => http.HttpContext?.Request.Headers.UserAgent.ToString();
 }

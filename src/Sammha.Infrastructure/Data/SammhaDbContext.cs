@@ -34,6 +34,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
     {
@@ -130,6 +131,14 @@ public class SammhaDbContext : DbContext, IAppDbContext
         b.Entity<TicketMessage>(e => e.Property(x => x.Body).HasMaxLength(3000));
 
         b.Entity<Payment>(e => e.HasIndex(x => x.ProviderId));
+        b.Entity<RefreshToken>(e =>
+        {
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.RevokedAt });
+            e.HasIndex(x => x.FamilyId);
+            e.Property(x => x.TokenHash).HasMaxLength(64);
+        });
+        b.Entity<User>().Property(x => x.SecurityStamp).HasMaxLength(32);
     }
 
     public async Task<int> NextNumberAsync(string sequence, CancellationToken ct = default)

@@ -15,6 +15,8 @@ public class Access(IAppDbContext db, ICurrentUser current, IOptions<PlatformOpt
         if (current.Id is not { } id) throw DomainException.Unauthorized();
         var u = await db.Users.FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.Unauthorized();
         if (!u.Active) throw DomainException.Unauthorized("هذا الحساب موقوف");
+        // password changed or account suspended since this token was issued
+        if (current.Stamp != u.SecurityStamp) throw DomainException.Unauthorized("انتهت الجلسة، سجّل الدخول من جديد");
         return _me = u;
     }
 

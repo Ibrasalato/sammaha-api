@@ -11,7 +11,7 @@ namespace Sammha.Application.Features.Admin;
 
 /// <summary>Approval committee and platform administration.</summary>
 public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Matching matching, Money money, Notifier notifier,
-    IPasswordHasher hasher, IOptions<PlatformOptions> rules)
+    IPasswordHasher hasher, Sessions sessions, IOptions<PlatformOptions> rules)
     : IRequestHandler<GetOverviewQuery, AdminOverviewDto>, IRequestHandler<ListRequestsQuery, List<RequestDto>>, IRequestHandler<ReviewRequestCommand, RequestDto>, IRequestHandler<RejectRequestCommand, RequestDto>, IRequestHandler<CancelRequestCommand, RequestDto>, IRequestHandler<GetAwaitingScheduleQuery, List<AwaitingDto>>, IRequestHandler<ScheduleAuctionsCommand, List<AuctionDto>>, IRequestHandler<ListInvoicesQuery, List<InvoiceDto>>, IRequestHandler<MarkInvoicePaidCommand, InvoiceDto>, IRequestHandler<ListUsersQuery, List<UserDto>>, IRequestHandler<CreateStaffCommand, UserDto>, IRequestHandler<SetUserRoleCommand, UserDto>, IRequestHandler<SetUserActiveCommand, UserDto>, IRequestHandler<SaveEventCommand, CamelEventDto>, IRequestHandler<DeleteEventCommand, MediatR.Unit>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -263,6 +263,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     {
         var t = await TargetAsync(id, ct);
         if (!Roles.All.Contains(role)) throw new DomainException("صلاحية غير معروفة");
+        if (t.Role != role) await sessions.RevokeAllAsync(t, "role", ct); // the role is in the token: sign in again
         t.Role = role;
         await db.SaveChangesAsync(ct);
         return Mapper.User(t);
@@ -271,6 +272,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     private async Task<UserDto> SetActiveAsync(Guid id, bool active, CancellationToken ct)
     {
         var t = await TargetAsync(id, ct);
+        if (!active) await sessions.RevokeAllAsync(t, "suspended", ct);
         t.Active = active;
         await db.SaveChangesAsync(ct);
         return Mapper.User(t);

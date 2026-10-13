@@ -24,6 +24,7 @@ public interface IAppDbContext
     DbSet<TicketMessage> TicketMessages { get; }
     DbSet<OtpChallenge> OtpChallenges { get; }
     DbSet<Payment> Payments { get; }
+    DbSet<RefreshToken> RefreshTokens { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     /// <summary>next value of a database sequence (RequestNo, InvoiceNo, ListingNo, TicketNo)</summary>
@@ -51,6 +52,11 @@ public interface IPostCommit
 public interface ICurrentUser
 {
     Guid? Id { get; }
+    /// <summary>the security stamp carried by the access token</summary>
+    string? Stamp { get; }
+    /// <summary>caller's IP and browser, recorded with refresh tokens</summary>
+    string? Ip { get; }
+    string? UserAgent { get; }
 }
 
 public interface IPasswordHasher
@@ -77,9 +83,14 @@ public interface IPaymentGateway
     Task<(string ProviderId, string Url)> CreateCheckoutAsync(Payment payment, string description, string callbackUrl, CancellationToken ct);
 }
 
+public record AccessToken(string Token, DateTimeOffset ExpiresAt);
+
 public interface ITokenIssuer
 {
-    string Issue(User user);
+    /// <summary>short-lived signed JWT (sub, role, stamp, jti)</summary>
+    AccessToken Issue(User user);
+    /// <summary>how long a refresh token lives</summary>
+    TimeSpan RefreshLifetime { get; }
 }
 
 public interface IAuctionRealtime

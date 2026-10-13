@@ -7,6 +7,8 @@ public record SignInBody(string Login, string Password, string Portal);
 public record CodeBody(string Challenge, string Code);
 public record ChallengeBody(string Challenge);
 public record PasswordBody(string Current, string Next);
+public record RefreshBody(string RefreshToken);
+public record SignOutBody(string? RefreshToken, bool Everywhere = false);
 public record ProfileBody(string? AvatarUrl, bool AvatarSet, bool ShowAvatar);
 public record AccountBody(string FullName, string? NationalId);
 public record EmailBody(string Email);

@@ -9,9 +9,9 @@ using Sammha.Domain;
 namespace Sammha.Application.Features.Auth;
 
 /// <summary>Sign-up, two-step sign-in (password then one-time code) and account changes.</summary>
-public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, IPasswordHasher hasher, ITokenIssuer tokens, ISmsSender sms,
+public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, IPasswordHasher hasher, Sessions sessions, ISmsSender sms,
     IOptions<OtpOptions> otpOpt)
-    : IRequestHandler<GetCurrentUserQuery, UserDto?>, IRequestHandler<SignUpCommand, AuthResult>, IRequestHandler<StartSignInCommand, OtpChallengeDto>, IRequestHandler<CompleteSignInCommand, AuthResult>, IRequestHandler<ResendOtpCommand, OtpChallengeDto>, IRequestHandler<ChangePasswordCommand, MediatR.Unit>, IRequestHandler<UpdateProfileCommand, UserDto>, IRequestHandler<UpdateAccountCommand, UserDto>, IRequestHandler<RequestEmailChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailChangeCommand, UserDto>, IRequestHandler<RequestPhoneChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmPhoneChangeCommand, UserDto>
+    : IRequestHandler<GetCurrentUserQuery, UserDto?>, IRequestHandler<SignUpCommand, AuthResult>, IRequestHandler<StartSignInCommand, OtpChallengeDto>, IRequestHandler<CompleteSignInCommand, AuthResult>, IRequestHandler<ResendOtpCommand, OtpChallengeDto>, IRequestHandler<ChangePasswordCommand, AuthResult>, IRequestHandler<RefreshSessionCommand, AuthResult>, IRequestHandler<SignOutCommand, MediatR.Unit>, IRequestHandler<UpdateProfileCommand, UserDto>, IRequestHandler<UpdateAccountCommand, UserDto>, IRequestHandler<RequestEmailChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailChangeCommand, UserDto>, IRequestHandler<RequestPhoneChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmPhoneChangeCommand, UserDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     private OtpOptions Otp => otpOpt.Value;
@@ -36,7 +36,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         u.PasswordHash = hasher.Hash(i.Password!);
         db.Users.Add(u);
         await db.SaveChangesAsync(ct);
-        return new AuthResult(Mapper.User(u), tokens.Issue(u));
+        return await sessions.IssueAsync(u, null, ct);
     }
 
     /// <summary>Step 1. The same generic error whichever portal is wrong, so the staff portal is never revealed.</summary>
@@ -57,7 +57,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         var c = await ConsumeOtpAsync(challenge, code, OtpPurposes.Login, ct);
         var u = await db.Users.FirstOrDefaultAsync(x => x.Id == c.UserId, ct);
         if (u == null || !u.Active) throw new DomainException("تعذّر الدخول");
-        return new AuthResult(Mapper.User(u), tokens.Issue(u));
+        return await sessions.IssueAsync(u, null, ct);
     }
 
     private async Task<OtpChallengeDto> ResendOtpAsync(string challenge, CancellationToken ct)
@@ -68,13 +68,15 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         return await IssueOtpAsync(c.UserId, c.Purpose, c.Target, ct);
     }
 
-    private async Task ChangePasswordAsync(string current, string next, CancellationToken ct)
+    private async Task<AuthResult> ChangePasswordAsync(string current, string next, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         if (!hasher.Verify(u.PasswordHash, current ?? "")) throw new DomainException("كلمة المرور الحالية غير صحيحة");
         if ((next ?? "").Length < 8) throw new DomainException("كلمة المرور الجديدة 8 أحرف على الأقل");
         u.PasswordHash = hasher.Hash(next!);
+        await sessions.RevokeAllAsync(u, "password", ct); // every other device is signed out
         await db.SaveChangesAsync(ct);
+        return await sessions.IssueAsync(u, null, ct);
     }
 
     // ───── account ─────
@@ -193,7 +195,14 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     public Task<OtpChallengeDto> Handle(StartSignInCommand q, CancellationToken ct) => StartSignInAsync(q.Login, q.Password, q.Portal, ct);
     public Task<AuthResult> Handle(CompleteSignInCommand q, CancellationToken ct) => CompleteSignInAsync(q.Challenge, q.Code, ct);
     public Task<OtpChallengeDto> Handle(ResendOtpCommand q, CancellationToken ct) => ResendOtpAsync(q.Challenge, ct);
-    public async Task<MediatR.Unit> Handle(ChangePasswordCommand q, CancellationToken ct) { await ChangePasswordAsync(q.Current, q.Next, ct); return Unit.Value; }
+    public Task<AuthResult> Handle(ChangePasswordCommand q, CancellationToken ct) => ChangePasswordAsync(q.Current, q.Next, ct);
+    public Task<AuthResult> Handle(RefreshSessionCommand q, CancellationToken ct) => sessions.RefreshAsync(q.RefreshToken, ct);
+    public async Task<MediatR.Unit> Handle(SignOutCommand q, CancellationToken ct)
+    {
+        if (q.Everywhere && await access.MaybeAsync(ct) is { } u) { await sessions.RevokeAllAsync(u, "signout-all", ct); await db.SaveChangesAsync(ct); }
+        else await sessions.RevokeAsync(q.RefreshToken, ct);
+        return Unit.Value;
+    }
     public Task<UserDto> Handle(UpdateProfileCommand q, CancellationToken ct) => UpdateProfileAsync(q.AvatarUrl, q.AvatarSet, q.ShowAvatar, ct);
     public Task<UserDto> Handle(UpdateAccountCommand q, CancellationToken ct) => UpdateAccountAsync(q.FullName, q.NationalId, ct);
     public Task<OtpChallengeDto> Handle(RequestEmailChangeCommand q, CancellationToken ct) => RequestEmailChangeAsync(q.Email, ct);

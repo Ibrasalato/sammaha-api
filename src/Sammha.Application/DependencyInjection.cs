@@ -17,6 +17,7 @@ public static class DependencyInjection
         s.AddSingleton(TimeProvider.System);
 
         s.AddScoped<Access>();
+        s.AddScoped<Sessions>();
         s.AddScoped<Mapper>();
         s.AddScoped<Notifier>();
         s.AddScoped<Matching>();

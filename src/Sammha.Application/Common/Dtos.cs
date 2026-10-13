@@ -65,7 +65,8 @@ public record AwaitingDto(Guid Id, string Name, string Normalized, string Status
 
 public record OtpChallengeDto(string Challenge, string PhoneMasked, DateTimeOffset ExpiresAt, int? Length);
 
-public record AuthResult(UserDto User, string Token);
+/// <summary>token = access token (Bearer, minutes); refreshToken = exchanged at /api/auth/refresh for a new pair</summary>
+public record AuthResult(UserDto User, string Token, DateTimeOffset ExpiresAt, string RefreshToken, DateTimeOffset RefreshExpiresAt);
 
 // ───── inputs ─────
 public record SignUpInput(string FullName, string Phone, string Email, string? NationalId, string Password);
