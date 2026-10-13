@@ -13,14 +13,20 @@
 ```
 src/
   Sammha.Domain          الكيانات وقواعد الأعمال الثابتة ومطابقة الأسماء العربية — بلا أي اعتماديات
-  Sammha.Application     منطق المنصة كاملًا (الخدمات، المحرك، المنافذ Interfaces، DTOs)
+  Sammha.Application     منطق المنصة كاملًا بنمط CQRS عبر MediatR:
+                         Features/<المجال>/  أوامر (ICommand) واستعلامات (IQuery) ومعالجاتها
+                         Engine/             محرك المزايدة والتسوية والمحفظة والمطابقة والإشعارات
+                         Common/             المنافذ (Interfaces) و DTOs وسلوك تسجيل لكل طلب
                          يعتمد على Domain فقط (+ تجريدات EF Core للاستعلام)
   Sammha.Infrastructure  تنفيذ المنافذ: SQL Server و EF Core والترحيلات والأقفال،
                          وwebhooks لـ n8n، وبوابة ميسّر، وتشفير كلمات المرور، وتعبئة البيانات
-  Sammha.Api             العرض: Controllers و JWT و SignalR والخدمة الدورية ومعالجة الأخطاء
+  Sammha.Api             العرض: Controllers ترسل الأوامر والاستعلامات عبر ISender، و JWT و SignalR والخدمة الدورية ومعالجة الأخطاء
 tests/
   Sammha.Tests           اختبارات وحدة واختبارات تكامل كاملة على SQL Server حقيقي
 ```
+
+مثال: `POST /api/me/requests` ← `MeController` يرسل `CreateRequestCommand` ← `RequestHandlers` (في `Features/Requests`).
+MediatR مثبّت على الإصدار 12.5 (آخر إصدار برخصة Apache 2.0؛ الإصدارات 13 وما بعدها تحتاج مفتاح ترخيص تجاري).
 
 اتجاه الاعتماد للداخل فقط: `Api → Application → Domain`. و`Infrastructure` تنفّذ منافذ `Application`.
 وطبقة `Api` هي نقطة التركيب الوحيدة التي تربط الطبقات.
