@@ -1,14 +1,16 @@
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Sammha.Application.Common;
 using Sammha.Application.Engine;
 using Sammha.Domain;
 
-namespace Sammha.Application.Features;
+namespace Sammha.Application.Features.Bidding;
 
 /// <summary>Bids, automatic bidding, the watchlist and resale participation guarantees.</summary>
-public class BiddingService(IAppDbContext db, TimeProvider clock, Access access, Mapper map, AuctionEngine engine, Money money,
+public class BiddingHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, AuctionEngine engine, Money money,
     IAuctionRealtime realtime, IPostCommit postCommit, IOptions<PlatformOptions> rules)
+    : IRequestHandler<PlaceBidCommand, AuctionViewDto>, IRequestHandler<SetAutoBidCommand, AuctionViewDto>, IRequestHandler<CancelAutoBidCommand, AuctionViewDto>, IRequestHandler<ToggleWatchCommand, WatchResult>, IRequestHandler<PayBidDepositCommand, AuctionViewDto>, IRequestHandler<GetWatchlistQuery, List<AuctionDto>>, IRequestHandler<GetMyBidsQuery, List<MyBidDto>>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
 
@@ -25,7 +27,7 @@ public class BiddingService(IAppDbContext db, TimeProvider clock, Access access,
             throw new DomainException($"ادفع ضمان دخول المزاد {a.BidDeposit ?? rules.Value.ResaleBidDeposit:0.##} ريال أولًا");
     }
 
-    public async Task<AuctionViewDto> PlaceBidAsync(Guid auctionId, decimal amount, CancellationToken ct)
+    private async Task<AuctionViewDto> PlaceBidAsync(Guid auctionId, decimal amount, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         await using var uow = await db.BeginAsync([$"a:{auctionId}"], ct);
@@ -46,7 +48,7 @@ public class BiddingService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.ViewAsync(a, ct);
     }
 
-    public async Task<AuctionViewDto> SetAutoBidAsync(Guid auctionId, decimal max, CancellationToken ct)
+    private async Task<AuctionViewDto> SetAutoBidAsync(Guid auctionId, decimal max, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         await using var uow = await db.BeginAsync([$"a:{auctionId}"], ct);
@@ -68,7 +70,7 @@ public class BiddingService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.ViewAsync(a, ct);
     }
 
-    public async Task<AuctionViewDto> CancelAutoBidAsync(Guid auctionId, CancellationToken ct)
+    private async Task<AuctionViewDto> CancelAutoBidAsync(Guid auctionId, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var a = await LoadAsync(auctionId, ct);
@@ -76,7 +78,7 @@ public class BiddingService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.ViewAsync(a, ct);
     }
 
-    public async Task<bool> ToggleWatchAsync(Guid auctionId, CancellationToken ct)
+    private async Task<bool> ToggleWatchAsync(Guid auctionId, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         if (!await db.Auctions.AnyAsync(a => a.Id == auctionId, ct)) throw DomainException.NotFound("المزاد غير موجود");
@@ -87,7 +89,7 @@ public class BiddingService(IAppDbContext db, TimeProvider clock, Access access,
         return true;
     }
 
-    public async Task<List<AuctionDto>> WatchlistAsync(CancellationToken ct)
+    private async Task<List<AuctionDto>> WatchlistAsync(CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var list = await db.Watches.Where(w => w.UserId == u.Id).Join(db.Auctions, w => w.AuctionId, a => a.Id, (w, a) => a)
@@ -95,7 +97,7 @@ public class BiddingService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.AuctionsAsync(list, ct);
     }
 
-    public async Task<List<MyBidDto>> MyBidsAsync(CancellationToken ct)
+    private async Task<List<MyBidDto>> MyBidsAsync(CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var bids = await db.Bids.AsNoTracking().Where(b => b.UserId == u.Id).ToListAsync(ct);
@@ -108,7 +110,7 @@ public class BiddingService(IAppDbContext db, TimeProvider clock, Access access,
     }
 
     /// <summary>resale auctions: the participation guarantee, refunded unless the bidder wins</summary>
-    public async Task<AuctionViewDto> PayBidDepositAsync(Guid auctionId, CancellationToken ct)
+    private async Task<AuctionViewDto> PayBidDepositAsync(Guid auctionId, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         await using var uow = await db.BeginAsync([$"a:{auctionId}", $"u:{u.Id}"], ct);
@@ -126,4 +128,13 @@ public class BiddingService(IAppDbContext db, TimeProvider clock, Access access,
         await uow.CommitAsync(ct);
         return await map.ViewAsync(a, ct);
     }
+
+    // ───── MediatR entry points ─────
+    public Task<AuctionViewDto> Handle(PlaceBidCommand q, CancellationToken ct) => PlaceBidAsync(q.AuctionId, q.Amount, ct);
+    public Task<AuctionViewDto> Handle(SetAutoBidCommand q, CancellationToken ct) => SetAutoBidAsync(q.AuctionId, q.Max, ct);
+    public Task<AuctionViewDto> Handle(CancelAutoBidCommand q, CancellationToken ct) => CancelAutoBidAsync(q.AuctionId, ct);
+    public async Task<WatchResult> Handle(ToggleWatchCommand q, CancellationToken ct) { return new WatchResult(await ToggleWatchAsync(q.AuctionId, ct)); }
+    public Task<AuctionViewDto> Handle(PayBidDepositCommand q, CancellationToken ct) => PayBidDepositAsync(q.AuctionId, ct);
+    public Task<List<AuctionDto>> Handle(GetWatchlistQuery q, CancellationToken ct) => WatchlistAsync(ct);
+    public Task<List<MyBidDto>> Handle(GetMyBidsQuery q, CancellationToken ct) => MyBidsAsync(ct);
 }

@@ -1,3 +1,4 @@
+using MediatR;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -5,17 +6,18 @@ using Sammha.Application.Common;
 using Sammha.Application.Engine;
 using Sammha.Domain;
 
-namespace Sammha.Application.Features;
+namespace Sammha.Application.Features.Requests;
 
 /// <summary>Logo requests (three names), compound names and «استثمار الاسم», as their owner sees them.</summary>
-public class RequestService(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Matching matching, Money money, IOptions<PlatformOptions> rules)
+public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Matching matching, Money money, IOptions<PlatformOptions> rules)
+    : IRequestHandler<GetMyRequestsQuery, List<RequestDto>>, IRequestHandler<GetRequestQuery, RequestDto>, IRequestHandler<CreateRequestCommand, RequestDto>, IRequestHandler<CreateCompoundRequestCommand, RequestDto>, IRequestHandler<CreateInvestmentRequestCommand, RequestDto>, IRequestHandler<GetMyInvestmentsQuery, List<InvestmentItemDto>>, IRequestHandler<PayDepositCommand, RequestDto>, IRequestHandler<CancelMyRequestCommand, CancelResult>, IRequestHandler<WithdrawNameCommand, WithdrawResult>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     private PlatformOptions R => rules.Value;
 
     private IQueryable<LogoRequest> Full => db.Requests.Include(r => r.User).Include(r => r.Candidates);
 
-    public async Task<List<RequestDto>> MineAsync(CancellationToken ct)
+    private async Task<List<RequestDto>> MineAsync(CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var list = await Full.AsNoTracking().Where(r => r.UserId == u.Id).OrderByDescending(r => r.CreatedAt).ToListAsync(ct);
@@ -23,7 +25,7 @@ public class RequestService(IAppDbContext db, TimeProvider clock, Access access,
     }
 
     /// <summary>owner sees their own; staff see any (with similar names recomputed for review)</summary>
-    public async Task<RequestDto> GetAsync(Guid id, CancellationToken ct)
+    private async Task<RequestDto> GetAsync(Guid id, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var r = await Full.FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -56,7 +58,7 @@ public class RequestService(IAppDbContext db, TimeProvider clock, Access access,
         return r;
     }
 
-    public async Task<RequestDto> CreateAsync(string type, List<string> names, CancellationToken ct)
+    private async Task<RequestDto> CreateAsync(string type, List<string> names, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         if (!NameTypes.IsValid(type)) throw new DomainException("اختر النوع");
@@ -69,7 +71,7 @@ public class RequestService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.RequestAsync(r, ct);
     }
 
-    public async Task<RequestDto> CreateCompoundAsync(Guid reservedId, string fullName, CancellationToken ct)
+    private async Task<RequestDto> CreateCompoundAsync(Guid reservedId, string fullName, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var b = await db.ReservedNames.FirstOrDefaultAsync(x => x.Id == reservedId && x.OwnerId == u.Id, ct) ?? throw new DomainException("اختر اسمًا من أسمائك المسجلة");
@@ -94,7 +96,7 @@ public class RequestService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.RequestAsync(req, ct);
     }
 
-    public async Task<RequestDto> CreateInvestmentAsync(string type, List<string> names, CancellationToken ct)
+    private async Task<RequestDto> CreateInvestmentAsync(string type, List<string> names, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         if (!NameTypes.IsValid(type)) throw new DomainException("اختر النوع");
@@ -113,7 +115,7 @@ public class RequestService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.RequestAsync(r, ct);
     }
 
-    public async Task<List<InvestmentItemDto>> MyInvestmentsAsync(CancellationToken ct)
+    private async Task<List<InvestmentItemDto>> MyInvestmentsAsync(CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var list = await Full.AsNoTracking().Where(r => r.UserId == u.Id && r.Kind == RequestKinds.Investment).OrderByDescending(r => r.CreatedAt).ToListAsync(ct);
@@ -137,7 +139,7 @@ public class RequestService(IAppDbContext db, TimeProvider clock, Access access,
     }
 
     /// <summary>Pays the auction guarantee (or the investment study fee) from the wallet and sends the request to the committee.</summary>
-    public async Task<RequestDto> PayDepositAsync(Guid id, CancellationToken ct)
+    private async Task<RequestDto> PayDepositAsync(Guid id, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         await using var uow = await db.BeginAsync([$"u:{u.Id}", $"r:{id}"], ct);
@@ -161,7 +163,7 @@ public class RequestService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.RequestAsync(r, ct);
     }
 
-    public async Task<decimal> CancelMineAsync(Guid id, string? reason, CancellationToken ct)
+    private async Task<decimal> CancelMineAsync(Guid id, string? reason, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         await using var uow = await db.BeginAsync([$"r:{id}"], ct);
@@ -183,7 +185,7 @@ public class RequestService(IAppDbContext db, TimeProvider clock, Access access,
         return held;
     }
 
-    public async Task<(decimal Refunded, bool RequestCancelled)> WithdrawNameAsync(Guid id, Guid candidateId, CancellationToken ct)
+    private async Task<(decimal Refunded, bool RequestCancelled)> WithdrawNameAsync(Guid id, Guid candidateId, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         await using var uow = await db.BeginAsync([$"r:{id}"], ct);
@@ -230,4 +232,15 @@ public class RequestService(IAppDbContext db, TimeProvider clock, Access access,
         var list = await db.Auctions.Where(a => auctionIds.Contains(a.Id)).ToListAsync(ct);
         db.Auctions.RemoveRange(list);
     }
+
+    // ───── MediatR entry points ─────
+    public Task<List<RequestDto>> Handle(GetMyRequestsQuery q, CancellationToken ct) => MineAsync(ct);
+    public Task<RequestDto> Handle(GetRequestQuery q, CancellationToken ct) => GetAsync(q.Id, ct);
+    public Task<RequestDto> Handle(CreateRequestCommand q, CancellationToken ct) => CreateAsync(q.Type, q.Names, ct);
+    public Task<RequestDto> Handle(CreateCompoundRequestCommand q, CancellationToken ct) => CreateCompoundAsync(q.ReservedId, q.FullName, ct);
+    public Task<RequestDto> Handle(CreateInvestmentRequestCommand q, CancellationToken ct) => CreateInvestmentAsync(q.Type, q.Names, ct);
+    public Task<List<InvestmentItemDto>> Handle(GetMyInvestmentsQuery q, CancellationToken ct) => MyInvestmentsAsync(ct);
+    public Task<RequestDto> Handle(PayDepositCommand q, CancellationToken ct) => PayDepositAsync(q.RequestId, ct);
+    public async Task<CancelResult> Handle(CancelMyRequestCommand q, CancellationToken ct) { return new CancelResult(await CancelMineAsync(q.RequestId, q.Reason, ct)); }
+    public async Task<WithdrawResult> Handle(WithdrawNameCommand q, CancellationToken ct) { var (r, c) = await WithdrawNameAsync(q.RequestId, q.CandidateId, ct); return new WithdrawResult(r, c); }
 }

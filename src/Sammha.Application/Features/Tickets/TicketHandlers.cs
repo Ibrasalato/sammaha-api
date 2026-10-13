@@ -1,3 +1,4 @@
+using MediatR;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -5,18 +6,19 @@ using Sammha.Application.Common;
 using Sammha.Application.Engine;
 using Sammha.Domain;
 
-namespace Sammha.Application.Features;
+namespace Sammha.Application.Features.Tickets;
 
 /// <summary>Complaints, reports, enquiries and suggestions (public form, tracking, staff handling, email through n8n).</summary>
-public partial class TicketService(IAppDbContext db, TimeProvider clock, Access access, Notifier notifier, IPostCommit postCommit, IWebhookPublisher webhooks,
+public partial class TicketHandlers(IAppDbContext db, TimeProvider clock, Access access, Notifier notifier, IPostCommit postCommit, IWebhookPublisher webhooks,
     IOptions<IntegrationOptions> integrations)
+    : IRequestHandler<SubmitTicketCommand, TicketDto>, IRequestHandler<TrackTicketQuery, TicketDto?>, IRequestHandler<FollowUpTicketCommand, TicketDto>, IRequestHandler<GetMyTicketsQuery, List<TicketDto>>, IRequestHandler<ListTicketsQuery, List<TicketDto>>, IRequestHandler<GetTicketQuery, TicketDto>, IRequestHandler<UpdateTicketCommand, TicketDto>, IRequestHandler<ReplyTicketCommand, TicketDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     [GeneratedRegex(@"^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$")] private static partial Regex EmailRx();
 
     private static string Clip(string? s, int max) { var t = (s ?? "").Trim(); return t.Length > max ? t[..max] : t; }
 
-    public async Task<TicketDto> SubmitAsync(TicketInput i, CancellationToken ct)
+    private async Task<TicketDto> SubmitAsync(TicketInput i, CancellationToken ct)
     {
         var t = new Ticket
         {
@@ -47,10 +49,10 @@ public partial class TicketService(IAppDbContext db, TimeProvider clock, Access 
         return db.Tickets.Include(t => t.Messages).FirstOrDefaultAsync(t => t.Number == n && t.Phone == p, ct);
     }
 
-    public async Task<TicketDto?> TrackAsync(string number, string phone, CancellationToken ct) =>
+    private async Task<TicketDto?> TrackAsync(string number, string phone, CancellationToken ct) =>
         await FindAsync(number, phone, ct) is { } t ? Mapper.Ticket(t, false) : null;
 
-    public async Task<TicketDto> FollowUpAsync(string number, string phone, string body, CancellationToken ct)
+    private async Task<TicketDto> FollowUpAsync(string number, string phone, string body, CancellationToken ct)
     {
         var t = await FindAsync(number, phone, ct) ?? throw DomainException.NotFound("لم نجد طلبًا بهذا الرقم والجوال");
         if (t.Status == TicketStatuses.Closed) throw new DomainException("هذا الطلب مغلق، افتح طلبًا جديدًا");
@@ -63,28 +65,28 @@ public partial class TicketService(IAppDbContext db, TimeProvider clock, Access 
         return Mapper.Ticket(await db.Tickets.Include(x => x.Messages).FirstAsync(x => x.Id == t.Id, ct), false);
     }
 
-    public async Task<List<TicketDto>> MineAsync(CancellationToken ct)
+    private async Task<List<TicketDto>> MineAsync(CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var list = await db.Tickets.AsNoTracking().Include(t => t.Messages).Where(t => t.UserId == u.Id || t.Phone == u.Phone).OrderByDescending(t => t.CreatedAt).ToListAsync(ct);
         return list.Select(t => Mapper.Ticket(t, false)).ToList();
     }
 
-    public async Task<List<TicketDto>> ListAsync(CancellationToken ct)
+    private async Task<List<TicketDto>> ListAsync(CancellationToken ct)
     {
         await access.StaffAsync(ct);
         var list = await db.Tickets.AsNoTracking().Include(t => t.Messages).OrderByDescending(t => t.CreatedAt).Take(1000).ToListAsync(ct);
         return list.Select(t => Mapper.Ticket(t, true)).ToList();
     }
 
-    public async Task<TicketDto> GetAsync(Guid id, CancellationToken ct)
+    private async Task<TicketDto> GetAsync(Guid id, CancellationToken ct)
     {
         await access.StaffAsync(ct);
         var t = await db.Tickets.AsNoTracking().Include(x => x.Messages).FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("الطلب غير موجود");
         return Mapper.Ticket(t, true);
     }
 
-    public async Task<TicketDto> UpdateAsync(Guid id, string? status, string? priority, string? assignee, CancellationToken ct)
+    private async Task<TicketDto> UpdateAsync(Guid id, string? status, string? priority, string? assignee, CancellationToken ct)
     {
         await access.StaffAsync(ct);
         var t = await db.Tickets.Include(x => x.Messages).FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("الطلب غير موجود");
@@ -98,7 +100,7 @@ public partial class TicketService(IAppDbContext db, TimeProvider clock, Access 
         return Mapper.Ticket(t, true);
     }
 
-    public async Task<TicketDto> ReplyAsync(Guid id, string body, bool isInternal, CancellationToken ct)
+    private async Task<TicketDto> ReplyAsync(Guid id, string body, bool isInternal, CancellationToken ct)
     {
         var u = await access.StaffAsync(ct);
         var t = await db.Tickets.Include(x => x.Messages).FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("الطلب غير موجود");
@@ -137,4 +139,14 @@ public partial class TicketService(IAppDbContext db, TimeProvider clock, Access 
         };
         postCommit.Enqueue(() => webhooks.PublishAsync(url, body));
     }
+
+    // ───── MediatR entry points ─────
+    public Task<TicketDto> Handle(SubmitTicketCommand q, CancellationToken ct) => SubmitAsync(q.Input, ct);
+    public Task<TicketDto?> Handle(TrackTicketQuery q, CancellationToken ct) => TrackAsync(q.Number, q.Phone, ct);
+    public Task<TicketDto> Handle(FollowUpTicketCommand q, CancellationToken ct) => FollowUpAsync(q.Number, q.Phone, q.Body, ct);
+    public Task<List<TicketDto>> Handle(GetMyTicketsQuery q, CancellationToken ct) => MineAsync(ct);
+    public Task<List<TicketDto>> Handle(ListTicketsQuery q, CancellationToken ct) => ListAsync(ct);
+    public Task<TicketDto> Handle(GetTicketQuery q, CancellationToken ct) => GetAsync(q.Id, ct);
+    public Task<TicketDto> Handle(UpdateTicketCommand q, CancellationToken ct) => UpdateAsync(q.Id, q.Status, q.Priority, q.Assignee, ct);
+    public Task<TicketDto> Handle(ReplyTicketCommand q, CancellationToken ct) => ReplyAsync(q.Id, q.Body, q.Internal, ct);
 }

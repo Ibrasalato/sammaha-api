@@ -1,3 +1,4 @@
+using MediatR;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -6,18 +7,19 @@ using Sammha.Application.Common;
 using Sammha.Application.Engine;
 using Sammha.Domain;
 
-namespace Sammha.Application.Features;
+namespace Sammha.Application.Features.Admin;
 
 /// <summary>Approval committee and platform administration.</summary>
-public partial class AdminService(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Matching matching, Money money, Notifier notifier,
+public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Matching matching, Money money, Notifier notifier,
     IPasswordHasher hasher, IOptions<PlatformOptions> rules)
+    : IRequestHandler<GetOverviewQuery, AdminOverviewDto>, IRequestHandler<ListRequestsQuery, List<RequestDto>>, IRequestHandler<ReviewRequestCommand, RequestDto>, IRequestHandler<RejectRequestCommand, RequestDto>, IRequestHandler<CancelRequestCommand, RequestDto>, IRequestHandler<GetAwaitingScheduleQuery, List<AwaitingDto>>, IRequestHandler<ScheduleAuctionsCommand, List<AuctionDto>>, IRequestHandler<ListInvoicesQuery, List<InvoiceDto>>, IRequestHandler<MarkInvoicePaidCommand, InvoiceDto>, IRequestHandler<ListUsersQuery, List<UserDto>>, IRequestHandler<CreateStaffCommand, UserDto>, IRequestHandler<SetUserRoleCommand, UserDto>, IRequestHandler<SetUserActiveCommand, UserDto>, IRequestHandler<SaveEventCommand, CamelEventDto>, IRequestHandler<DeleteEventCommand, MediatR.Unit>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     private PlatformOptions R => rules.Value;
     private IQueryable<LogoRequest> Full => db.Requests.Include(r => r.User).Include(r => r.Candidates);
     [GeneratedRegex(@"^[^\s@]+@[^\s@]+\.[^\s@]+$")] private static partial Regex EmailRx();
 
-    public async Task<AdminOverviewDto> OverviewAsync(CancellationToken ct)
+    private async Task<AdminOverviewDto> OverviewAsync(CancellationToken ct)
     {
         await access.StaffAsync(ct);
         var now = Now;
@@ -31,7 +33,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
             await db.Tickets.CountAsync(t => t.Status == TicketStatuses.New || t.Status == TicketStatuses.InProgress, ct));
     }
 
-    public async Task<List<RequestDto>> ListRequestsAsync(string? status, CancellationToken ct)
+    private async Task<List<RequestDto>> ListRequestsAsync(string? status, CancellationToken ct)
     {
         await access.StaffAsync(ct);
         var q = Full.AsNoTracking();
@@ -40,7 +42,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         return await map.RequestsAsync(list, ct);
     }
 
-    public async Task<RequestDto> ReviewAsync(Guid id, List<ReviewDecision> decisions, string? note, CancellationToken ct)
+    private async Task<RequestDto> ReviewAsync(Guid id, List<ReviewDecision> decisions, string? note, CancellationToken ct)
     {
         var staff = await access.StaffAsync(ct);
         await using var uow = await db.BeginAsync([$"r:{id}"], ct);
@@ -109,7 +111,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         return await map.RequestAsync(r, ct);
     }
 
-    public async Task<RequestDto> RejectAsync(Guid id, string reason, CancellationToken ct)
+    private async Task<RequestDto> RejectAsync(Guid id, string reason, CancellationToken ct)
     {
         var staff = await access.StaffAsync(ct);
         await using var uow = await db.BeginAsync([$"r:{id}"], ct);
@@ -131,7 +133,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         return await map.RequestAsync(r, ct);
     }
 
-    public async Task<RequestDto> CancelAsync(Guid id, string reason, CancellationToken ct)
+    private async Task<RequestDto> CancelAsync(Guid id, string reason, CancellationToken ct)
     {
         var staff = await access.StaffAsync(ct);
         await using var uow = await db.BeginAsync([$"r:{id}"], ct);
@@ -153,7 +155,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         return await map.RequestAsync(r, ct);
     }
 
-    public async Task<List<AwaitingDto>> AwaitingScheduleAsync(CancellationToken ct)
+    private async Task<List<AwaitingDto>> AwaitingScheduleAsync(CancellationToken ct)
     {
         await access.StaffAsync(ct);
         var list = await Full.AsNoTracking()
@@ -171,7 +173,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         }).ToList();
     }
 
-    public async Task<List<AuctionDto>> ScheduleAsync(List<Guid> candidateIds, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct)
+    private async Task<List<AuctionDto>> ScheduleAsync(List<Guid> candidateIds, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct)
     {
         await access.StaffAsync(ct);
         if (endsAt <= startsAt) throw new DomainException("موعد النهاية يجب أن يكون بعد البداية");
@@ -180,7 +182,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         await using var uow = await db.BeginAsync(["schedule"], ct);
         var cands = await db.Candidates.Include(c => c.Request)
             .Where(c => candidateIds.Contains(c.Id) && c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.Request.Status == RequestStatuses.Accepted && c.Request.Kind != RequestKinds.Compound)
-            .ToListAsync(ct);
+            .OrderBy(c => c.Request.Number).ThenBy(c => c.Position).ToListAsync(ct);
         var created = new List<Auction>();
         var tz = TimeZoneInfo.FindSystemTimeZoneById(R.TimeZone);
         var when = TimeZoneInfo.ConvertTime(startsAt, tz).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
@@ -202,7 +204,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         return await map.AuctionsAsync(created, ct);
     }
 
-    public async Task<List<InvoiceDto>> AllInvoicesAsync(CancellationToken ct)
+    private async Task<List<InvoiceDto>> AllInvoicesAsync(CancellationToken ct)
     {
         await access.StaffAsync(ct);
         var list = await db.Invoices.AsNoTracking().OrderByDescending(i => i.IssuedAt).Take(2000).ToListAsync(ct);
@@ -210,7 +212,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
     }
 
     /// <summary>cash or bank transfer recorded by the committee</summary>
-    public async Task<InvoiceDto> MarkInvoicePaidAsync(Guid id, CancellationToken ct)
+    private async Task<InvoiceDto> MarkInvoicePaidAsync(Guid id, CancellationToken ct)
     {
         await access.StaffAsync(ct);
         await using var uow = await db.BeginAsync([$"i:{id}"], ct);
@@ -223,13 +225,13 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
     }
 
     // ───── users & permissions (super admin) ─────
-    public async Task<List<UserDto>> ListUsersAsync(CancellationToken ct)
+    private async Task<List<UserDto>> ListUsersAsync(CancellationToken ct)
     {
         await access.StaffAsync(ct);
         return (await db.Users.AsNoTracking().OrderByDescending(u => u.CreatedAt).ToListAsync(ct)).Select(Mapper.User).ToList();
     }
 
-    public async Task<UserDto> CreateStaffAsync(StaffInput i, CancellationToken ct)
+    private async Task<UserDto> CreateStaffAsync(StaffInput i, CancellationToken ct)
     {
         await access.AdminAsync(ct);
         var phone = NameMatcher.NormalizePhone(i.Phone);
@@ -257,7 +259,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         return t;
     }
 
-    public async Task<UserDto> SetRoleAsync(Guid id, string role, CancellationToken ct)
+    private async Task<UserDto> SetRoleAsync(Guid id, string role, CancellationToken ct)
     {
         var t = await TargetAsync(id, ct);
         if (!Roles.All.Contains(role)) throw new DomainException("صلاحية غير معروفة");
@@ -266,7 +268,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         return Mapper.User(t);
     }
 
-    public async Task<UserDto> SetActiveAsync(Guid id, bool active, CancellationToken ct)
+    private async Task<UserDto> SetActiveAsync(Guid id, bool active, CancellationToken ct)
     {
         var t = await TargetAsync(id, ct);
         t.Active = active;
@@ -275,7 +277,7 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
     }
 
     // ───── events calendar ─────
-    public async Task<CamelEventDto> SaveEventAsync(CamelEventDto e, CancellationToken ct)
+    private async Task<CamelEventDto> SaveEventAsync(CamelEventDto e, CancellationToken ct)
     {
         await access.StaffAsync(ct);
         if (string.IsNullOrWhiteSpace(e.Title) || string.IsNullOrEmpty(e.StartsOn) || string.IsNullOrEmpty(e.EndsOn)) throw new DomainException("أكمل اسم الفعالية والتواريخ");
@@ -290,9 +292,26 @@ public partial class AdminService(IAppDbContext db, TimeProvider clock, Access a
         return Mapper.Event(row);
     }
 
-    public async Task DeleteEventAsync(string id, CancellationToken ct)
+    private async Task DeleteEventAsync(string id, CancellationToken ct)
     {
         await access.StaffAsync(ct);
         await db.Events.Where(e => e.Id == id).ExecuteDeleteAsync(ct);
     }
+
+    // ───── MediatR entry points ─────
+    public Task<AdminOverviewDto> Handle(GetOverviewQuery q, CancellationToken ct) => OverviewAsync(ct);
+    public Task<List<RequestDto>> Handle(ListRequestsQuery q, CancellationToken ct) => ListRequestsAsync(q.Status, ct);
+    public Task<RequestDto> Handle(ReviewRequestCommand q, CancellationToken ct) => ReviewAsync(q.Id, q.Decisions, q.Note, ct);
+    public Task<RequestDto> Handle(RejectRequestCommand q, CancellationToken ct) => RejectAsync(q.Id, q.Reason, ct);
+    public Task<RequestDto> Handle(CancelRequestCommand q, CancellationToken ct) => CancelAsync(q.Id, q.Reason, ct);
+    public Task<List<AwaitingDto>> Handle(GetAwaitingScheduleQuery q, CancellationToken ct) => AwaitingScheduleAsync(ct);
+    public Task<List<AuctionDto>> Handle(ScheduleAuctionsCommand q, CancellationToken ct) => ScheduleAsync(q.CandidateIds, q.StartsAt, q.EndsAt, ct);
+    public Task<List<InvoiceDto>> Handle(ListInvoicesQuery q, CancellationToken ct) => AllInvoicesAsync(ct);
+    public Task<InvoiceDto> Handle(MarkInvoicePaidCommand q, CancellationToken ct) => MarkInvoicePaidAsync(q.Id, ct);
+    public Task<List<UserDto>> Handle(ListUsersQuery q, CancellationToken ct) => ListUsersAsync(ct);
+    public Task<UserDto> Handle(CreateStaffCommand q, CancellationToken ct) => CreateStaffAsync(q.Input, ct);
+    public Task<UserDto> Handle(SetUserRoleCommand q, CancellationToken ct) => SetRoleAsync(q.Id, q.Role, ct);
+    public Task<UserDto> Handle(SetUserActiveCommand q, CancellationToken ct) => SetActiveAsync(q.Id, q.Active, ct);
+    public Task<CamelEventDto> Handle(SaveEventCommand q, CancellationToken ct) => SaveEventAsync(q.Event, ct);
+    public async Task<MediatR.Unit> Handle(DeleteEventCommand q, CancellationToken ct) { await DeleteEventAsync(q.Id, ct); return Unit.Value; }
 }

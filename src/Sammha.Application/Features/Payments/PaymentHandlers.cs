@@ -1,4 +1,9 @@
 using System.Text.Json;
+using MediatR;
+using Sammha.Application.Features.Bidding;
+using Sammha.Application.Features.Listings;
+using Sammha.Application.Features.Requests;
+using Sammha.Application.Features.Wallet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -6,21 +11,24 @@ using Sammha.Application.Common;
 using Sammha.Application.Engine;
 using Sammha.Domain;
 
-namespace Sammha.Application.Features;
-
-public record CardCheckout(string? Url, bool Simulated);
+namespace Sammha.Application.Features.Payments;
 
 /// <summary>
 /// Card payments (mada, Visa, Mastercard, Apple Pay) through Moyasar. A paid card payment tops the wallet up,
 /// then completes what it was for (guarantee, invoice, participation guarantee or purchase) from the wallet.
 /// With Payments:Simulate the payment succeeds at once (development).
 /// </summary>
-public class PaymentService(IAppDbContext db, TimeProvider clock, Access access, Money money, IPaymentGateway gateway, IOptions<PaymentOptions> opt,
-    RequestService requests, WalletService wallet, BiddingService bidding, ListingService listings, ILogger<PaymentService> log)
+public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access, Money money, IPaymentGateway gateway, IOptions<PaymentOptions> opt,
+    ISender sender, ILogger<PaymentHandlers> log)
+    : IRequestHandler<StartCardPaymentCommand, CardCheckout>, IRequestHandler<TopUpCommand, WalletDto>, IRequestHandler<MoyasarWebhookCommand, Unit>
 {
+    public Task<CardCheckout> Handle(StartCardPaymentCommand c, CancellationToken ct) => StartAsync(c.Purpose, c.Ref, c.Amount, c.CallbackUrl, ct);
+    public Task<WalletDto> Handle(TopUpCommand c, CancellationToken ct) => TopUpAsync(c.Amount, c.CallbackUrl, ct);
+    public async Task<Unit> Handle(MoyasarWebhookCommand c, CancellationToken ct) { await HandleWebhookAsync(c.Body, ct); return Unit.Value; }
+
     private DateTimeOffset Now => clock.GetUtcNow();
 
-    public async Task<CardCheckout> StartAsync(string purpose, Guid? reference, decimal amount, string callbackUrl, CancellationToken ct)
+    private async Task<CardCheckout> StartAsync(string purpose, Guid? reference, decimal amount, string callbackUrl, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         if (!PaymentPurposes.All.Contains(purpose)) throw new DomainException("عملية دفع غير معروفة");
@@ -55,15 +63,15 @@ public class PaymentService(IAppDbContext db, TimeProvider clock, Access access,
         return new CardCheckout(url, false);
     }
 
-    public async Task<WalletDto> TopUpAsync(decimal amount, string callbackUrl, CancellationToken ct)
+    private async Task<WalletDto> TopUpAsync(decimal amount, string callbackUrl, CancellationToken ct)
     {
         var r = await StartAsync(PaymentPurposes.TopUp, null, amount, callbackUrl, ct);
         if (r.Url != null) throw new DomainException("أكمل الدفع في صفحة البطاقة");
-        return await wallet.WalletAsync(ct);
+        return await sender.Send(new GetWalletQuery(), ct);
     }
 
     /// <summary>Moyasar webhook (event payment_paid): credits the wallet once, then completes the purpose.</summary>
-    public async Task HandleWebhookAsync(JsonElement body, CancellationToken ct)
+    private async Task HandleWebhookAsync(JsonElement body, CancellationToken ct)
     {
         var secret = opt.Value.WebhookSecret;
         if (string.IsNullOrEmpty(secret) || !body.TryGetProperty("secret_token", out var tok) || tok.GetString() != secret) throw DomainException.Forbidden("forbidden");
@@ -91,10 +99,10 @@ public class PaymentService(IAppDbContext db, TimeProvider clock, Access access,
         {
             switch (p.Purpose)
             {
-                case PaymentPurposes.Deposit: await requests.PayDepositAsync(reference, ct); break;
-                case PaymentPurposes.Invoice: await wallet.PayInvoiceAsync(reference, ct); break;
-                case PaymentPurposes.BidDeposit: await bidding.PayBidDepositAsync(reference, ct); break;
-                case PaymentPurposes.Listing: await listings.BuyAsync(reference, ct); break;
+                case PaymentPurposes.Deposit: await sender.Send(new PayDepositCommand(reference), ct); break;
+                case PaymentPurposes.Invoice: await sender.Send(new PayInvoiceCommand(reference), ct); break;
+                case PaymentPurposes.BidDeposit: await sender.Send(new PayBidDepositCommand(reference), ct); break;
+                case PaymentPurposes.Listing: await sender.Send(new BuyListingCommand(reference), ct); break;
             }
         }
         catch (DomainException e)

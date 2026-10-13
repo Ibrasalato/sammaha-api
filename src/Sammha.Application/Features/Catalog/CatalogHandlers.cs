@@ -1,16 +1,18 @@
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Sammha.Application.Common;
 using Sammha.Application.Engine;
 using Sammha.Domain;
 
-namespace Sammha.Application.Features;
+namespace Sammha.Application.Features.Catalog;
 
 /// <summary>Public pages: auctions, the name registry, availability checks, events and certificate verification.</summary>
-public class CatalogService(IAppDbContext db, TimeProvider clock, Mapper map, Matching matching, Sweeper sweeper)
+public class CatalogHandlers(IAppDbContext db, TimeProvider clock, Mapper map, Matching matching, Sweeper sweeper)
+    : IRequestHandler<GetStatsQuery, PublicStatsDto>, IRequestHandler<ListAuctionsQuery, List<AuctionDto>>, IRequestHandler<GetAuctionQuery, AuctionViewDto>, IRequestHandler<ListReservedNamesQuery, List<ReservedNameDto>>, IRequestHandler<CheckNamesQuery, List<NameCheckDto>>, IRequestHandler<ListEventsQuery, List<CamelEventDto>>, IRequestHandler<VerifyCertificateQuery, ReservedNameDto?>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
 
-    public async Task<PublicStatsDto> StatsAsync(CancellationToken ct)
+    private async Task<PublicStatsDto> StatsAsync(CancellationToken ct)
     {
         var now = Now;
         return new PublicStatsDto(
@@ -20,7 +22,7 @@ public class CatalogService(IAppDbContext db, TimeProvider clock, Mapper map, Ma
             await db.ReservedNames.Select(r => r.OwnerName).Distinct().CountAsync(ct));
     }
 
-    public async Task<List<AuctionDto>> ListAuctionsAsync(AuctionFilter f, CancellationToken ct)
+    private async Task<List<AuctionDto>> ListAuctionsAsync(AuctionFilter f, CancellationToken ct)
     {
         var now = Now;
         var q = db.Auctions.AsNoTracking();
@@ -45,7 +47,7 @@ public class CatalogService(IAppDbContext db, TimeProvider clock, Mapper map, Ma
         return await map.AuctionsAsync(list, ct);
     }
 
-    public async Task<AuctionViewDto> GetAuctionAsync(Guid id, CancellationToken ct)
+    private async Task<AuctionViewDto> GetAuctionAsync(Guid id, CancellationToken ct)
     {
         var a = await db.Auctions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("المزاد غير موجود");
         if (!a.Settled && a.EndsAt <= Now)
@@ -57,7 +59,7 @@ public class CatalogService(IAppDbContext db, TimeProvider clock, Mapper map, Ma
         return await map.ViewAsync(a, ct);
     }
 
-    public async Task<List<ReservedNameDto>> ListReservedAsync(string? q, string? type, CancellationToken ct)
+    private async Task<List<ReservedNameDto>> ListReservedAsync(string? q, string? type, CancellationToken ct)
     {
         var query = db.ReservedNames.AsNoTracking();
         if (NameTypes.IsValid(type)) query = query.Where(r => r.Type == type);
@@ -74,20 +76,29 @@ public class CatalogService(IAppDbContext db, TimeProvider clock, Mapper map, Ma
         return list.Select(r => Mapper.Reserved(r, r.OwnerId is { } o ? avatars.GetValueOrDefault(o) : null)).ToList();
     }
 
-    public async Task<List<NameCheckDto>> CheckNamesAsync(List<string> names, CancellationToken ct)
+    private async Task<List<NameCheckDto>> CheckNamesAsync(List<string> names, CancellationToken ct)
     {
         if (names.Count > 10) throw new DomainException("عدد الأسماء كبير");
         var checks = await matching.CheckAsync(names, null, ct);
         return checks.Select(c => new NameCheckDto(c.Name, c.Normalized, c.Verdict, c.Message, Mapper.Hits(c.Hits))).ToList();
     }
 
-    public async Task<List<CamelEventDto>> EventsAsync(CancellationToken ct) =>
+    private async Task<List<CamelEventDto>> EventsAsync(CancellationToken ct) =>
         (await db.Events.AsNoTracking().OrderBy(e => e.StartsOn).ToListAsync(ct)).Select(Mapper.Event).ToList();
 
-    public async Task<ReservedNameDto?> VerifyAsync(string code, CancellationToken ct)
+    private async Task<ReservedNameDto?> VerifyAsync(string code, CancellationToken ct)
     {
         var c = (code ?? "").Trim().ToUpperInvariant();
         var r = await db.ReservedNames.AsNoTracking().FirstOrDefaultAsync(x => x.CertCode == c, ct);
         return r == null ? null : Mapper.Reserved(r);
     }
+
+    // ───── MediatR entry points ─────
+    public Task<PublicStatsDto> Handle(GetStatsQuery q, CancellationToken ct) => StatsAsync(ct);
+    public Task<List<AuctionDto>> Handle(ListAuctionsQuery q, CancellationToken ct) => ListAuctionsAsync(q.Filter, ct);
+    public Task<AuctionViewDto> Handle(GetAuctionQuery q, CancellationToken ct) => GetAuctionAsync(q.Id, ct);
+    public Task<List<ReservedNameDto>> Handle(ListReservedNamesQuery q, CancellationToken ct) => ListReservedAsync(q.Q, q.Type, ct);
+    public Task<List<NameCheckDto>> Handle(CheckNamesQuery q, CancellationToken ct) => CheckNamesAsync(q.Names, ct);
+    public Task<List<CamelEventDto>> Handle(ListEventsQuery q, CancellationToken ct) => EventsAsync(ct);
+    public Task<ReservedNameDto?> Handle(VerifyCertificateQuery q, CancellationToken ct) => VerifyAsync(q.Code, ct);
 }

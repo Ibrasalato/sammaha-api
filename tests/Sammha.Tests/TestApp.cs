@@ -28,6 +28,8 @@ public class TestApp : WebApplicationFactory<Program>
         b.UseEnvironment("Development");
         b.UseSetting("ConnectionStrings:Sammha", $"{server};Database={_db}");
         b.UseSetting("Seed:Demo", "true");
+        b.UseSetting("RateLimit:AuthPerMinute", "100000");
+        b.UseSetting("RateLimit:CheckPerMinute", "100000");
         b.UseSetting("Payments:Simulate", "true");
         b.UseSetting("Integrations:TicketWebhookUrl", "");
         b.UseSetting("Integrations:NotifyWebhookUrl", "");

@@ -2,7 +2,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Sammha.Application.Common;
 using Sammha.Application.Engine;
-using Sammha.Application.Features;
 using Sammha.Domain;
 
 namespace Sammha.Application;
@@ -25,15 +24,12 @@ public static class DependencyInjection
         s.AddScoped<AuctionEngine>();
         s.AddScoped<Sweeper>();
 
-        s.AddScoped<AuthService>();
-        s.AddScoped<CatalogService>();
-        s.AddScoped<RequestService>();
-        s.AddScoped<BiddingService>();
-        s.AddScoped<WalletService>();
-        s.AddScoped<ListingService>();
-        s.AddScoped<TicketService>();
-        s.AddScoped<AdminService>();
-        s.AddScoped<PaymentService>();
+        // CQRS: every command and query goes through MediatR
+        s.AddMediatR(m =>
+        {
+            m.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
+            m.AddOpenBehavior(typeof(LoggingBehavior<,>));
+        });
         return s;
     }
 }

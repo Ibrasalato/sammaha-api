@@ -41,8 +41,9 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
 
         var now = app.Clock.GetUtcNow();
         var auctions = await committee.Post<JsonElement>("/api/admin/schedule", new { candidateIds = new[] { cands[0], cands[1] }, startsAt = now.AddMinutes(-1), endsAt = now.AddHours(2) });
-        var a1 = auctions[0].GetProperty("id").GetString();
-        var a2 = auctions[1].GetProperty("id").GetString();
+        string? IdOf(string name) => auctions.EnumerateArray().First(a => a.GetProperty("name").GetString() == name).GetProperty("id").GetString();
+        var a1 = IdOf("نسيم الصبا");
+        var a2 = IdOf("برق الشمال");
 
         // proxy bidding: b1 sets a ceiling, b2 bids, the platform answers for b1
         await b1.Put<JsonElement>($"/api/auctions/{a1}/autobid", new { max = 300 });

@@ -1,23 +1,25 @@
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Sammha.Application.Common;
 using Sammha.Application.Engine;
 using Sammha.Domain;
 
-namespace Sammha.Application.Features;
+namespace Sammha.Application.Features.Listings;
 
 /// <summary>
 /// «بيع اسم»: an owner sells a name they own.
 /// Resale auction: announced 72 h ahead, opens at the owner's minimum, 3 days, bidders pay a guarantee, 10% commission.
 /// Instant sale: on the market 72 h at the owner's price, first buyer who pays takes it, 15% commission.
 /// </summary>
-public class ListingService(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Money money, AuctionEngine engine, Notifier notifier, IOptions<PlatformOptions> rules)
+public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Money money, AuctionEngine engine, Notifier notifier, IOptions<PlatformOptions> rules)
+    : IRequestHandler<CreateListingCommand, ListingDto>, IRequestHandler<CancelListingCommand, ListingDto>, IRequestHandler<GetMyListingsQuery, List<ListingDto>>, IRequestHandler<GetMarketQuery, List<ListingDto>>, IRequestHandler<BuyListingCommand, ListingDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     private PlatformOptions R => rules.Value;
     private static readonly string[] Active = [ListingStatuses.Scheduled, ListingStatuses.Live];
 
-    public async Task<ListingDto> CreateAsync(Guid reservedId, string mode, decimal price, CancellationToken ct)
+    private async Task<ListingDto> CreateAsync(Guid reservedId, string mode, decimal price, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         if (mode is not (ListingModes.Auction or ListingModes.Instant)) throw new DomainException("اختر نوع الطرح");
@@ -62,7 +64,7 @@ public class ListingService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.ListingAsync(l, ct);
     }
 
-    public async Task<ListingDto> CancelAsync(Guid id, CancellationToken ct)
+    private async Task<ListingDto> CancelAsync(Guid id, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         await using var uow = await db.BeginAsync([$"l:{id}"], ct);
@@ -83,7 +85,7 @@ public class ListingService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.ListingAsync(l, ct);
     }
 
-    public async Task<List<ListingDto>> MineAsync(CancellationToken ct)
+    private async Task<List<ListingDto>> MineAsync(CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var list = await db.Listings.AsNoTracking().Where(l => l.SellerId == u.Id).OrderByDescending(l => l.CreatedAt).ToListAsync(ct);
@@ -91,7 +93,7 @@ public class ListingService(IAppDbContext db, TimeProvider clock, Access access,
     }
 
     /// <summary>fixed-price names on sale now, plus those closed in the last 3 days (shown locked)</summary>
-    public async Task<List<ListingDto>> MarketAsync(CancellationToken ct)
+    private async Task<List<ListingDto>> MarketAsync(CancellationToken ct)
     {
         var now = Now;
         var since = now.AddDays(-3);
@@ -104,7 +106,7 @@ public class ListingService(IAppDbContext db, TimeProvider clock, Access access,
         return await map.ListingsAsync(list, ct);
     }
 
-    public async Task<ListingDto> BuyAsync(Guid id, CancellationToken ct)
+    private async Task<ListingDto> BuyAsync(Guid id, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         await using var uow = await db.BeginAsync([$"l:{id}", $"u:{u.Id}"], ct);
@@ -128,4 +130,11 @@ public class ListingService(IAppDbContext db, TimeProvider clock, Access access,
         await uow.CommitAsync(ct);
         return await map.ListingAsync(l, ct);
     }
+
+    // ───── MediatR entry points ─────
+    public Task<ListingDto> Handle(CreateListingCommand q, CancellationToken ct) => CreateAsync(q.ReservedId, q.Mode, q.Price, ct);
+    public Task<ListingDto> Handle(CancelListingCommand q, CancellationToken ct) => CancelAsync(q.ListingId, ct);
+    public Task<List<ListingDto>> Handle(GetMyListingsQuery q, CancellationToken ct) => MineAsync(ct);
+    public Task<List<ListingDto>> Handle(GetMarketQuery q, CancellationToken ct) => MarketAsync(ct);
+    public Task<ListingDto> Handle(BuyListingCommand q, CancellationToken ct) => BuyAsync(q.ListingId, ct);
 }

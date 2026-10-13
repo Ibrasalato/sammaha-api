@@ -1,3 +1,4 @@
+using MediatR;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -5,20 +6,21 @@ using Microsoft.Extensions.Options;
 using Sammha.Application.Common;
 using Sammha.Domain;
 
-namespace Sammha.Application.Features;
+namespace Sammha.Application.Features.Auth;
 
 /// <summary>Sign-up, two-step sign-in (password then one-time code) and account changes.</summary>
-public partial class AuthService(IAppDbContext db, TimeProvider clock, Access access, IPasswordHasher hasher, ITokenIssuer tokens, ISmsSender sms,
+public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, IPasswordHasher hasher, ITokenIssuer tokens, ISmsSender sms,
     IOptions<OtpOptions> otpOpt)
+    : IRequestHandler<GetCurrentUserQuery, UserDto?>, IRequestHandler<SignUpCommand, AuthResult>, IRequestHandler<StartSignInCommand, OtpChallengeDto>, IRequestHandler<CompleteSignInCommand, AuthResult>, IRequestHandler<ResendOtpCommand, OtpChallengeDto>, IRequestHandler<ChangePasswordCommand, MediatR.Unit>, IRequestHandler<UpdateProfileCommand, UserDto>, IRequestHandler<UpdateAccountCommand, UserDto>, IRequestHandler<RequestEmailChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailChangeCommand, UserDto>, IRequestHandler<RequestPhoneChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmPhoneChangeCommand, UserDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     private OtpOptions Otp => otpOpt.Value;
     [GeneratedRegex(@"^[^\s@]+@[^\s@]+\.[^\s@]+$")] private static partial Regex EmailRx();
     [GeneratedRegex(@"^[12]\d{9}$")] private static partial Regex NationalIdRx();
 
-    public async Task<UserDto?> CurrentAsync(CancellationToken ct) => (await access.MaybeAsync(ct)) is { } u ? Mapper.User(u) : null;
+    private async Task<UserDto?> CurrentAsync(CancellationToken ct) => (await access.MaybeAsync(ct)) is { } u ? Mapper.User(u) : null;
 
-    public async Task<AuthResult> SignUpAsync(SignUpInput i, CancellationToken ct)
+    private async Task<AuthResult> SignUpAsync(SignUpInput i, CancellationToken ct)
     {
         var phone = NameMatcher.NormalizePhone(i.Phone);
         var email = (i.Email ?? "").Trim();
@@ -38,7 +40,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
     }
 
     /// <summary>Step 1. The same generic error whichever portal is wrong, so the staff portal is never revealed.</summary>
-    public async Task<OtpChallengeDto> StartSignInAsync(string login, string password, string portal, CancellationToken ct)
+    private async Task<OtpChallengeDto> StartSignInAsync(string login, string password, string portal, CancellationToken ct)
     {
         var l = (login ?? "").Trim().ToLowerInvariant();
         var phone = NameMatcher.NormalizePhone(l);
@@ -50,7 +52,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
         return await IssueOtpAsync(u.Id, OtpPurposes.Login, u.Phone, ct);
     }
 
-    public async Task<AuthResult> CompleteSignInAsync(string challenge, string code, CancellationToken ct)
+    private async Task<AuthResult> CompleteSignInAsync(string challenge, string code, CancellationToken ct)
     {
         var c = await ConsumeOtpAsync(challenge, code, OtpPurposes.Login, ct);
         var u = await db.Users.FirstOrDefaultAsync(x => x.Id == c.UserId, ct);
@@ -58,7 +60,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
         return new AuthResult(Mapper.User(u), tokens.Issue(u));
     }
 
-    public async Task<OtpChallengeDto> ResendOtpAsync(string challenge, CancellationToken ct)
+    private async Task<OtpChallengeDto> ResendOtpAsync(string challenge, CancellationToken ct)
     {
         var c = Guid.TryParse(challenge, out var id) ? await db.OtpChallenges.FirstOrDefaultAsync(x => x.Id == id && !x.Used, ct) : null;
         if (c == null) throw new DomainException("انتهت الجلسة، أعد إدخال بياناتك");
@@ -66,7 +68,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
         return await IssueOtpAsync(c.UserId, c.Purpose, c.Target, ct);
     }
 
-    public async Task ChangePasswordAsync(string current, string next, CancellationToken ct)
+    private async Task ChangePasswordAsync(string current, string next, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         if (!hasher.Verify(u.PasswordHash, current ?? "")) throw new DomainException("كلمة المرور الحالية غير صحيحة");
@@ -76,7 +78,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
     }
 
     // ───── account ─────
-    public async Task<UserDto> UpdateProfileAsync(string? avatarUrl, bool avatarGiven, bool showAvatar, CancellationToken ct)
+    private async Task<UserDto> UpdateProfileAsync(string? avatarUrl, bool avatarGiven, bool showAvatar, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         if (avatarGiven)
@@ -89,7 +91,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
         return Mapper.User(u);
     }
 
-    public async Task<UserDto> UpdateAccountAsync(string fullName, string? nationalId, CancellationToken ct)
+    private async Task<UserDto> UpdateAccountAsync(string fullName, string? nationalId, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var name = Regex.Replace((fullName ?? "").Trim(), @"\s+", " ");
@@ -104,7 +106,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
         return Mapper.User(u);
     }
 
-    public async Task<OtpChallengeDto> RequestEmailChangeAsync(string newEmail, CancellationToken ct)
+    private async Task<OtpChallengeDto> RequestEmailChangeAsync(string newEmail, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var mail = (newEmail ?? "").Trim();
@@ -115,7 +117,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
         return await IssueOtpAsync(u.Id, OtpPurposes.Email, mail, ct);
     }
 
-    public async Task<UserDto> ConfirmEmailChangeAsync(string challenge, string code, CancellationToken ct)
+    private async Task<UserDto> ConfirmEmailChangeAsync(string challenge, string code, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var c = await ConsumeOtpAsync(challenge, code, OtpPurposes.Email, ct);
@@ -126,7 +128,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
         return Mapper.User(u);
     }
 
-    public async Task<OtpChallengeDto> RequestPhoneChangeAsync(string newPhone, CancellationToken ct)
+    private async Task<OtpChallengeDto> RequestPhoneChangeAsync(string newPhone, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var phone = NameMatcher.NormalizePhone(newPhone);
@@ -136,7 +138,7 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
         return await IssueOtpAsync(u.Id, OtpPurposes.Phone, phone, ct);
     }
 
-    public async Task<UserDto> ConfirmPhoneChangeAsync(string challenge, string code, CancellationToken ct)
+    private async Task<UserDto> ConfirmPhoneChangeAsync(string challenge, string code, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         var c = await ConsumeOtpAsync(challenge, code, OtpPurposes.Phone, ct);
@@ -184,4 +186,18 @@ public partial class AuthService(IAppDbContext db, TimeProvider clock, Access ac
         var at = e.IndexOf('@');
         return at <= 0 ? e : $"{e[0]}•••{e[at..]}";
     }
+
+    // ───── MediatR entry points ─────
+    public Task<UserDto?> Handle(GetCurrentUserQuery q, CancellationToken ct) => CurrentAsync(ct);
+    public Task<AuthResult> Handle(SignUpCommand q, CancellationToken ct) => SignUpAsync(q.Input, ct);
+    public Task<OtpChallengeDto> Handle(StartSignInCommand q, CancellationToken ct) => StartSignInAsync(q.Login, q.Password, q.Portal, ct);
+    public Task<AuthResult> Handle(CompleteSignInCommand q, CancellationToken ct) => CompleteSignInAsync(q.Challenge, q.Code, ct);
+    public Task<OtpChallengeDto> Handle(ResendOtpCommand q, CancellationToken ct) => ResendOtpAsync(q.Challenge, ct);
+    public async Task<MediatR.Unit> Handle(ChangePasswordCommand q, CancellationToken ct) { await ChangePasswordAsync(q.Current, q.Next, ct); return Unit.Value; }
+    public Task<UserDto> Handle(UpdateProfileCommand q, CancellationToken ct) => UpdateProfileAsync(q.AvatarUrl, q.AvatarSet, q.ShowAvatar, ct);
+    public Task<UserDto> Handle(UpdateAccountCommand q, CancellationToken ct) => UpdateAccountAsync(q.FullName, q.NationalId, ct);
+    public Task<OtpChallengeDto> Handle(RequestEmailChangeCommand q, CancellationToken ct) => RequestEmailChangeAsync(q.Email, ct);
+    public Task<UserDto> Handle(ConfirmEmailChangeCommand q, CancellationToken ct) => ConfirmEmailChangeAsync(q.Challenge, q.Code, ct);
+    public Task<OtpChallengeDto> Handle(RequestPhoneChangeCommand q, CancellationToken ct) => RequestPhoneChangeAsync(q.Phone, ct);
+    public Task<UserDto> Handle(ConfirmPhoneChangeCommand q, CancellationToken ct) => ConfirmPhoneChangeAsync(q.Challenge, q.Code, ct);
 }

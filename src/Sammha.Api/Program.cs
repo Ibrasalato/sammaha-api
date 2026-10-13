@@ -60,8 +60,8 @@ builder.Services.AddRateLimiter(o =>
     o.RejectionStatusCode = 429;
     o.OnRejected = async (ctx, ct) => await ctx.HttpContext.Response.WriteAsJsonAsync(new { message = "محاولات كثيرة، انتظر دقيقة ثم حاول" }, ct);
     string Ip(HttpContext h) => h.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    o.AddPolicy("auth", h => RateLimitPartition.GetFixedWindowLimiter(Ip(h), _ => new FixedWindowRateLimiterOptions { PermitLimit = 15, Window = TimeSpan.FromMinutes(1) }));
-    o.AddPolicy("check", h => RateLimitPartition.GetFixedWindowLimiter(Ip(h), _ => new FixedWindowRateLimiterOptions { PermitLimit = 90, Window = TimeSpan.FromMinutes(1) }));
+    o.AddPolicy("auth", h => RateLimitPartition.GetFixedWindowLimiter(Ip(h), _ => new FixedWindowRateLimiterOptions { PermitLimit = cfg.GetValue("RateLimit:AuthPerMinute", 15), Window = TimeSpan.FromMinutes(1) }));
+    o.AddPolicy("check", h => RateLimitPartition.GetFixedWindowLimiter(Ip(h), _ => new FixedWindowRateLimiterOptions { PermitLimit = cfg.GetValue("RateLimit:CheckPerMinute", 90), Window = TimeSpan.FromMinutes(1) }));
 });
 
 var app = builder.Build();

@@ -5,6 +5,8 @@
   <ItemGroup>
     <!-- the Application layer queries through IAppDbContext (DbSet/IQueryable); no provider-specific code here -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.*" />
+    <!-- 12.x is the last Apache-2.0 release; 13+ needs a commercial licence key -->
+    <PackageReference Include="MediatR" Version="12.5.0" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.*" />

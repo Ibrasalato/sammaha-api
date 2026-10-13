@@ -9,7 +9,7 @@ public class NameMatcherTests
     [InlineData("مدعث", "مدعث")]
     [InlineData("أصايل", "اصايل")]
     [InlineData("غزلانة", "غزلانه")]
-    [InlineData("ريم البيداء", "ريمالبيداء")]
+    [InlineData("ريم البيداء", "ريمالبيدا")] // standalone hamza dropped, as in names.ts
     public void Normalizes_like_the_front_end(string input, string expected) => Assert.Equal(expected, NameMatcher.Normalize(input));
 
     [Fact]
@@ -34,5 +34,5 @@ public class NameMatcherTests
     public void Normalizes_phones(string input, string expected) => Assert.Equal(expected, NameMatcher.NormalizePhone(input));
 
     [Fact]
-    public void Masks_names() => Assert.Equal("فهد الد…", NameMatcher.MaskName("فهد عبدالله الدوسري"));
+    public void Masks_names() => Assert.Equal("فهد ال…", NameMatcher.MaskName("فهد عبدالله الدوسري"));
 }
