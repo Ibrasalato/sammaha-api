@@ -53,7 +53,7 @@ public class TestApp : WebApplicationFactory<Program>
         {
             await using var scope = Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<Sammha.Infrastructure.Data.SammhaDbContext>();
-            await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.EnsureDeletedAsync(db.Database);
+            await db.Database.EnsureDeletedAsync();
         }
         catch { /* best effort */ }
         await base.DisposeAsync();
