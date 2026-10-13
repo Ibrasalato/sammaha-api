@@ -636,3 +636,69 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261013163037_RefreshTokens'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [SecurityStamp] nvarchar(32) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261013163037_RefreshTokens'
+)
+BEGIN
+    CREATE TABLE [RefreshTokens] (
+        [Id] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [TokenHash] nvarchar(64) NOT NULL,
+        [FamilyId] uniqueidentifier NOT NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        [ExpiresAt] datetimeoffset NOT NULL,
+        [RevokedAt] datetimeoffset NULL,
+        [RevokedReason] nvarchar(400) NULL,
+        [ReplacedById] uniqueidentifier NULL,
+        [CreatedByIp] nvarchar(400) NULL,
+        [UserAgent] nvarchar(400) NULL,
+        CONSTRAINT [PK_RefreshTokens] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261013163037_RefreshTokens'
+)
+BEGIN
+    CREATE INDEX [IX_RefreshTokens_FamilyId] ON [RefreshTokens] ([FamilyId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261013163037_RefreshTokens'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_RefreshTokens_TokenHash] ON [RefreshTokens] ([TokenHash]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261013163037_RefreshTokens'
+)
+BEGIN
+    CREATE INDEX [IX_RefreshTokens_UserId_RevokedAt] ON [RefreshTokens] ([UserId], [RevokedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261013163037_RefreshTokens'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261013163037_RefreshTokens', N'10.0.12');
+END;
+
+COMMIT;
+GO
+
