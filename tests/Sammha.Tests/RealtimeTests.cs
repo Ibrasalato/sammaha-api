@@ -26,17 +26,17 @@ public class RealtimeTests(TestApp app) : IClassFixture<TestApp>
     }
 
     /// <summary>one accepted name, scheduled to be live now</summary>
-    private async Task<(string Id, decimal Min)> LiveAuctionAsync(string name)
+    private async Task<(string Id, decimal Min)> LiveAuctionAsync(params string[] names)
     {
         var owner = await app.OwnerAsync();
         var committee = await app.CommitteeAsync();
-        var r = await owner.Post<JsonElement>("/api/me/requests", new { type = "bakkar", names = new[] { name } });
+        var r = await owner.Post<JsonElement>("/api/me/requests", new { type = "bakkar", names });
         var id = r.GetProperty("id").GetString();
         await owner.TopUp(100);
         await owner.Post<JsonElement>($"/api/me/requests/{id}/pay");
         var full = await committee.Get<JsonElement>($"/api/requests/{id}");
         var cand = full.GetProperty("candidates")[0].GetProperty("id").GetString();
-        await committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new { decisions = new[] { new { candidateId = cand, status = "accepted" } } });
+        await committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new { decisions = full.GetProperty("candidates").EnumerateArray().Select(c => new { candidateId = c.GetProperty("id").GetString(), status = "accepted" }).ToArray() });
         var now = app.Clock.GetUtcNow();
         var a = (await committee.Post<JsonElement>("/api/admin/schedule", new { candidateIds = new[] { cand }, startsAt = now.AddMinutes(-1), endsAt = now.AddHours(2) }))[0];
         return (a.GetProperty("id").GetString()!, a.GetProperty("currentPrice").GetDecimal() + a.GetProperty("minIncrement").GetDecimal());
@@ -45,7 +45,7 @@ public class RealtimeTests(TestApp app) : IClassFixture<TestApp>
     [Fact]
     public async Task Auction_page_and_list_get_the_new_price()
     {
-        var (aid, min) = await LiveAuctionAsync("سهم الريح");
+        var (aid, min) = await LiveAuctionAsync("سهم الريح", "غيث الربيع", "طيف المساء");
         await using var page = Hub();
         await using var list = Hub();
         var onPage = Next(page, "auction");
@@ -70,7 +70,7 @@ public class RealtimeTests(TestApp app) : IClassFixture<TestApp>
     [Fact]
     public async Task Outbid_notice_reaches_only_the_outbid_bidder()
     {
-        var (aid, min) = await LiveAuctionAsync("نجم الوادي");
+        var (aid, min) = await LiveAuctionAsync("نجم الوادي", "ورد الخزامى", "سحاب الصيف");
         var b1 = await app.BidderAsync(1);
         var b2 = await app.BidderAsync(2);
         await using var c1 = Hub(b1.Token);
@@ -106,7 +106,7 @@ public class RealtimeTests(TestApp app) : IClassFixture<TestApp>
         await using var fresh = Hub(user.Token);
         await fresh.StartAsync();
         Assert.Equal(HubConnectionState.Connected, fresh.State);
-        await user.Post<JsonElement>("/api/auth/password", new { current = "Realtime#2026", next = "123456" });
+        await user.Post<JsonElement>("/api/auth/password", new { current = "Realtime#2026", next = "12345678" });
     }
 
     [Fact]
