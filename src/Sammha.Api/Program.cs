@@ -33,7 +33,16 @@ builder.Services.AddControllers().AddJsonOptions(o =>
     o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     o.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
 });
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(o =>
+{
+    o.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    o.MaximumReceiveMessageSize = 4 * 1024; // clients only send auction ids
+}).AddJsonProtocol(o =>
+{
+    o.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    o.PayloadSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+});
+builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, SubjectUserIdProvider>();
 
 var jwt = cfg.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 if (jwt.Key.Length < 32) throw new InvalidOperationException("Jwt:Key must be at least 32 characters (set it in user-secrets or an environment variable).");

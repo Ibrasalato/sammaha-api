@@ -93,7 +93,11 @@ public interface ITokenIssuer
     TimeSpan RefreshLifetime { get; }
 }
 
+/// <summary>Live updates to browsers (SignalR hub /hubs/auctions in the API).</summary>
 public interface IAuctionRealtime
 {
+    /// <summary>an auction's price, leader, end time or result changed: pushed to its page and to the auctions list</summary>
     Task ChangedAsync(Guid auctionId);
+    /// <summary>a new in-app notification, pushed to that user's open sessions only</summary>
+    Task NotifyAsync(NotificationDto notification);
 }

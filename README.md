@@ -148,3 +148,23 @@ SAMMHA_TEST_DB="Server=localhost,1433;User Id=sa;Password=Sammha_dev_2026!;Trust
 - `POST /api/auth/signout` يلغي الرمز، ومع `everywhere: true` يخرج من كل الأجهزة.
 - تغيير كلمة المرور أو الدور أو إيقاف الحساب يغيّر SecurityStamp فتسقط كل الرموز السابقة فورًا.
 - المفتاح `Jwt__Key` (32 حرفًا على الأقل) يوضع في متغيرات البيئة على IIS ولا يُحفظ في المستودع.
+
+## SignalR (التحديث اللحظي)
+
+الـ Hub على `/hubs/auctions` (WebSockets، مع رجوع تلقائي إلى SSE / Long Polling).
+
+| من العميل | الوظيفة |
+|---|---|
+| `Join(auctionId)` / `Leave(auctionId)` | متابعة صفحة مزاد |
+| `JoinLobby()` / `LeaveLobby()` | متابعة قائمة المزادات |
+
+| من الخادم | المحتوى |
+|---|---|
+| `auction` | `AuctionDto` محدَّث (السعر، عدد المزايدات، المتصدر مُقنَّع، وقت الانتهاء، النتيجة) |
+| `changed` | معرّف المزاد (للعملاء القدامى) |
+| `notification` | `NotificationDto` يصل لصاحبه فقط (تمت المزايدة عليك، فزت، …) |
+
+- الدخول اختياري: الزائر يتابع المزادات، والمسجّل يرسل رمز الوصول في `?access_token=` فتصله تنبيهاته.
+- عند الاتصال يُتحقق من SecurityStamp وحالة الحساب، فالرمز القديم بعد تغيير كلمة المرور أو الإيقاف يُرفض.
+- الإرسال يتم بعد اعتماد المعاملة (IPostCommit)، ولا يُفشل الطلب إن تعذّر.
+- على IIS: فعّل ميزة **WebSocket Protocol** في Windows Features. ولأكثر من خادم استخدم Azure SignalR أو Redis backplane.
