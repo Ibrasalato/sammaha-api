@@ -170,7 +170,6 @@ public partial class CertificateHandlers(IAppDbContext db, Access access, ICerti
     /// <summary>constant-time, case-insensitive comparison of two signature codes</summary>
     private static bool SameCode(string a, string b) =>
         CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(a.ToUpperInvariant()), Encoding.UTF8.GetBytes(b.ToUpperInvariant()));
-    }
 
     public async Task<CertificatePage> Handle(ListCertificatesQuery q, CancellationToken ct)
     {
