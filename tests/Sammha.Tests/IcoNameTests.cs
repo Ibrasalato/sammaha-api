@@ -82,7 +82,8 @@ public class IcoNameTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal("exception", reg.GetProperty("source").GetString());
 
         // the organization's names: staff with names.ico only
-        Assert.Equal(HttpStatusCode.Forbidden, await StatusOf(() => (await app.CommitteeAsync()).Get<JsonElement>("/api/admin/ico-names")));
+        var committee = await app.CommitteeAsync();
+        Assert.Equal(HttpStatusCode.Forbidden, await StatusOf(() => committee.Get<JsonElement>("/api/admin/ico-names")));
         var ico = (await admin.Get<JsonElement>("/api/admin/ico-names")).EnumerateArray().Single(n => n.GetProperty("name").GetString() == "صقر الفلاة");
         Assert.Equal(500m, ico.GetProperty("forfeitedPrice").GetDecimal());
         Assert.Equal(50m, ico.GetProperty("forfeitedDeposit").GetDecimal());
