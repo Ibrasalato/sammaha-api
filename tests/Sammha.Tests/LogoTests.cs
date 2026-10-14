@@ -41,6 +41,6 @@ public class LogoTests(TestApp app) : IClassFixture<TestApp>
         await owner.Put<JsonElement>($"/api/me/names/{id}/logo", new { fileName = "logo2.png", base64 = Png });
         Assert.Equal(HttpStatusCode.NotFound, (await web.GetAsync($"/api/names/{id}/logo")).StatusCode);
         await owner.Send<JsonElement>(HttpMethod.Delete, $"/api/me/names/{id}/logo", new { });
-        Assert.Empty((await admin.Get<JsonElement>("/api/admin/logos")).EnumerateArray().Where(l => l.GetProperty("reservedId").GetString() == id));
+        Assert.DoesNotContain((await admin.Get<JsonElement>("/api/admin/logos")).EnumerateArray(), l => l.GetProperty("reservedId").GetString() == id);
     }
 }
