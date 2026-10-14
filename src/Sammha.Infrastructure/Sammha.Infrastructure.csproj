@@ -9,6 +9,8 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.*" />
+    <!-- pinned above the vulnerable 9.0.x that Microsoft.Data.SqlClient pulls in (GHSA-846f-f764-76mx) -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.*" />
