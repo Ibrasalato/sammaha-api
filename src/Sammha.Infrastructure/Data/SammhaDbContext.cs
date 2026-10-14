@@ -37,6 +37,8 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PlatformSettings> Settings => Set<PlatformSettings>();
     public DbSet<SettingsChange> SettingsChanges => Set<SettingsChange>();
+    public DbSet<StaffRole> StaffRoles => Set<StaffRole>();
+    public DbSet<TicketRoute> TicketRoutes => Set<TicketRoute>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
     {
@@ -164,6 +166,39 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.Property(x => x.MaintenanceNote).HasMaxLength(300);
             e.Property(x => x.UpdatedBy).HasMaxLength(120);
             e.ToTable("PlatformSettings", t => t.HasCheckConstraint("CK_PlatformSettings_Single", "[Id] = 1"));
+        });
+        b.Entity<StaffRole>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(60);
+            e.HasIndex(x => x.Name).IsUnique();
+            e.Property(x => x.Description).HasMaxLength(200);
+            e.Property(x => x.Permissions).HasMaxLength(1000);
+            // the built-in committee role, with what the committee could do before roles existed
+            e.HasData(new StaffRole
+            {
+                Id = Permissions.CommitteeRoleId, Name = "لجنة الاعتماد", Description = "مراجعة الطلبات وفتح المزادات والرد على الشكاوى",
+                Permissions = string.Join(',', Permissions.CommitteeDefault), IsSystem = true, CreatedAt = new DateTimeOffset(2026, 10, 14, 0, 0, 0, TimeSpan.Zero),
+            });
+        });
+        b.Entity<User>().HasOne<StaffRole>().WithMany().HasForeignKey(u => u.StaffRoleId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<TicketRoute>(e =>
+        {
+            e.HasKey(x => new { x.Kind, x.UserId });
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<Ticket>().HasIndex(x => new { x.AssigneeId, x.Status });
+        b.Entity<Auction>(e =>
+        {
+            e.Property(x => x.PauseReason).HasMaxLength(300);
+            e.Property(x => x.CancelReason).HasMaxLength(300);
+        });
+        b.Entity<PlatformSettings>(e =>
+        {
+            e.Property(x => x.ComplaintEmails).HasMaxLength(400);
+            e.Property(x => x.ReportEmails).HasMaxLength(400);
+            e.Property(x => x.InquiryEmails).HasMaxLength(400);
+            e.Property(x => x.SuggestionEmails).HasMaxLength(400);
         });
         b.Entity<SettingsChange>(e =>
         {

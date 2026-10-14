@@ -39,5 +39,44 @@ public class Access(IAppDbContext db, ICurrentUser current, IOptions<PlatformOpt
         return u;
     }
 
+    private (Guid User, IReadOnlySet<string> Set, StaffRole? Role)? _perms;
+
+    /// <summary>admins have every permission; committee members have their staff role's (the default committee role when none is set)</summary>
+    public async Task<(IReadOnlySet<string> Permissions, StaffRole? Role)> PermissionsOfAsync(User u, CancellationToken ct)
+    {
+        if (_perms is { } c && c.User == u.Id) return (c.Set, c.Role);
+        IReadOnlySet<string> set;
+        StaffRole? role = null;
+        if (u.Role == Roles.Admin) set = Permissions.All.ToHashSet();
+        else if (u.Role == Roles.Committee)
+        {
+            var id = u.StaffRoleId ?? Permissions.CommitteeRoleId;
+            role = await db.StaffRoles.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct)
+                ?? await db.StaffRoles.AsNoTracking().FirstOrDefaultAsync(r => r.Id == Permissions.CommitteeRoleId, ct);
+            set = (role?.PermissionList() ?? Permissions.CommitteeDefault).ToHashSet();
+        }
+        else set = new HashSet<string>();
+        _perms = (u.Id, set, role);
+        return (set, role);
+    }
+
+    /// <summary>the signed-in staff member, if they hold this permission</summary>
+    public async Task<User> RequireAsync(string permission, CancellationToken ct)
+    {
+        var u = await StaffAsync(ct);
+        var (set, _) = await PermissionsOfAsync(u, ct);
+        if (!set.Contains(permission)) throw DomainException.Forbidden($"ليست لديك صلاحية «{Permissions.Label(permission)}»، تواصل مع مدير النظام");
+        return u;
+    }
+
+    public async Task<bool> CanAsync(User u, string permission, CancellationToken ct) => (await PermissionsOfAsync(u, ct)).Permissions.Contains(permission);
+
+    public async Task<UserDto> DtoAsync(User u, CancellationToken ct)
+    {
+        if (!Roles.IsStaff(u.Role)) return Mapper.User(u);
+        var (set, role) = await PermissionsOfAsync(u, ct);
+        return Mapper.User(u, set, role);
+    }
+
     public bool IsSuper(User u) => string.Equals(u.Email, rules.Value.SuperAdminEmail, StringComparison.OrdinalIgnoreCase);
 }

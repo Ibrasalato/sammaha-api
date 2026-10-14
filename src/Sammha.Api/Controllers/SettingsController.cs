@@ -14,7 +14,7 @@ public class SettingsController(ISender mediator) : ControllerBase
 }
 
 /// <summary>Platform settings (super admin and admins).</summary>
-[ApiController, Route("api/admin/settings"), Authorize(Policy = "admin")]
+[ApiController, Route("api/admin/settings"), Authorize(Policy = "staff")]
 public class AdminSettingsController(ISender mediator) : ControllerBase
 {
     [HttpGet]

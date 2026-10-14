@@ -3,7 +3,9 @@ namespace Sammha.Application.Common;
 // JSON contract of the React front end (src/lib/types.ts). Null members are omitted on the wire.
 
 public record UserDto(Guid Id, string FullName, string Phone, string Email, string? NationalId, string Role, DateTimeOffset CreatedAt,
-    string? AvatarUrl, bool? ShowAvatar, bool? Active);
+    string? AvatarUrl, bool? ShowAvatar, bool? Active,
+    /// <summary>staff only: the permission keys this account has, and its staff role</summary>
+    List<string>? Permissions = null, Guid? StaffRoleId = null, string? StaffRoleName = null);
 
 public record SimilarHitDto(string Name, string Type, string Source, double Score);
 
@@ -17,7 +19,8 @@ public record RequestDto(Guid Id, string Number, Guid UserId, string OwnerName, 
 
 public record AuctionDto(Guid Id, Guid? RequestId, Guid? CandidateId, string Name, string Type, Guid RequesterId, decimal OpeningPrice, decimal MinIncrement,
     DateTimeOffset StartsAt, DateTimeOffset EndsAt, decimal CurrentPrice, int BidCount, Guid? LeaderId, string? LeaderLabel, bool Settled,
-    Guid? WinnerId, string? WinnerName, decimal? FinalPrice, bool? WonByRequester, int? Extensions, bool? Investment, Guid? ListingId, decimal? BidDeposit);
+    Guid? WinnerId, string? WinnerName, decimal? FinalPrice, bool? WonByRequester, int? Extensions, bool? Investment, Guid? ListingId, decimal? BidDeposit,
+    bool? Paused = null, DateTimeOffset? PausedAt = null, string? PauseReason = null, bool? Cancelled = null, string? CancelReason = null);
 
 public record BidDto(Guid Id, Guid AuctionId, Guid UserId, string BidderLabel, decimal Amount, DateTimeOffset CreatedAt, bool? Auto);
 
@@ -57,7 +60,7 @@ public record NotificationDto(Guid Id, Guid UserId, string Kind, string Title, s
 public record TicketMessageDto(Guid Id, string By, string Author, string Body, bool? Internal, DateTimeOffset CreatedAt);
 
 public record TicketDto(Guid Id, string Number, string Kind, string Topic, string Subject, string Name, string Phone, string? Email, string? RefNumber,
-    string Message, Guid? UserId, string Status, string Priority, string? Assignee, List<TicketMessageDto> Messages, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    string Message, Guid? UserId, string Status, string Priority, string? Assignee, List<TicketMessageDto> Messages, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, Guid? AssigneeId = null);
 
 /// <summary>a candidate waiting for an auction date, with its request (committee «فتح المزادات»)</summary>
 public record AwaitingDto(Guid Id, string Name, string Normalized, string Status, List<SimilarHitDto> Similar, string? RejectReason,
@@ -72,5 +75,5 @@ public record AuthResult(UserDto User, string Token, DateTimeOffset ExpiresAt, s
 public record SignUpInput(string FullName, string Phone, string Email, string? NationalId, string Password);
 public record TicketInput(string Kind, string Topic, string Subject, string Name, string Phone, string? Email, string? RefNumber, string Message);
 public record ReviewDecision(Guid CandidateId, string Status, string? Reason);
-public record StaffInput(string FullName, string Phone, string Email, string Password, string Role);
+public record StaffInput(string FullName, string Phone, string Email, string Password, string Role, Guid? StaffRoleId = null);
 public record AuctionFilter(string? Phase, string? Type, string? Q);

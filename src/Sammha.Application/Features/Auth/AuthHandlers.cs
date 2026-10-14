@@ -18,7 +18,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     [GeneratedRegex(@"^[^\s@]+@[^\s@]+\.[^\s@]+$")] private static partial Regex EmailRx();
     [GeneratedRegex(@"^[12]\d{9}$")] private static partial Regex NationalIdRx();
 
-    private async Task<UserDto?> CurrentAsync(CancellationToken ct) => (await access.MaybeAsync(ct)) is { } u ? Mapper.User(u) : null;
+    private async Task<UserDto?> CurrentAsync(CancellationToken ct) => (await access.MaybeAsync(ct)) is { } u ? await access.DtoAsync(u, ct) : null;
 
     private async Task<AuthResult> SignUpAsync(SignUpInput i, CancellationToken ct)
     {

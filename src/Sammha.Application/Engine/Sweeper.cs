@@ -24,7 +24,7 @@ public class Sweeper(IAppDbContext db, TimeProvider clock, AuctionEngine engine,
     public async Task SettleDueAsync(CancellationToken ct)
     {
         var now = Now;
-        var due = await db.Auctions.Where(a => !a.Settled && a.EndsAt <= now).OrderBy(a => a.EndsAt).Select(a => a.Id).Take(100).ToListAsync(ct);
+        var due = await db.Auctions.Where(a => !a.Settled && a.PausedAt == null && a.EndsAt <= now).OrderBy(a => a.EndsAt).Select(a => a.Id).Take(100).ToListAsync(ct);
         foreach (var id in due) await SettleOneAsync(id, ct);
     }
 
@@ -47,7 +47,7 @@ public class Sweeper(IAppDbContext db, TimeProvider clock, AuctionEngine engine,
     {
         var now = Now;
         var ids = await db.AutoBids.Join(db.Auctions, x => x.AuctionId, a => a.Id, (x, a) => a)
-            .Where(a => !a.Settled && a.StartsAt <= now && a.EndsAt > now).Select(a => a.Id).Distinct().ToListAsync(ct);
+            .Where(a => !a.Settled && a.PausedAt == null && a.StartsAt <= now && a.EndsAt > now).Select(a => a.Id).Distinct().ToListAsync(ct);
         foreach (var id in ids)
         {
             try
@@ -71,7 +71,7 @@ public class Sweeper(IAppDbContext db, TimeProvider clock, AuctionEngine engine,
         var now = Now;
         var hour = now.AddHours(1);
         var rows = await db.Watches.Join(db.Auctions, w => w.AuctionId, a => a.Id, (w, a) => new { w, a })
-            .Where(x => (!x.w.NotifiedStart && x.a.StartsAt > now && x.a.StartsAt <= hour) || (!x.w.NotifiedEnd && x.a.StartsAt <= now && x.a.EndsAt > now && x.a.EndsAt <= hour))
+            .Where(x => x.a.PausedAt == null && !x.a.Settled).Where(x => (!x.w.NotifiedStart && x.a.StartsAt > now && x.a.StartsAt <= hour) || (!x.w.NotifiedEnd && x.a.StartsAt <= now && x.a.EndsAt > now && x.a.EndsAt <= hour))
             .Take(500).ToListAsync(ct);
         if (rows.Count == 0) return;
         foreach (var x in rows)

@@ -93,14 +93,21 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
 
     public async Task<AdminSettingsDto> Handle(GetAdminSettingsQuery q, CancellationToken ct)
     {
-        await access.AdminAsync(ct);
+        var me = await access.StaffAsync(ct);
+        if (!await access.CanAsync(me, Permissions.SettingsManage, ct) && !await access.CanAsync(me, Permissions.SecurityManage, ct))
+            throw DomainException.Forbidden("ليست لديك صلاحية «إعدادات المنصة»");
         return Admin(await store.GetAsync(ct));
     }
 
     public async Task<AdminSettingsDto> Handle(UpdateSettingsCommand cmd, CancellationToken ct)
     {
-        var me = await access.AdminAsync(ct);
+        var me = await access.StaffAsync(ct);
         var p = cmd.Patch;
+        // operational switches need «إعدادات المنصة»; the password and sign-in policy needs «سياسة الأمان»
+        var touchesSecurity = p.PasswordMinLength != null || p.MaxLoginAttempts != null || p.LockoutMinutes != null || p.StaffIdleMinutes != null;
+        var touchesGeneral = p with { PasswordMinLength = null, MaxLoginAttempts = null, LockoutMinutes = null, StaffIdleMinutes = null } != new SettingsPatch();
+        if (touchesSecurity) await access.RequireAsync(Permissions.SecurityManage, ct);
+        if (touchesGeneral) await access.RequireAsync(Permissions.SettingsManage, ct);
         var s = await store.ForUpdateAsync(ct);
         var changes = new List<SettingsChange>();
 
@@ -172,14 +179,14 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
 
     public async Task<List<SettingsChangeDto>> Handle(GetSettingsHistoryQuery q, CancellationToken ct)
     {
-        await access.AdminAsync(ct);
+        await access.RequireAsync(Permissions.AuditView, ct);
         return await db.SettingsChanges.AsNoTracking().OrderByDescending(c => c.Id).Take(Math.Clamp(q.Take, 1, 500))
             .Select(c => new SettingsChangeDto(c.Id, c.At, c.UserName, c.Field, c.OldValue, c.NewValue)).ToListAsync(ct);
     }
 
     public async Task<int> Handle(SignOutEveryoneCommand cmd, CancellationToken ct)
     {
-        var me = await access.AdminAsync(ct);
+        var me = await access.RequireAsync(Permissions.SecurityManage, ct);
         var users = await db.Users.Where(u => u.Id != me.Id).ToListAsync(ct);
         foreach (var u in users) u.SecurityStamp = Guid.NewGuid().ToString("N");
         var now = Now;

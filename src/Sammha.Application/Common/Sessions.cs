@@ -10,7 +10,7 @@ namespace Sammha.Application.Common;
 /// Refresh tokens are random 256-bit values; only their SHA-256 hash is stored. Each refresh rotates the token,
 /// and presenting an already-rotated token (a stolen copy) revokes the whole family.
 /// </summary>
-public class Sessions(IAppDbContext db, TimeProvider clock, ITokenIssuer tokens, ICurrentUser current)
+public class Sessions(IAppDbContext db, TimeProvider clock, ITokenIssuer tokens, ICurrentUser current, Access access)
 {
     private DateTimeOffset Now => clock.GetUtcNow();
 
@@ -27,8 +27,8 @@ public class Sessions(IAppDbContext db, TimeProvider clock, ITokenIssuer tokens,
         };
         db.RefreshTokens.Add(row);
         await db.SaveChangesAsync(ct);
-        var access = tokens.Issue(u, row.FamilyId);
-        return new AuthResult(Mapper.User(u), access.Token, access.ExpiresAt, refresh, row.ExpiresAt);
+        var token = tokens.Issue(u, row.FamilyId);
+        return new AuthResult(await access.DtoAsync(u, ct), token.Token, token.ExpiresAt, refresh, row.ExpiresAt);
     }
 
     public async Task<AuthResult> RefreshAsync(string token, CancellationToken ct)

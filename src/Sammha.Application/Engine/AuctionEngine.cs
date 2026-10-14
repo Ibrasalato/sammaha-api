@@ -31,7 +31,7 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
         var list = await db.AutoBids.Where(x => x.AuctionId == a.Id).ToListAsync(ct);
         for (var guard = 0; guard < 20; guard++)
         {
-            if (a.PhaseAt(Now) != "live") return;
+            if (a.PausedAt != null || a.PhaseAt(Now) != "live") return;
             var inc = a.MinIncrement;
             var challenger = list.Where(x => x.UserId != a.LeaderId && x.Max >= a.CurrentPrice + inc)
                 .OrderByDescending(x => x.Max).ThenBy(x => x.CreatedAt).FirstOrDefault();
@@ -54,7 +54,7 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
 
     public async Task SettleAsync(Auction a, CancellationToken ct)
     {
-        if (a.Settled || a.PhaseAt(Now) != "ended") return;
+        if (a.Settled || a.PausedAt != null || a.CancelledAt != null || a.PhaseAt(Now) != "ended") return;
         if (a.ListingId != null) { await SettleResaleAsync(a, ct); return; }
         var r = await db.Requests.Include(x => x.Candidates).FirstAsync(x => x.Id == a.RequestId, ct);
         if (r.Kind == RequestKinds.Investment) { await SettleInvestmentAsync(a, r, ct); return; }
@@ -171,6 +171,41 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
         a.WinnerId = winnerId;
         a.FinalPrice = price;
         a.WonByRequester = byRequester;
+    }
+
+    /// <summary>
+    /// The administration cancels an auction: closed with no sale, automatic bids removed, bidders told.
+    /// A request's name goes back to the committee's scheduling list (its guarantee stays held); a resale listing is withdrawn,
+    /// the name stays with its owner and every participation guarantee is refunded.
+    /// </summary>
+    public async Task CancelAsync(Auction a, string reason, CancellationToken ct)
+    {
+        a.CancelledAt = Now;
+        a.CancelReason = reason;
+        a.PausedAt = null;
+        a.Settled = true;
+        db.AutoBids.RemoveRange(await db.AutoBids.Where(x => x.AuctionId == a.Id).ToListAsync(ct));
+        var bidders = await db.Bids.Where(b => b.AuctionId == a.Id).Select(b => b.UserId).Distinct().ToListAsync(ct);
+        Guid? owner = null;
+        if (a.ListingId != null)
+        {
+            var l = await db.Listings.FirstAsync(x => x.Id == a.ListingId, ct);
+            l.Status = ListingStatuses.Cancelled;
+            owner = l.SellerId;
+            var deposits = await db.BidDeposits.Where(d => d.AuctionId == a.Id && d.State == BidDepositStates.Held).ToListAsync(ct);
+            await RefundBidDepositsAsync(a, deposits, null, ct);
+            await notifier.NotifyAsync(l.SellerId, NotificationKinds.AuctionUpdate, $"أُلغي مزاد «{a.Name}»", $"بقي الاسم باسمك ويمكنك عرضه من جديد. السبب: {reason}", "/dashboard/sell", ct);
+        }
+        else if (a.CandidateId != null)
+        {
+            var c = await db.Candidates.FirstOrDefaultAsync(x => x.Id == a.CandidateId, ct);
+            if (c != null && c.AuctionId == a.Id) c.AuctionId = null; // back to «فتح المزادات»
+            owner = a.RequesterId;
+            await notifier.NotifyAsync(a.RequesterId, NotificationKinds.AuctionUpdate, $"أُلغي مزاد «{a.Name}»",
+                $"يعود الاسم إلى قائمة الجدولة وتحدد اللجنة موعدًا جديدًا لمزاده. السبب: {reason}", "/dashboard/requests", ct);
+        }
+        foreach (var u in bidders.Where(u => u != owner))
+            await notifier.NotifyAsync(u, NotificationKinds.AuctionUpdate, $"أُلغي مزاد «{a.Name}»", $"لم تُحتسب المزايدات على هذا المزاد. السبب: {reason}", $"/auctions/{a.Id}", ct);
     }
 
     private async Task NotifyLosersAsync(Auction a, Guid winnerId, decimal price, CancellationToken ct)

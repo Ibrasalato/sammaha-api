@@ -44,13 +44,13 @@ public class AdminController(ISender mediator) : ControllerBase
     [HttpGet("users")]
     public Task<List<UserDto>> Users(CancellationToken ct) => mediator.Send(new ListUsersQuery(), ct);
 
-    [HttpPost("users"), Authorize(Policy = "admin")]
+    [HttpPost("users")]
     public Task<UserDto> CreateStaff(StaffInput b, CancellationToken ct) => mediator.Send(new CreateStaffCommand(b), ct);
 
-    [HttpPut("users/{id:guid}/role"), Authorize(Policy = "admin")]
+    [HttpPut("users/{id:guid}/role")]
     public Task<UserDto> Role(Guid id, RoleBody b, CancellationToken ct) => mediator.Send(new SetUserRoleCommand(id, b.Role), ct);
 
-    [HttpPut("users/{id:guid}/active"), Authorize(Policy = "admin")]
+    [HttpPut("users/{id:guid}/active")]
     public Task<UserDto> Active(Guid id, ActiveBody b, CancellationToken ct) => mediator.Send(new SetUserActiveCommand(id, b.Active), ct);
 
     // ───── events calendar ─────

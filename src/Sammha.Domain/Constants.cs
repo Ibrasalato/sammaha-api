@@ -6,6 +6,7 @@ public static class NameTypes
     public const string Qaadan = "qaadan", Bakkar = "bakkar", Manqiya = "manqiya";
     public static readonly string[] All = [Qaadan, Bakkar, Manqiya];
     public static bool IsValid(string? t) => t is not null && All.Contains(t);
+    public static readonly Dictionary<string, string> Arabic = new() { [Qaadan] = "القعدان", [Bakkar] = "البكار", [Manqiya] = "المنقية" };
 }
 
 public static class Roles
@@ -68,7 +69,7 @@ public static class BidDepositStates
 
 public static class NotificationKinds
 {
-    public const string Outbid = "outbid", Won = "won", Lost = "lost", Reviewed = "reviewed", AuctionOpened = "auction_opened", Refund = "refund", Ticket = "ticket", Reminder = "reminder";
+    public const string Outbid = "outbid", Won = "won", Lost = "lost", Reviewed = "reviewed", AuctionOpened = "auction_opened", AuctionUpdate = "auction_update", Refund = "refund", Ticket = "ticket", Reminder = "reminder";
 }
 
 public static class TicketKinds

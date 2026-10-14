@@ -10,6 +10,14 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private DateTimeOffset Now => clock.GetUtcNow();
 
+    /// <summary>a staff account with its permissions (owners get none)</summary>
+    public static UserDto User(User u, IReadOnlyCollection<string>? permissions, StaffRole? role) => User(u) with
+    {
+        Permissions = Roles.IsStaff(u.Role) ? (permissions ?? []).ToList() : null,
+        StaffRoleId = u.Role == Roles.Committee ? role?.Id : null,
+        StaffRoleName = u.Role == Roles.Admin ? "مدير النظام" : u.Role == Roles.Committee ? role?.Name : null,
+    };
+
     public static UserDto User(User u) => new(u.Id, u.FullName, u.Phone, u.Email, u.NationalId, u.Role, u.CreatedAt, u.AvatarUrl, u.ShowAvatar ? true : null, u.Active);
 
     public static List<SimilarHitDto> Hits(string json) =>
@@ -71,7 +79,8 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
         new(a.Id, a.RequestId, a.CandidateId, a.Name, a.Type, a.RequesterId, a.OpeningPrice, a.MinIncrement, a.StartsAt, a.EndsAt, a.CurrentPrice, a.BidCount,
             a.LeaderId, a.LeaderId is { } l && names.TryGetValue(l, out var ln) ? NameMatcher.MaskName(ln) : null, a.Settled,
             a.WinnerId, a.WinnerId is { } w && names.TryGetValue(w, out var wn) ? wn : null, a.FinalPrice, a.WonByRequester,
-            a.Extensions > 0 ? a.Extensions : null, a.IsInvestment ? true : null, a.ListingId, a.BidDeposit);
+            a.Extensions > 0 ? a.Extensions : null, a.IsInvestment ? true : null, a.ListingId, a.BidDeposit,
+            a.PausedAt != null ? true : null, a.PausedAt, a.PausedAt != null ? a.PauseReason : null, a.CancelledAt != null ? true : null, a.CancelReason);
 
     public async Task<List<AuctionDto>> AuctionsAsync(List<Auction> list, CancellationToken ct)
     {
@@ -145,5 +154,5 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
         new(t.Id, t.Number, t.Kind, t.Topic, t.Subject, t.Name, t.Phone, t.Email, t.RefNumber, t.Message, t.UserId, t.Status, t.Priority,
             staff ? t.Assignee : null,
             t.Messages.Where(m => staff || !m.Internal).OrderBy(m => m.CreatedAt).Select(m => new TicketMessageDto(m.Id, m.By, m.Author, m.Body, m.Internal ? true : null, m.CreatedAt)).ToList(),
-            t.CreatedAt, t.UpdatedAt);
+            t.CreatedAt, t.UpdatedAt, staff ? t.AssigneeId : null);
 }

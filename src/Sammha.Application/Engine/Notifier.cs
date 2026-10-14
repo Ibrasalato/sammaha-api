@@ -25,7 +25,7 @@ public class Notifier(IAppDbContext db, TimeProvider clock, IPostCommit postComm
     public static bool Wants(User u, string kind) => kind switch
     {
         "outbid" => u.NotifyOutbid,
-        "reminder" or "auction_opened" => u.NotifyReminders,
+        "reminder" or "auction_opened" or "auction_update" => u.NotifyReminders,
         "won" or "lost" or "refund" => u.NotifyResults,
         "reviewed" => u.NotifyRequests,
         _ => true, // tickets, payments and account notices always go out

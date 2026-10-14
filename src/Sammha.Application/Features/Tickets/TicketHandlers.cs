@@ -10,7 +10,7 @@ namespace Sammha.Application.Features.Tickets;
 
 /// <summary>Complaints, reports, enquiries and suggestions (public form, tracking, staff handling, email through n8n).</summary>
 public partial class TicketHandlers(IAppDbContext db, TimeProvider clock, Access access, Notifier notifier, IPostCommit postCommit, IWebhookPublisher webhooks,
-    IOptions<IntegrationOptions> integrations)
+    SettingsStore settings, IOptions<IntegrationOptions> integrations)
     : IRequestHandler<SubmitTicketCommand, TicketDto>, IRequestHandler<TrackTicketQuery, TicketDto?>, IRequestHandler<FollowUpTicketCommand, TicketDto>, IRequestHandler<GetMyTicketsQuery, List<TicketDto>>, IRequestHandler<ListTicketsQuery, List<TicketDto>>, IRequestHandler<GetTicketQuery, TicketDto>, IRequestHandler<UpdateTicketCommand, TicketDto>, IRequestHandler<ReplyTicketCommand, TicketDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -37,9 +37,40 @@ public partial class TicketHandlers(IAppDbContext db, TimeProvider clock, Access
         var seq = await db.NextNumberAsync("TicketNo", ct);
         t.Number = $"BL-{Now.Year % 100:D2}{seq:D4}";
         db.Tickets.Add(t);
+        await RouteAsync(t, ct);
         await db.SaveChangesAsync(ct);
-        Email("created", t);
+        await EmailAsync("created", t);
         return Mapper.Ticket(t, false);
+    }
+
+    /// <summary>
+    /// Settings → complaints and enquiries: the ticket goes to whichever handler of its kind has the fewest open tickets,
+    /// and every handler of that kind is notified. With no handlers set, it stays unassigned for the whole team.
+    /// </summary>
+    private async Task RouteAsync(Ticket t, CancellationToken ct)
+    {
+        var handlers = await db.TicketRoutes.Where(r => r.Kind == t.Kind).Join(db.Users.Where(u => u.Active), r => r.UserId, u => u.Id, (r, u) => u).ToListAsync(ct);
+        if (handlers.Count == 0) return;
+        var ids = handlers.Select(h => h.Id).ToList();
+        var open = await db.Tickets.Where(x => x.AssigneeId != null && ids.Contains(x.AssigneeId.Value) && x.Status != TicketStatuses.Closed)
+            .GroupBy(x => x.AssigneeId!.Value).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
+        var pick = handlers.OrderBy(h => open.GetValueOrDefault(h.Id)).ThenBy(h => h.FullName).First();
+        t.AssigneeId = pick.Id;
+        t.Assignee = pick.FullName;
+        var kind = TicketKinds.Arabic.GetValueOrDefault(t.Kind, t.Kind);
+        foreach (var h in handlers)
+            await notifier.NotifyAsync(h.Id, NotificationKinds.Ticket, h.Id == pick.Id ? $"{kind} جديد مُسند إليك: {t.Number}" : $"{kind} جديد: {t.Number}",
+                $"{t.Subject} · من {t.Name}", $"/admin/tickets/{t.Id}", ct);
+    }
+
+    /// <summary>with «الرد يقتصر على المسؤولين» on, only that kind's handlers, the assignee and admins may act on a ticket</summary>
+    private async Task EnsureHandlerAsync(User u, Ticket t, CancellationToken ct)
+    {
+        if (u.Role == Roles.Admin || t.AssigneeId == u.Id) return;
+        if (!(await settings.GetAsync(ct)).TicketsRestrictToHandlers) return;
+        var routed = await db.TicketRoutes.Where(r => r.Kind == t.Kind).Select(r => r.UserId).ToListAsync(ct);
+        if (routed.Count > 0 && !routed.Contains(u.Id))
+            throw DomainException.Forbidden($"هذا النوع ({TicketKinds.Arabic.GetValueOrDefault(t.Kind, t.Kind)}) يعالجه الموظفون المسؤولون عنه فقط");
     }
 
     private Task<Ticket?> FindAsync(string number, string phone, CancellationToken ct)
@@ -61,6 +92,9 @@ public partial class TicketHandlers(IAppDbContext db, TimeProvider clock, Access
         db.TicketMessages.Add(new TicketMessage { TicketId = t.Id, By = "customer", Author = t.Name, Body = text, CreatedAt = Now });
         if (t.Status == TicketStatuses.Answered) t.Status = TicketStatuses.InProgress;
         t.UpdatedAt = Now;
+        // the assignee hears about the customer's follow-up at once
+        if (t.AssigneeId is { } aid)
+            await notifier.NotifyAsync(aid, NotificationKinds.Ticket, $"رد جديد من العميل على {t.Number}", text.Length > 120 ? text[..120] : text, $"/admin/tickets/{t.Id}", ct);
         await db.SaveChangesAsync(ct);
         return Mapper.Ticket(await db.Tickets.Include(x => x.Messages).FirstAsync(x => x.Id == t.Id, ct), false);
     }
@@ -74,36 +108,44 @@ public partial class TicketHandlers(IAppDbContext db, TimeProvider clock, Access
 
     private async Task<List<TicketDto>> ListAsync(CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.TicketsView, ct);
         var list = await db.Tickets.AsNoTracking().Include(t => t.Messages).OrderByDescending(t => t.CreatedAt).Take(1000).ToListAsync(ct);
         return list.Select(t => Mapper.Ticket(t, true)).ToList();
     }
 
     private async Task<TicketDto> GetAsync(Guid id, CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.TicketsView, ct);
         var t = await db.Tickets.AsNoTracking().Include(x => x.Messages).FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("الطلب غير موجود");
         return Mapper.Ticket(t, true);
     }
 
     private async Task<TicketDto> UpdateAsync(Guid id, string? status, string? priority, string? assignee, CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        var me = await access.RequireAsync(Permissions.TicketsManage, ct);
         var t = await db.Tickets.Include(x => x.Messages).FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("الطلب غير موجود");
+        await EnsureHandlerAsync(me, t, ct);
         var changed = status != null && status != t.Status;
         if (status != null) { if (!TicketStatuses.All.Contains(status)) throw new DomainException("حالة غير معروفة"); t.Status = status; }
         if (priority != null) { if (!TicketPriorities.All.Contains(priority)) throw new DomainException("أولوية غير معروفة"); t.Priority = priority; }
-        if (assignee != null) t.Assignee = Clip(assignee, 80);
+        if (assignee != null)
+        {
+            t.Assignee = Clip(assignee, 80);
+            // keep the id in step when the name is a staff member's (routing balances on it)
+            var who = t.Assignee.Length == 0 ? null : await db.Users.FirstOrDefaultAsync(u => u.FullName == t.Assignee && (u.Role == Roles.Committee || u.Role == Roles.Admin), ct);
+            t.AssigneeId = who?.Id;
+        }
         t.UpdatedAt = Now;
         await db.SaveChangesAsync(ct);
-        if (changed && t.Status is TicketStatuses.Closed or TicketStatuses.InProgress) Email("status", t);
+        if (changed && t.Status is TicketStatuses.Closed or TicketStatuses.InProgress) await EmailAsync("status", t);
         return Mapper.Ticket(t, true);
     }
 
     private async Task<TicketDto> ReplyAsync(Guid id, string body, bool isInternal, CancellationToken ct)
     {
-        var u = await access.StaffAsync(ct);
+        var u = await access.RequireAsync(Permissions.TicketsReply, ct);
         var t = await db.Tickets.Include(x => x.Messages).FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("الطلب غير موجود");
+        await EnsureHandlerAsync(u, t, ct);
         var text = Clip(body, 3000);
         if (text.Length < 2) throw new DomainException("اكتب الرد");
         db.TicketMessages.Add(new TicketMessage { TicketId = t.Id, By = "staff", Author = u.FullName, Body = text, Internal = isInternal, CreatedAt = Now });
@@ -113,18 +155,20 @@ public partial class TicketHandlers(IAppDbContext db, TimeProvider clock, Access
             if (t.UserId is { } uid) await notifier.NotifyAsync(uid, NotificationKinds.Ticket, $"رد فريق سمّها على طلبك {t.Number}", text.Length > 120 ? text[..120] : text, "/dashboard/tickets", ct);
         }
         else if (t.Status == TicketStatuses.New) t.Status = TicketStatuses.InProgress;
-        t.Assignee ??= u.FullName;
+        if (t.Assignee == null) { t.Assignee = u.FullName; t.AssigneeId = u.Id; }
         t.UpdatedAt = Now;
         await db.SaveChangesAsync(ct);
-        if (!isInternal) Email("reply", t, text);
+        if (!isInternal) await EmailAsync("reply", t, text);
         return Mapper.Ticket(await db.Tickets.AsNoTracking().Include(x => x.Messages).FirstAsync(x => x.Id == t.Id, ct), true);
     }
 
     /// <summary>the payload n8n «Sammha 6 — Tickets Email» expects</summary>
-    private void Email(string evt, Ticket t, string? reply = null)
+    private async Task EmailAsync(string evt, Ticket t, string? reply = null)
     {
         var url = integrations.Value.TicketWebhookUrl;
         if (string.IsNullOrWhiteSpace(url)) return;
+        // Settings → complaints and enquiries: each kind has its own team inbox(es)
+        var teamTo = (await settings.GetAsync()).EmailsFor(t.Kind).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var site = integrations.Value.SiteUrl.TrimEnd('/');
         var body = new
         {
@@ -136,6 +180,8 @@ public partial class TicketHandlers(IAppDbContext db, TimeProvider clock, Access
                 status = t.Status, statusLabel = TicketStatuses.Arabic.GetValueOrDefault(t.Status, t.Status), trackUrl = $"{site}/#/contact/track/{t.Number}",
             },
             reply = reply ?? "",
+            teamTo,
+            assignee = t.Assignee ?? "",
         };
         postCommit.Enqueue(() => webhooks.PublishAsync(url, body));
     }

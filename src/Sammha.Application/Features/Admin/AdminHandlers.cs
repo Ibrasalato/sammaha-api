@@ -21,7 +21,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task<AdminOverviewDto> OverviewAsync(CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.Overview, ct);
         var now = Now;
         return new AdminOverviewDto(
             await db.Requests.CountAsync(r => r.Status == RequestStatuses.UnderReview, ct),
@@ -35,7 +35,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task<List<RequestDto>> ListRequestsAsync(string? status, CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.RequestsView, ct);
         var q = Full.AsNoTracking();
         q = string.IsNullOrEmpty(status) || status == "all" ? q.Where(r => r.Status != RequestStatuses.PendingPayment) : q.Where(r => r.Status == status);
         var list = await q.OrderByDescending(r => r.SubmittedAt ?? r.CreatedAt).Take(1000).ToListAsync(ct);
@@ -44,7 +44,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task<RequestDto> ReviewAsync(Guid id, List<ReviewDecision> decisions, string? note, CancellationToken ct)
     {
-        var staff = await access.StaffAsync(ct);
+        var staff = await access.RequireAsync(Permissions.RequestsReview, ct);
         await using var uow = await db.BeginAsync([$"r:{id}"], ct);
         var r = await Full.FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("الطلب غير موجود");
         if (r.Status != RequestStatuses.UnderReview) throw new DomainException("تمت مراجعة هذا الطلب");
@@ -113,7 +113,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task<RequestDto> RejectAsync(Guid id, string reason, CancellationToken ct)
     {
-        var staff = await access.StaffAsync(ct);
+        var staff = await access.RequireAsync(Permissions.RequestsReview, ct);
         await using var uow = await db.BeginAsync([$"r:{id}"], ct);
         var r = await Full.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (r == null || r.Status != RequestStatuses.UnderReview) throw new DomainException("لا يمكن رفض هذا الطلب");
@@ -135,7 +135,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task<RequestDto> CancelAsync(Guid id, string reason, CancellationToken ct)
     {
-        var staff = await access.StaffAsync(ct);
+        var staff = await access.RequireAsync(Permissions.RequestsCancel, ct);
         await using var uow = await db.BeginAsync([$"r:{id}"], ct);
         var r = await Full.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (r == null || r.Status is not (RequestStatuses.UnderReview or RequestStatuses.Accepted)) throw new DomainException("لا يمكن إلغاء هذا الطلب");
@@ -157,7 +157,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task<List<AwaitingDto>> AwaitingScheduleAsync(CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.AuctionsSchedule, ct);
         var list = await Full.AsNoTracking()
             .Where(r => r.Status == RequestStatuses.Accepted && r.Kind != RequestKinds.Compound && r.Candidates.Any(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null))
             .OrderBy(r => r.ReviewedAt).ToListAsync(ct);
@@ -175,7 +175,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task<List<AuctionDto>> ScheduleAsync(List<Guid> candidateIds, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.AuctionsSchedule, ct);
         if (endsAt <= startsAt) throw new DomainException("موعد النهاية يجب أن يكون بعد البداية");
         if (endsAt <= Now) throw new DomainException("موعد النهاية في الماضي");
         if (candidateIds.Count == 0) throw new DomainException("اختر اسمًا واحدًا على الأقل");
@@ -206,7 +206,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task<List<InvoiceDto>> AllInvoicesAsync(CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.InvoicesView, ct);
         var list = await db.Invoices.AsNoTracking().OrderByDescending(i => i.IssuedAt).Take(2000).ToListAsync(ct);
         return await map.InvoicesAsync(list, ct);
     }
@@ -214,7 +214,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     /// <summary>cash or bank transfer recorded by the committee</summary>
     private async Task<InvoiceDto> MarkInvoicePaidAsync(Guid id, CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.InvoicesMarkPaid, ct);
         await using var uow = await db.BeginAsync([$"i:{id}"], ct);
         var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id, ct);
         if (inv == null || inv.Status == InvoiceStatuses.Paid) throw new DomainException("الفاتورة غير موجودة أو مدفوعة");
@@ -227,13 +227,17 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     // ───── users & permissions (super admin) ─────
     private async Task<List<UserDto>> ListUsersAsync(CancellationToken ct)
     {
-        await access.StaffAsync(ct);
-        return (await db.Users.AsNoTracking().OrderByDescending(u => u.CreatedAt).ToListAsync(ct)).Select(Mapper.User).ToList();
+        await access.RequireAsync(Permissions.UsersView, ct);
+        var roles = await db.StaffRoles.AsNoTracking().ToDictionaryAsync(r => r.Id, ct);
+        StaffRole? RoleOf(User u) => u.Role != Roles.Committee ? null : roles.GetValueOrDefault(u.StaffRoleId ?? Permissions.CommitteeRoleId) ?? roles.GetValueOrDefault(Permissions.CommitteeRoleId);
+        return (await db.Users.AsNoTracking().OrderByDescending(u => u.CreatedAt).ToListAsync(ct))
+            .Select(u => Roles.IsStaff(u.Role) ? Mapper.User(u, u.Role == Roles.Admin ? Permissions.All : RoleOf(u)?.PermissionList() ?? Permissions.CommitteeDefault, RoleOf(u)) : Mapper.User(u)).ToList();
     }
 
     private async Task<UserDto> CreateStaffAsync(StaffInput i, CancellationToken ct)
     {
-        await access.AdminAsync(ct);
+        var actor = await access.RequireAsync(Permissions.UsersCreate, ct);
+        if (i.Role == Roles.Admin && actor.Role != Roles.Admin) throw DomainException.Forbidden("إنشاء حساب مدير نظام لمدير النظام فقط");
         var phone = NameMatcher.NormalizePhone(i.Phone);
         var email = (i.Email ?? "").Trim();
         if ((i.FullName ?? "").Trim().Length < 3) throw new DomainException("اكتب اسم الموظف");
@@ -244,25 +248,33 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         if ((i.Password ?? "").Length < 8) throw new DomainException("كلمة المرور المؤقتة 8 أحرف على الأقل");
         if (i.Role is not (Roles.Committee or Roles.Admin)) throw new DomainException("اختر الصلاحية");
         var u = new User { FullName = i.FullName!.Trim(), Phone = phone, Email = email, Role = i.Role, Active = true, CreatedAt = Now };
+        if (i.Role == Roles.Committee && i.StaffRoleId is { } rid)
+        {
+            if (!await db.StaffRoles.AnyAsync(r => r.Id == rid, ct)) throw new DomainException("الدور غير موجود");
+            u.StaffRoleId = rid;
+        }
         u.PasswordHash = hasher.Hash(i.Password!);
         db.Users.Add(u);
         await db.SaveChangesAsync(ct);
-        return Mapper.User(u);
+        return await access.DtoAsync(u, ct);
     }
 
-    private async Task<User> TargetAsync(Guid id, CancellationToken ct)
+    /// <summary>only admins can change admin accounts or make someone an admin, so a permission never escalates itself</summary>
+    private async Task<User> TargetAsync(Guid id, string permission, CancellationToken ct)
     {
-        var actor = await access.AdminAsync(ct);
+        var actor = await access.RequireAsync(permission, ct);
         var t = await db.Users.FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("المستخدم غير موجود");
         if (access.IsSuper(t)) throw new DomainException("لا يمكن تعديل حساب مدير النظام الرئيسي");
         if (t.Id == actor.Id) throw new DomainException("لا يمكنك تعديل صلاحيات حسابك");
+        if (t.Role == Roles.Admin && actor.Role != Roles.Admin) throw DomainException.Forbidden("حسابات مديري النظام يعدّلها مدير النظام فقط");
         return t;
     }
 
     private async Task<UserDto> SetRoleAsync(Guid id, string role, CancellationToken ct)
     {
-        var t = await TargetAsync(id, ct);
+        var t = await TargetAsync(id, Permissions.UsersRoles, ct);
         if (!Roles.All.Contains(role)) throw new DomainException("صلاحية غير معروفة");
+        if (role == Roles.Admin && (await access.MeAsync(ct)).Role != Roles.Admin) throw DomainException.Forbidden("ترقية حساب إلى مدير نظام لمدير النظام فقط");
         if (t.Role != role) await sessions.RevokeAllAsync(t, "role", ct); // the role is in the token: sign in again
         t.Role = role;
         await db.SaveChangesAsync(ct);
@@ -271,7 +283,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task<UserDto> SetActiveAsync(Guid id, bool active, CancellationToken ct)
     {
-        var t = await TargetAsync(id, ct);
+        var t = await TargetAsync(id, Permissions.UsersSuspend, ct);
         if (!active) await sessions.RevokeAllAsync(t, "suspended", ct);
         t.Active = active;
         await db.SaveChangesAsync(ct);
@@ -281,7 +293,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     // ───── events calendar ─────
     private async Task<CamelEventDto> SaveEventAsync(CamelEventDto e, CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.EventsManage, ct);
         if (string.IsNullOrWhiteSpace(e.Title) || string.IsNullOrEmpty(e.StartsOn) || string.IsNullOrEmpty(e.EndsOn)) throw new DomainException("أكمل اسم الفعالية والتواريخ");
         if (string.CompareOrdinal(e.EndsOn, e.StartsOn) < 0) throw new DomainException("تاريخ النهاية قبل البداية");
         var id = string.IsNullOrWhiteSpace(e.Id) ? "ev-" + Guid.NewGuid().ToString("N")[..10] : e.Id;
@@ -296,7 +308,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
 
     private async Task DeleteEventAsync(string id, CancellationToken ct)
     {
-        await access.StaffAsync(ct);
+        await access.RequireAsync(Permissions.EventsManage, ct);
         await db.Events.Where(e => e.Id == id).ExecuteDeleteAsync(ct);
     }
 

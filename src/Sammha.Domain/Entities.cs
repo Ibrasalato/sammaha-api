@@ -26,6 +26,8 @@ public class User
     public int FailedLogins { get; set; }
     public DateTimeOffset? LockedUntil { get; set; }
     public DateTimeOffset? LastLoginAt { get; set; }
+    /// <summary>committee members: the staff role that sets their permissions (null = the default committee role)</summary>
+    public Guid? StaffRoleId { get; set; }
 }
 
 /// <summary>
@@ -71,8 +73,33 @@ public class PlatformSettings
     /// <summary>staff dashboards sign out after this many idle minutes (0 = never)</summary>
     public int StaffIdleMinutes { get; set; } = 30;
 
+    // ───── complaints, reports and enquiries ─────
+    /// <summary>when on, only the handlers of a ticket's kind (and admins) can reply to it or change it</summary>
+    public bool TicketsRestrictToHandlers { get; set; }
+    /// <summary>team inboxes per kind (comma-separated): new tickets and follow-ups of that kind are emailed there</summary>
+    public string ComplaintEmails { get; set; } = "";
+    public string ReportEmails { get; set; } = "";
+    public string InquiryEmails { get; set; } = "";
+    public string SuggestionEmails { get; set; } = "";
+
+    public string EmailsFor(string kind) => kind switch
+    {
+        TicketKinds.Complaint => ComplaintEmails,
+        TicketKinds.Report => ReportEmails,
+        TicketKinds.Inquiry => InquiryEmails,
+        TicketKinds.Suggestion => SuggestionEmails,
+        _ => "",
+    };
+
     public DateTimeOffset UpdatedAt { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>Who handles which kind of ticket (complaint, report, inquiry, suggestion). New tickets are assigned among them.</summary>
+public class TicketRoute
+{
+    public string Kind { get; set; } = "";
+    public Guid UserId { get; set; }
 }
 
 /// <summary>Audit trail of settings changes and security actions.</summary>
@@ -173,9 +200,15 @@ public class Auction
     public int Extensions { get; set; }
     public bool IsInvestment { get; set; }
     public decimal? BidDeposit { get; set; }
+    /// <summary>paused by the administration: no bids, no settlement; resuming adds the paused time back</summary>
+    public DateTimeOffset? PausedAt { get; set; }
+    public string? PauseReason { get; set; }
+    /// <summary>cancelled by the administration: closed with no sale</summary>
+    public DateTimeOffset? CancelledAt { get; set; }
+    public string? CancelReason { get; set; }
     public byte[] RowVersion { get; set; } = [];
 
-    public string PhaseAt(DateTimeOffset now) => now < StartsAt ? "scheduled" : now < EndsAt ? "live" : "ended";
+    public string PhaseAt(DateTimeOffset now) => CancelledAt != null ? "ended" : now < StartsAt ? "scheduled" : now < EndsAt ? "live" : "ended";
 }
 
 public class Bid
@@ -335,6 +368,8 @@ public class Ticket
     public string Status { get; set; } = TicketStatuses.New;
     public string Priority { get; set; } = TicketPriorities.Normal;
     public string? Assignee { get; set; }
+    /// <summary>the staff member the ticket is assigned to (set by routing or by hand)</summary>
+    public Guid? AssigneeId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public List<TicketMessage> Messages { get; set; } = [];

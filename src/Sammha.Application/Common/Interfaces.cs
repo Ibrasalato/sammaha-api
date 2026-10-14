@@ -27,6 +27,8 @@ public interface IAppDbContext
     DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<PlatformSettings> Settings { get; }
     DbSet<SettingsChange> SettingsChanges { get; }
+    DbSet<StaffRole> StaffRoles { get; }
+    DbSet<TicketRoute> TicketRoutes { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     /// <summary>next value of a database sequence (RequestNo, InvoiceNo, ListingNo, TicketNo)</summary>

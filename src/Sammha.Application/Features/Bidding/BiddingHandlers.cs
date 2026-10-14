@@ -34,6 +34,8 @@ public class BiddingHandlers(IAppDbContext db, TimeProvider clock, Access access
         var a = await LoadAsync(auctionId, ct);
         var phase = a.PhaseAt(Now);
         if (phase == "scheduled") throw new DomainException("المزاد لم يبدأ بعد");
+        if (a.CancelledAt != null) throw new DomainException("أُلغي هذا المزاد");
+        if (a.PausedAt != null) throw new DomainException("المزاد متوقف مؤقتًا، تابع الصفحة لمعرفة موعد الاستئناف");
         if (phase == "ended" || a.Settled) throw new DomainException("انتهى المزاد");
         var min = a.CurrentPrice + a.MinIncrement;
         if (amount < min) throw new DomainException($"أقل مزايدة {min:0.##} ريال");
@@ -54,6 +56,7 @@ public class BiddingHandlers(IAppDbContext db, TimeProvider clock, Access access
         await using var uow = await db.BeginAsync([$"a:{auctionId}"], ct);
         var a = await LoadAsync(auctionId, ct);
         if (a.Settled || a.PhaseAt(Now) == "ended") throw new DomainException("انتهى المزاد");
+        if (a.PausedAt != null) throw new DomainException("المزاد متوقف مؤقتًا، تابع الصفحة لمعرفة موعد الاستئناف");
         await GuardAsync(a, u.Id, ct);
         var floor = a.CurrentPrice + a.MinIncrement;
         if (max < floor) throw new DomainException($"الحد الأقصى {floor:0.##} ريال على الأقل");

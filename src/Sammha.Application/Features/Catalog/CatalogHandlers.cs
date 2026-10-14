@@ -25,7 +25,7 @@ public class CatalogHandlers(IAppDbContext db, TimeProvider clock, Mapper map, M
     private async Task<List<AuctionDto>> ListAuctionsAsync(AuctionFilter f, CancellationToken ct)
     {
         var now = Now;
-        var q = db.Auctions.AsNoTracking();
+        var q = db.Auctions.AsNoTracking().Where(a => a.CancelledAt == null);
         q = f.Phase switch
         {
             "live" => q.Where(a => a.StartsAt <= now && a.EndsAt > now),
