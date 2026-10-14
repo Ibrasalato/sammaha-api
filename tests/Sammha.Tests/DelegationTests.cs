@@ -31,7 +31,7 @@ public class DelegationTests(TestApp app) : IClassFixture<TestApp>
 
         var fahad = await app.SignInAsync("0500000004");
         var mine = (await fahad.Get<JsonElement>("/api/me/delegated")).EnumerateArray().ToList();
-        Assert.Single(mine);
+        Assert.Contains(mine, x => x.GetProperty("id").GetString() == id && x.GetProperty("ownerName").GetString() == "سعد بن ناصر العتيبي");
         var acting = app.Anonymous();
         var res = await fahad.Post<JsonElement>("/api/auth/act-as", new { delegationId = id });
         acting.Token = res.GetProperty("token").GetString(); acting.Refresh = res.GetProperty("refreshToken").GetString();
