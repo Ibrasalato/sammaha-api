@@ -69,7 +69,7 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
               (3, N'خالد', N'ناصر', N'سعد', N'الدوسري', 1, 1, '1000000003', '{OldHash}', '1990-03-03', '0551110003', '966', '2022-03-10', 1, 'k@old.example', 0, NULL, NULL, NULL),
               (4, N'سعد', N'محمد', N'علي', N'القحطاني', 1, 1, '1000000001', 'plain-old', NULL, '0551110001', '966', '2023-01-10', 1, 'saad@old.example', 0, NULL, NULL, NULL);
             INSERT Orders VALUES
-              (5001, '{past}', 1, N'شعار الغيم البعيد', N'شعار الريح الغربية', NULL, 1, 0, 0, 2, 3, 1, 1, 1, 0, 0, 7001, NULL, NULL, NULL, N'مشابه لاسم مسجل', NULL, 1, '{past}', 1, 0, 0, 0, 0),
+              (5001, '{past}', 1, N'شعار الغيم البعيد', N'شعار الريح الغربية', NULL, 1, 1, 0, 2, 3, 1, 1, 1, 0, 0, 7001, NULL, NULL, NULL, N'مشابه لاسم مسجل', NULL, 1, '{past}', 1, 0, 0, 0, 0),
               (5002, '{past}', 2, N'شعار وادي القمر', NULL, NULL, 1, 0, 0, 2, 1, 1, 1, 1, 0, 0, 7002, NULL, NULL, NULL, NULL, NULL, 1, '{past}', 2, 1, 0, 0, 0),
               (5003, '{past}', 1, N'شعار الفجر الساطع', NULL, NULL, 1, 0, 0, 2, 1, 1, 2, 1, 0, 0, 7003, NULL, NULL, NULL, NULL, NULL, 1, '{past}', 1, 0, 0, 0, 0);
             INSERT Biddings VALUES
