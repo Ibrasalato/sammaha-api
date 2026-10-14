@@ -41,6 +41,8 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<TicketRoute> TicketRoutes => Set<TicketRoute>();
     public DbSet<Withdrawal> Withdrawals => Set<Withdrawal>();
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
+    public DbSet<Delegation> Delegations => Set<Delegation>();
+    public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
     {
@@ -198,6 +200,36 @@ public class SammhaDbContext : DbContext, IAppDbContext
             });
         });
         b.Entity<User>().HasOne<StaffRole>().WithMany().HasForeignKey(u => u.StaffRoleId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Delegation>(e =>
+        {
+            e.Property(x => x.FullName).HasMaxLength(120);
+            e.Property(x => x.NationalId).HasMaxLength(20);
+            e.Property(x => x.Phone).HasMaxLength(16);
+            e.Property(x => x.Email).HasMaxLength(160);
+            e.Property(x => x.Capacity).HasMaxLength(20);
+            e.Property(x => x.CapacityNote).HasMaxLength(100);
+            e.Property(x => x.Scopes).HasMaxLength(200);
+            e.Property(x => x.RevokedBy).HasMaxLength(120);
+            e.HasIndex(x => x.OwnerId);
+            e.HasIndex(x => x.DelegateUserId);
+            e.HasIndex(x => new { x.NationalId, x.Phone });
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<ActivityLog>(e =>
+        {
+            e.Property(x => x.ActorName).HasMaxLength(120);
+            e.Property(x => x.ActorRole).HasMaxLength(20);
+            e.Property(x => x.OnBehalfOfName).HasMaxLength(120);
+            e.Property(x => x.Action).HasMaxLength(80);
+            e.Property(x => x.Category).HasMaxLength(20);
+            e.Property(x => x.Details).HasMaxLength(500);
+            e.Property(x => x.Error).HasMaxLength(300);
+            e.Property(x => x.Ip).HasMaxLength(64);
+            e.Property(x => x.UserAgent).HasMaxLength(200);
+            e.HasIndex(x => x.At);
+            e.HasIndex(x => new { x.Category, x.At });
+            e.HasIndex(x => x.ActorId);
+        });
         b.Entity<BankAccount>(e =>
         {
             e.HasKey(x => x.UserId);

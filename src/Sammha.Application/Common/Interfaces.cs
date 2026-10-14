@@ -31,6 +31,8 @@ public interface IAppDbContext
     DbSet<TicketRoute> TicketRoutes { get; }
     DbSet<Withdrawal> Withdrawals { get; }
     DbSet<BankAccount> BankAccounts { get; }
+    DbSet<Delegation> Delegations { get; }
+    DbSet<ActivityLog> ActivityLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     /// <summary>next value of a database sequence (RequestNo, InvoiceNo, ListingNo, TicketNo)</summary>
@@ -65,6 +67,8 @@ public interface ICurrentUser
     string? UserAgent { get; }
     /// <summary>the sign-in (refresh-token family) this access token belongs to</summary>
     Guid? SessionId { get; }
+    /// <summary>set when a delegate acts on an owner's account (the token's subject is the owner)</summary>
+    Guid? DelegationId { get; }
 }
 
 public interface IPasswordHasher
@@ -96,7 +100,7 @@ public record AccessToken(string Token, DateTimeOffset ExpiresAt);
 public interface ITokenIssuer
 {
     /// <summary>short-lived signed JWT (sub, role, stamp, jti)</summary>
-    AccessToken Issue(User user, Guid sessionId);
+    AccessToken Issue(User user, Guid sessionId, Guid? delegationId = null);
     /// <summary>how long a refresh token lives</summary>
     TimeSpan RefreshLifetime { get; }
 }

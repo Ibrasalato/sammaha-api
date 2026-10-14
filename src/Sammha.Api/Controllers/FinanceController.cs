@@ -85,3 +85,53 @@ public class FinanceController(ISender mediator) : ControllerBase
     public Task<List<MarkRowDto>> Marks([FromQuery] string? type, [FromQuery] string? state, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken ct) =>
         mediator.Send(new MarksReportQuery(type, state, from, to), ct);
 }
+
+public record DelegationBody(string FullName, string NationalId, string? PhoneCountry, string Phone, string Email, string Capacity, string? CapacityNote,
+    List<string>? Scopes, bool Permanent, DateTimeOffset? StartsAt, DateTimeOffset? EndsAt);
+public record ActAsBody(Guid DelegationId);
+
+/// <summary>Account delegation: owners grant, delegates switch in and out.</summary>
+[ApiController, Route("api"), Authorize]
+public class DelegationController(ISender mediator) : ControllerBase
+{
+    [HttpGet("delegation-scopes"), AllowAnonymous]
+    public object Scopes() => new
+    {
+        scopes = DelegationScopes.Catalog.Select(c => new { key = c.Key, label = c.Label, description = c.Description }),
+        capacities = DelegationCapacities.Arabic.Select(c => new { key = c.Key, label = c.Value }),
+    };
+
+    [HttpGet("me/delegations")]
+    public Task<List<Sammha.Application.Features.Delegations.DelegationDto>> Mine(CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Delegations.ListMyDelegationsQuery(), ct);
+
+    [HttpPost("me/delegations")]
+    public Task<Sammha.Application.Features.Delegations.DelegationDto> Add(DelegationBody b, CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Delegations.SaveDelegationCommand(null, Input(b)), ct);
+
+    [HttpPut("me/delegations/{id:guid}")]
+    public Task<Sammha.Application.Features.Delegations.DelegationDto> Edit(Guid id, DelegationBody b, CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Delegations.SaveDelegationCommand(id, Input(b)), ct);
+
+    [HttpPost("me/delegations/{id:guid}/revoke")]
+    public Task<Sammha.Application.Features.Delegations.DelegationDto> Revoke(Guid id, CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Delegations.RevokeDelegationCommand(id), ct);
+
+    [HttpGet("me/delegated")]
+    public Task<List<Sammha.Application.Features.Delegations.DelegationDto>> ToMe(CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Delegations.ListDelegatedToMeQuery(), ct);
+
+    [HttpPost("auth/act-as")]
+    public Task<Sammha.Application.Common.AuthResult> ActAs(ActAsBody b, CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Delegations.ActAsCommand(b.DelegationId), ct);
+
+    [HttpPost("auth/act-as/stop")]
+    public Task<Sammha.Application.Common.AuthResult> Stop(CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Delegations.StopActingCommand(), ct);
+
+    private static Sammha.Application.Features.Delegations.DelegationInput Input(DelegationBody b) =>
+        new(b.FullName, b.NationalId, b.PhoneCountry, b.Phone, b.Email, b.Capacity, b.CapacityNote, b.Scopes, b.Permanent, b.StartsAt, b.EndsAt);
+}
+
+/// <summary>The activity log (logs.view).</summary>
+[ApiController, Route("api/admin/activity"), Authorize(Policy = "staff")]
+public class ActivityController(ISender mediator) : ControllerBase
+{
+    [HttpGet]
+    public Task<Sammha.Application.Features.Admin.ActivityPage> List([FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] string? category,
+        [FromQuery] string? role, [FromQuery] string? q, [FromQuery] bool? failed, [FromQuery] int page = 1, [FromQuery] int size = 100, CancellationToken ct = default) =>
+        mediator.Send(new Sammha.Application.Features.Admin.ListActivityQuery(from, to, category, role, q, failed, page, size), ct);
+}

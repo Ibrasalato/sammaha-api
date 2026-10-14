@@ -5,7 +5,11 @@ namespace Sammha.Application.Common;
 public record UserDto(Guid Id, string FullName, string Phone, string Email, string? NationalId, string Role, DateTimeOffset CreatedAt,
     string? AvatarUrl, bool? ShowAvatar, bool? Active,
     /// <summary>staff only: the permission keys this account has, and its staff role</summary>
-    List<string>? Permissions = null, Guid? StaffRoleId = null, string? StaffRoleName = null, ProfileDto? Profile = null);
+    List<string>? Permissions = null, Guid? StaffRoleId = null, string? StaffRoleName = null, ProfileDto? Profile = null,
+    /// <summary>set in a delegated session: who is acting on this owner's account and what they may do</summary>
+    ActingDto? Acting = null);
+
+public record ActingDto(Guid DelegationId, Guid ActorId, string ActorName, string Capacity, List<string> Scopes, DateTimeOffset? EndsAt);
 
 public record SimilarHitDto(string Name, string Type, string Source, double Score);
 

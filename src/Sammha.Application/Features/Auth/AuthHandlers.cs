@@ -100,6 +100,9 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         };
         u.PasswordHash = hasher.Hash(i.Password!);
         db.Users.Add(u);
+        // delegations waiting for this person (same national ID and mobile) link to the new account
+        foreach (var d in await db.Delegations.Where(x => x.DelegateUserId == null && x.RevokedAt == null && x.NationalId == n.NationalId && x.Phone == n.Phone).ToListAsync(ct))
+            d.DelegateUserId = u.Id;
         await db.SaveChangesAsync(ct);
         return await sessions.IssueAsync(u, null, ct);
     }

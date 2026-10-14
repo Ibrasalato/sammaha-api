@@ -17,18 +17,18 @@ public class Sessions(IAppDbContext db, TimeProvider clock, ITokenIssuer tokens,
     public static string Hash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     private static string NewToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    public async Task<AuthResult> IssueAsync(User u, Guid? family = null, CancellationToken ct = default)
+    public async Task<AuthResult> IssueAsync(User u, Guid? family = null, CancellationToken ct = default, Guid? delegationId = null)
     {
         var refresh = NewToken();
         var row = new RefreshToken
         {
             UserId = u.Id, TokenHash = Hash(refresh), FamilyId = family ?? Guid.NewGuid(), CreatedAt = Now, ExpiresAt = Now + tokens.RefreshLifetime,
-            CreatedByIp = Clip(current.Ip, 64), UserAgent = Clip(current.UserAgent, 300),
+            CreatedByIp = Clip(current.Ip, 64), UserAgent = Clip(current.UserAgent, 300), DelegationId = delegationId,
         };
         db.RefreshTokens.Add(row);
         await db.SaveChangesAsync(ct);
-        var token = tokens.Issue(u, row.FamilyId);
-        return new AuthResult(await access.DtoAsync(u, ct), token.Token, token.ExpiresAt, refresh, row.ExpiresAt);
+        var token = tokens.Issue(u, row.FamilyId, delegationId);
+        return new AuthResult(await access.DtoAsync(u, ct, delegationId), token.Token, token.ExpiresAt, refresh, row.ExpiresAt);
     }
 
     public async Task<AuthResult> RefreshAsync(string token, CancellationToken ct)
@@ -51,7 +51,13 @@ public class Sessions(IAppDbContext db, TimeProvider clock, ITokenIssuer tokens,
         if (Now >= row.ExpiresAt) throw expired;
         var u = await db.Users.FirstOrDefaultAsync(x => x.Id == row.UserId, ct);
         if (u == null || !u.Active) throw DomainException.Unauthorized("هذا الحساب موقوف");
-        var next = await IssueAsync(u, row.FamilyId, ct);
+        if (row.DelegationId is { } did)
+        {
+            // a delegated session lives only while the delegation is in force
+            var d = await db.Delegations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == did, ct);
+            if (d == null || d.OwnerId != u.Id || d.StatusAt(Now) != DelegationStatuses.Active) throw DomainException.Unauthorized("انتهى التفويض أو أُلغي، سجّل الدخول بحسابك");
+        }
+        var next = await IssueAsync(u, row.FamilyId, ct, row.DelegationId);
         row.RevokedAt = Now;
         row.RevokedReason = "rotated";
         row.ReplacedById = (await db.RefreshTokens.FirstAsync(x => x.TokenHash == Hash(next.RefreshToken), ct)).Id;

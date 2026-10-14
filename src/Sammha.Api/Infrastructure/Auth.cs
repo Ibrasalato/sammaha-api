@@ -25,6 +25,8 @@ public static class SammhaClaims
     public const string Stamp = "stamp";
     /// <summary>sign-in id (refresh-token family), so "this device" can be told apart in the sessions list</summary>
     public const string Session = "sid";
+    /// <summary>delegation id of a delegated session</summary>
+    public const string Delegation = "dlg";
 }
 
 /// <summary>
@@ -35,13 +37,13 @@ public class JwtTokenIssuer(IOptions<JwtOptions> opt) : ITokenIssuer
 {
     public TimeSpan RefreshLifetime => TimeSpan.FromDays(Math.Max(1, opt.Value.RefreshDays));
 
-    public AccessToken Issue(User user, Guid sessionId)
+    public AccessToken Issue(User user, Guid sessionId, Guid? delegationId = null)
     {
         var o = opt.Value;
         var creds = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(o.Key)), SecurityAlgorithms.HmacSha256);
         var now = DateTime.UtcNow;
         var expires = now.AddMinutes(Math.Max(1, o.AccessMinutes));
-        var token = new JwtSecurityToken(o.Issuer, o.Audience,
+        List<Claim> claims =
         [
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
@@ -49,7 +51,9 @@ public class JwtTokenIssuer(IOptions<JwtOptions> opt) : ITokenIssuer
             new Claim(ClaimTypes.Role, user.Role),
             new Claim(SammhaClaims.Stamp, user.SecurityStamp),
             new Claim(SammhaClaims.Session, sessionId.ToString("N")),
-        ], notBefore: now, expires: expires, signingCredentials: creds);
+        ];
+        if (delegationId is { } d) claims.Add(new Claim(SammhaClaims.Delegation, d.ToString("N")));
+        var token = new JwtSecurityToken(o.Issuer, o.Audience, claims, notBefore: now, expires: expires, signingCredentials: creds);
         return new AccessToken(new JwtSecurityTokenHandler().WriteToken(token), new DateTimeOffset(expires));
     }
 }
@@ -71,4 +75,5 @@ public class HttpCurrentUser(IHttpContextAccessor http) : ICurrentUser
     public string? Ip => http.HttpContext?.Connection.RemoteIpAddress?.ToString();
     public string? UserAgent => http.HttpContext?.Request.Headers.UserAgent.ToString();
     public Guid? SessionId => Guid.TryParse(Principal?.FindFirstValue(SammhaClaims.Session), out var g) ? g : null;
+    public Guid? DelegationId => Guid.TryParse(Principal?.FindFirstValue(SammhaClaims.Delegation), out var g) ? g : null;
 }

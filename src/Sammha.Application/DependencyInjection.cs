@@ -32,6 +32,8 @@ public static class DependencyInjection
         {
             m.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
             m.AddOpenBehavior(typeof(LoggingBehavior<,>));
+            m.AddOpenBehavior(typeof(ActivityBehavior<,>));
+            m.AddOpenBehavior(typeof(DelegationGuardBehavior<,>));
         });
         return s;
     }

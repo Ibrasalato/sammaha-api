@@ -152,6 +152,8 @@ public class RefreshToken
     public Guid? ReplacedById { get; set; }
     public string? CreatedByIp { get; set; }
     public string? UserAgent { get; set; }
+    /// <summary>a delegated session: the delegate acting on the owner's account (UserId is the owner)</summary>
+    public Guid? DelegationId { get; set; }
 
     public bool IsActive(DateTimeOffset now) => RevokedAt == null && now < ExpiresAt;
 }

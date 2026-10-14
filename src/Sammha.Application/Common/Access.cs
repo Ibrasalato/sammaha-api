@@ -5,9 +5,23 @@ using Sammha.Domain;
 namespace Sammha.Application.Common;
 
 /// <summary>Who is calling, re-checked against the database on every request (a suspended account stops at once).</summary>
-public class Access(IAppDbContext db, ICurrentUser current, IOptions<PlatformOptions> rules)
+public class Access(IAppDbContext db, ICurrentUser current, IOptions<PlatformOptions> rules, TimeProvider clock)
 {
     private User? _me;
+    private Delegation? _delegation;
+    private bool _delegationLoaded;
+
+    /// <summary>the delegation of a delegated session, if it is still in force (null otherwise)</summary>
+    public async Task<Delegation?> DelegationAsync(CancellationToken ct)
+    {
+        if (_delegationLoaded) return _delegation;
+        _delegationLoaded = true;
+        if (current.DelegationId is not { } id) return null;
+        var d = await db.Delegations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (d == null || d.StatusAt(clock.GetUtcNow()) != DelegationStatuses.Active) return null;
+        var delegateActive = await db.Users.AsNoTracking().AnyAsync(u => u.Id == d.DelegateUserId && u.Active, ct);
+        return _delegation = delegateActive ? d : null;
+    }
 
     public async Task<User> MeAsync(CancellationToken ct)
     {
@@ -17,6 +31,9 @@ public class Access(IAppDbContext db, ICurrentUser current, IOptions<PlatformOpt
         if (!u.Active) throw DomainException.Unauthorized("هذا الحساب موقوف");
         // password changed or account suspended since this token was issued
         if (current.Stamp != u.SecurityStamp) throw DomainException.Unauthorized("انتهت الجلسة، سجّل الدخول من جديد");
+        // a delegated session ends the moment the delegation is revoked or expires
+        if (current.DelegationId != null && (await DelegationAsync(ct) is not { } d || d.OwnerId != u.Id))
+            throw DomainException.Unauthorized("انتهى التفويض أو أُلغي، سجّل الدخول بحسابك");
         return _me = u;
     }
 
@@ -71,9 +88,18 @@ public class Access(IAppDbContext db, ICurrentUser current, IOptions<PlatformOpt
 
     public async Task<bool> CanAsync(User u, string permission, CancellationToken ct) => (await PermissionsOfAsync(u, ct)).Permissions.Contains(permission);
 
-    public async Task<UserDto> DtoAsync(User u, CancellationToken ct)
+    public async Task<UserDto> DtoAsync(User u, CancellationToken ct, Guid? delegationId = null)
     {
-        if (!Roles.IsStaff(u.Role)) return Mapper.User(u);
+        if (!Roles.IsStaff(u.Role))
+        {
+            var dto = Mapper.User(u);
+            var did = delegationId ?? current.DelegationId;
+            if (did == null) return dto;
+            var d = delegationId != null ? await db.Delegations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == did, ct) : await DelegationAsync(ct);
+            if (d == null) return dto;
+            var actor = await db.Users.AsNoTracking().Where(x => x.Id == d.DelegateUserId).Select(x => x.FullName).FirstOrDefaultAsync(ct) ?? d.FullName;
+            return dto with { Acting = new ActingDto(d.Id, d.DelegateUserId ?? Guid.Empty, actor, d.Capacity, d.ScopeList().ToList(), d.Permanent ? null : d.EndsAt) };
+        }
         var (set, role) = await PermissionsOfAsync(u, ct);
         return Mapper.User(u, set, role);
     }

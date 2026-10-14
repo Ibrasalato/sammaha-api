@@ -37,6 +37,7 @@ public static class Permissions
     public const string SettingsManage = "settings.manage";
     public const string SecurityManage = "security.manage";
     public const string AuditView = "audit.view";
+    public const string LogsView = "logs.view";
 
     public record Info(string Key, string Group, string Label, string Description);
 
@@ -74,6 +75,7 @@ public static class Permissions
         new(SettingsManage, "الإعدادات", "إعدادات المنصة", "استقبال الطلبات، الإعلان، الصيانة، بيانات التواصل"),
         new(SecurityManage, "الإعدادات", "سياسة الأمان", "كلمات المرور وقفل الدخول ومهلة الخمول وتسجيل خروج الجميع"),
         new(AuditView, "الإعدادات", "سجل التغييرات", "سجل تعديلات الإعدادات والإجراءات الإدارية"),
+        new(LogsView, "الإعدادات", "سجل النشاط (Logs)", "كل ما يجري على المنصة بالتاريخ والوقت: الدخول والطلبات والمزايدات والمدفوعات وإجراءات الموظفين والمفوضين"),
     ];
 
     public static readonly string[] All = Catalog.Select(c => c.Key).ToArray();
