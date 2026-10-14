@@ -48,6 +48,13 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         await using var uow = await db.BeginAsync([$"r:{id}"], ct);
         var r = await Full.FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw DomainException.NotFound("الطلب غير موجود");
         if (r.Status != RequestStatuses.UnderReview) throw new DomainException("تمت مراجعة هذا الطلب");
+        // policy: a logo request has one name accepted at most; the others are rejected
+        if (r.Kind == RequestKinds.Standard)
+        {
+            var accepted = decisions.Where(d => d.Status == CandidateStatuses.Accepted)
+                .Select(d => r.Candidates.FirstOrDefault(c => c.Id == d.CandidateId)).Where(c => c != null && c.Status != CandidateStatuses.Withdrawn).Distinct().ToList();
+            if (accepted.Count > 1) throw new DomainException("يُقبل شعار واحد فقط في الطلب الواحد؛ اختر اسمًا واحدًا وارفض البقية");
+        }
         foreach (var d in decisions)
         {
             var c = r.Candidates.FirstOrDefault(x => x.Id == d.CandidateId);

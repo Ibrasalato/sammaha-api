@@ -36,7 +36,7 @@ public class RealtimeTests(TestApp app) : IClassFixture<TestApp>
         await owner.Post<JsonElement>($"/api/me/requests/{id}/pay");
         var full = await committee.Get<JsonElement>($"/api/requests/{id}");
         var cand = full.GetProperty("candidates")[0].GetProperty("id").GetString();
-        await committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new { decisions = full.GetProperty("candidates").EnumerateArray().Select(c => new { candidateId = c.GetProperty("id").GetString(), status = "accepted" }).ToArray() });
+        await committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new { decisions = full.GetProperty("candidates").EnumerateArray().Select((c, i) => new { candidateId = c.GetProperty("id").GetString(), status = i == 0 ? "accepted" : "rejected", reason = i == 0 ? null : "قُبل شعار آخر" }).ToArray() });
         var now = app.Clock.GetUtcNow();
         var a = (await committee.Post<JsonElement>("/api/admin/schedule", new { candidateIds = new[] { cand }, startsAt = now.AddMinutes(-1), endsAt = now.AddHours(2) }))[0];
         return (a.GetProperty("id").GetString()!, a.GetProperty("currentPrice").GetDecimal() + a.GetProperty("minIncrement").GetDecimal());

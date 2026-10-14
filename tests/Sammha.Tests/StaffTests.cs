@@ -118,7 +118,7 @@ public class StaffTests(TestApp app) : IClassFixture<TestApp>
         var id = r.GetProperty("id").GetString();
         await owner.Post<JsonElement>($"/api/me/requests/{id}/pay");
         var full = await committee.Get<JsonElement>($"/api/requests/{id}");
-        var cands = full.GetProperty("candidates").EnumerateArray().Select(c => new { candidateId = c.GetProperty("id").GetString(), status = "accepted" }).ToArray();
+        var cands = full.GetProperty("candidates").EnumerateArray().Select((c, i) => new { candidateId = c.GetProperty("id").GetString(), status = i == 0 ? "accepted" : "rejected", reason = i == 0 ? null : "قُبل شعار آخر" }).ToArray();
         await committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new { decisions = cands });
         var now = app.Clock.GetUtcNow();
         var a = (await committee.Post<JsonElement>("/api/admin/schedule", new { candidateIds = new[] { cands[0].candidateId }, startsAt = now.AddMinutes(-1), endsAt = now.AddHours(2) }))[0];

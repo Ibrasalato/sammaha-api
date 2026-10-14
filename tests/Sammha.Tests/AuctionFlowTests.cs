@@ -28,7 +28,8 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
 
         var full = await committee.Get<JsonElement>($"/api/requests/{id}");
         var cands = full.GetProperty("candidates").EnumerateArray().Select(c => c.GetProperty("id").GetString()).ToList();
-        r = await committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new
+        // policy: one name accepted per logo request
+        var two = await committee.Fails(() => committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new
         {
             decisions = new object[]
             {
@@ -36,11 +37,28 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
                 new { candidateId = cands[1], status = "accepted" },
                 new { candidateId = cands[2], status = "rejected", reason = "مشابه" },
             },
+        }));
+        Assert.Contains("شعار واحد", two);
+        r = await committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new
+        {
+            decisions = new object[]
+            {
+                new { candidateId = cands[0], status = "accepted" },
+                new { candidateId = cands[1], status = "rejected", reason = "قُبل شعار آخر من الطلب" },
+                new { candidateId = cands[2], status = "rejected", reason = "مشابه" },
+            },
         });
         Assert.Equal("accepted", r.GetProperty("status").GetString());
 
+        // a second request whose accepted name gets no bids
+        var r2 = await owner.Post<JsonElement>("/api/me/requests", new { type = "manqiya", names = new[] { "برق الشمال", "سحاب الصيف", "نجم الوادي" } });
+        var id2 = r2.GetProperty("id").GetString();
+        await owner.Post<JsonElement>($"/api/me/requests/{id2}/pay");
+        var c2 = (await committee.Get<JsonElement>($"/api/requests/{id2}")).GetProperty("candidates").EnumerateArray().Select(c => c.GetProperty("id").GetString()).ToList();
+        await committee.Post<JsonElement>($"/api/admin/requests/{id2}/review", new { decisions = new object[] { new { candidateId = c2[0], status = "accepted" }, new { candidateId = c2[1], status = "rejected", reason = "قُبل شعار آخر" }, new { candidateId = c2[2], status = "rejected", reason = "قُبل شعار آخر" } } });
+
         var now = app.Clock.GetUtcNow();
-        var auctions = await committee.Post<JsonElement>("/api/admin/schedule", new { candidateIds = new[] { cands[0], cands[1] }, startsAt = now.AddMinutes(-1), endsAt = now.AddHours(2) });
+        var auctions = await committee.Post<JsonElement>("/api/admin/schedule", new { candidateIds = new[] { cands[0], c2[0] }, startsAt = now.AddMinutes(-1), endsAt = now.AddHours(2) });
         string? IdOf(string name) => auctions.EnumerateArray().First(a => a.GetProperty("name").GetString() == name).GetProperty("id").GetString();
         var a1 = IdOf("نسيم الصبا");
         var a2 = IdOf("برق الشمال");
@@ -72,6 +90,9 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
 
         var names = await b2.Get<JsonElement>("/api/me/names");
         Assert.Contains(names.EnumerateArray(), n => n.GetProperty("name").GetString() == "نسيم الصبا");
+        // the first request's only name went to another bidder, so its guarantee came back
+        var txs = (await owner.Get<JsonElement>("/api/me/wallet")).GetProperty("txs").EnumerateArray();
+        Assert.Contains(txs, t => t.GetProperty("kind").GetString() == "refund" && t.GetProperty("note").GetString()!.Contains(r.GetProperty("number").GetString()!));
     }
 
     [Fact]
