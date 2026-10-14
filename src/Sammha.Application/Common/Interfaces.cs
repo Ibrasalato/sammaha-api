@@ -25,6 +25,8 @@ public interface IAppDbContext
     DbSet<OtpChallenge> OtpChallenges { get; }
     DbSet<Payment> Payments { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
+    DbSet<PlatformSettings> Settings { get; }
+    DbSet<SettingsChange> SettingsChanges { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     /// <summary>next value of a database sequence (RequestNo, InvoiceNo, ListingNo, TicketNo)</summary>
@@ -57,6 +59,8 @@ public interface ICurrentUser
     /// <summary>caller's IP and browser, recorded with refresh tokens</summary>
     string? Ip { get; }
     string? UserAgent { get; }
+    /// <summary>the sign-in (refresh-token family) this access token belongs to</summary>
+    Guid? SessionId { get; }
 }
 
 public interface IPasswordHasher
@@ -88,7 +92,7 @@ public record AccessToken(string Token, DateTimeOffset ExpiresAt);
 public interface ITokenIssuer
 {
     /// <summary>short-lived signed JWT (sub, role, stamp, jti)</summary>
-    AccessToken Issue(User user);
+    AccessToken Issue(User user, Guid sessionId);
     /// <summary>how long a refresh token lives</summary>
     TimeSpan RefreshLifetime { get; }
 }

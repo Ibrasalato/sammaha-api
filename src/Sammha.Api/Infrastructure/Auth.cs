@@ -23,6 +23,8 @@ public class JwtOptions
 public static class SammhaClaims
 {
     public const string Stamp = "stamp";
+    /// <summary>sign-in id (refresh-token family), so "this device" can be told apart in the sessions list</summary>
+    public const string Session = "sid";
 }
 
 /// <summary>
@@ -33,7 +35,7 @@ public class JwtTokenIssuer(IOptions<JwtOptions> opt) : ITokenIssuer
 {
     public TimeSpan RefreshLifetime => TimeSpan.FromDays(Math.Max(1, opt.Value.RefreshDays));
 
-    public AccessToken Issue(User user)
+    public AccessToken Issue(User user, Guid sessionId)
     {
         var o = opt.Value;
         var creds = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(o.Key)), SecurityAlgorithms.HmacSha256);
@@ -46,6 +48,7 @@ public class JwtTokenIssuer(IOptions<JwtOptions> opt) : ITokenIssuer
             new Claim(JwtRegisteredClaimNames.Iat, new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new Claim(ClaimTypes.Role, user.Role),
             new Claim(SammhaClaims.Stamp, user.SecurityStamp),
+            new Claim(SammhaClaims.Session, sessionId.ToString("N")),
         ], notBefore: now, expires: expires, signingCredentials: creds);
         return new AccessToken(new JwtSecurityTokenHandler().WriteToken(token), new DateTimeOffset(expires));
     }
@@ -67,4 +70,5 @@ public class HttpCurrentUser(IHttpContextAccessor http) : ICurrentUser
     public string? Stamp => Principal?.FindFirstValue(SammhaClaims.Stamp);
     public string? Ip => http.HttpContext?.Connection.RemoteIpAddress?.ToString();
     public string? UserAgent => http.HttpContext?.Request.Headers.UserAgent.ToString();
+    public Guid? SessionId => Guid.TryParse(Principal?.FindFirstValue(SammhaClaims.Session), out var g) ? g : null;
 }

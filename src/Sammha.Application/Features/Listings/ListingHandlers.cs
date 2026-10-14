@@ -12,7 +12,7 @@ namespace Sammha.Application.Features.Listings;
 /// Resale auction: announced 72 h ahead, opens at the owner's minimum, 3 days, bidders pay a guarantee, 10% commission.
 /// Instant sale: on the market 72 h at the owner's price, first buyer who pays takes it, 15% commission.
 /// </summary>
-public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Money money, AuctionEngine engine, Notifier notifier, IOptions<PlatformOptions> rules)
+public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Money money, AuctionEngine engine, Notifier notifier, SettingsStore settings, IOptions<PlatformOptions> rules)
     : IRequestHandler<CreateListingCommand, ListingDto>, IRequestHandler<CancelListingCommand, ListingDto>, IRequestHandler<GetMyListingsQuery, List<ListingDto>>, IRequestHandler<GetMarketQuery, List<ListingDto>>, IRequestHandler<BuyListingCommand, ListingDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -23,6 +23,7 @@ public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access
     {
         var u = await access.MeAsync(ct);
         if (mode is not (ListingModes.Auction or ListingModes.Instant)) throw new DomainException("اختر نوع الطرح");
+        await settings.EnsureOpenAsync(mode == ListingModes.Auction ? Intakes.ResaleAuction : Intakes.InstantSale, ct);
         await using var uow = await db.BeginAsync([$"n:{reservedId}"], ct);
         var r = await db.ReservedNames.FirstOrDefaultAsync(x => x.Id == reservedId && x.OwnerId == u.Id, ct) ?? throw new DomainException("الاسم غير مسجل باسمك");
         if (await db.Listings.AnyAsync(l => l.ReservedId == r.Id && Active.Contains(l.Status), ct)) throw new DomainException("الاسم معروض للبيع حاليًا");

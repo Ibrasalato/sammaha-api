@@ -103,6 +103,7 @@ app.UseCors();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<MaintenanceMiddleware>();
 
 app.MapControllers();
 app.MapHub<AuctionHub>("/hubs/auctions");

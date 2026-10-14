@@ -9,10 +9,10 @@ public class AuthTests(TestApp app) : IClassFixture<TestApp>
     public async Task Sign_up_then_two_step_sign_in()
     {
         var api = app.Anonymous();
-        var res = await api.Post<JsonElement>("/api/auth/signup", new { fullName = "عبدالله محمد سالم القحطاني", phone = "0551112233", email = "a.q@example.com", password = "secret1" });
+        var res = await api.Post<JsonElement>("/api/auth/signup", new { fullName = "عبدالله محمد سالم القحطاني", phone = "0551112233", email = "a.q@example.com", password = "secret12" });
         Assert.Equal("owner", res.GetProperty("user").GetProperty("role").GetString());
 
-        var ch = await api.Post<JsonElement>("/api/auth/signin", new { login = "0551112233", password = "secret1", portal = "owner" });
+        var ch = await api.Post<JsonElement>("/api/auth/signin", new { login = "0551112233", password = "secret12", portal = "owner" });
         Assert.Equal("05•••••233", ch.GetProperty("phoneMasked").GetString());
         var challenge = ch.GetProperty("challenge").GetString();
         var wrong = await api.Fails(() => api.Post<JsonElement>("/api/auth/signin/complete", new { challenge, code = "0000" }));

@@ -18,6 +18,8 @@ public static class DependencyInjection
 
         s.AddScoped<Access>();
         s.AddScoped<Sessions>();
+        s.AddScoped<SettingsStore>();
+        s.AddSingleton<SettingsCache>();
         s.AddScoped<Mapper>();
         s.AddScoped<Notifier>();
         s.AddScoped<Matching>();

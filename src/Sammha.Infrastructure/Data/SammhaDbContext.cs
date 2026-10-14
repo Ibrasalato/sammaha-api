@@ -35,6 +35,8 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PlatformSettings> Settings => Set<PlatformSettings>();
+    public DbSet<SettingsChange> SettingsChanges => Set<SettingsChange>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
     {
@@ -139,6 +141,38 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.Property(x => x.TokenHash).HasMaxLength(64);
         });
         b.Entity<User>().Property(x => x.SecurityStamp).HasMaxLength(32);
+        b.Entity<User>(e =>
+        {
+            // existing accounts keep receiving every notification
+            e.Property(x => x.NotifyOutbid).HasDefaultValue(true);
+            e.Property(x => x.NotifyReminders).HasDefaultValue(true);
+            e.Property(x => x.NotifyResults).HasDefaultValue(true);
+            e.Property(x => x.NotifyRequests).HasDefaultValue(true);
+        });
+        b.Entity<PlatformSettings>(e =>
+        {
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.RequestsClosedNote).HasMaxLength(300);
+            e.Property(x => x.CompoundClosedNote).HasMaxLength(300);
+            e.Property(x => x.SaleClosedNote).HasMaxLength(300);
+            e.Property(x => x.InvestmentClosedNote).HasMaxLength(300);
+            e.Property(x => x.SupportEmail).HasMaxLength(160);
+            e.Property(x => x.SupportPhone).HasMaxLength(30);
+            e.Property(x => x.WhatsApp).HasMaxLength(30);
+            e.Property(x => x.Announcement).HasMaxLength(400);
+            e.Property(x => x.AnnouncementTone).HasMaxLength(10);
+            e.Property(x => x.MaintenanceNote).HasMaxLength(300);
+            e.Property(x => x.UpdatedBy).HasMaxLength(120);
+            e.ToTable("PlatformSettings", t => t.HasCheckConstraint("CK_PlatformSettings_Single", "[Id] = 1"));
+        });
+        b.Entity<SettingsChange>(e =>
+        {
+            e.Property(x => x.UserName).HasMaxLength(120);
+            e.Property(x => x.Field).HasMaxLength(60);
+            e.Property(x => x.OldValue).HasMaxLength(400);
+            e.Property(x => x.NewValue).HasMaxLength(400);
+            e.HasIndex(x => x.At);
+        });
     }
 
     public async Task<int> NextNumberAsync(string sequence, CancellationToken ct = default)

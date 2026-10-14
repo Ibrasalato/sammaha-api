@@ -1,0 +1,251 @@
+using System.Globalization;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Sammha.Application.Common;
+using Sammha.Domain;
+
+namespace Sammha.Application.Features.Settings;
+
+// ───── DTOs ─────
+
+/// <summary>What every visitor needs: which services accept requests, the site banner, contact details, the password rule.</summary>
+public record PublicSettingsDto(
+    bool RequestsOpen, string? RequestsClosedNote, bool CompoundOpen, string? CompoundClosedNote,
+    bool ResaleAuctionOpen, bool InstantSaleOpen, string? SaleClosedNote, bool InvestmentOpen, string? InvestmentClosedNote,
+    bool SignupOpen, string SupportEmail, string SupportPhone, string WhatsApp,
+    string? Announcement, string AnnouncementTone, bool Maintenance, string? MaintenanceNote,
+    int PasswordMinLength, int StaffIdleMinutes);
+
+public record AdminSettingsDto(
+    bool RequestsOpen, string? RequestsClosedNote, bool CompoundOpen, string? CompoundClosedNote,
+    bool ResaleAuctionOpen, bool InstantSaleOpen, string? SaleClosedNote, bool InvestmentOpen, string? InvestmentClosedNote,
+    bool SignupOpen, string SupportEmail, string SupportPhone, string WhatsApp,
+    bool AnnouncementOn, string? Announcement, string AnnouncementTone, bool Maintenance, string? MaintenanceNote,
+    int PasswordMinLength, int MaxLoginAttempts, int LockoutMinutes, int StaffIdleMinutes,
+    DateTimeOffset UpdatedAt, string? UpdatedBy, RulesDto Rules);
+
+/// <summary>fees and rules from the server configuration (read-only in the dashboard)</summary>
+public record RulesDto(decimal DepositAmount, int NamesPerRequest, decimal OpeningPrice, decimal MinIncrement, int ExtendMinutes, decimal VatRate,
+    decimal InvestFee, decimal InvestOwnerShare, int InvestMaxNames, int ResaleNoticeHours, int ResaleAuctionDays, decimal ResaleCommission,
+    decimal ResaleBidDeposit, int InstantSaleHours, decimal InstantCommission);
+
+/// <summary>a partial update: only the fields that are sent change</summary>
+public record SettingsPatch(
+    bool? RequestsOpen = null, string? RequestsClosedNote = null, bool? CompoundOpen = null, string? CompoundClosedNote = null,
+    bool? ResaleAuctionOpen = null, bool? InstantSaleOpen = null, string? SaleClosedNote = null, bool? InvestmentOpen = null, string? InvestmentClosedNote = null,
+    bool? SignupOpen = null, string? SupportEmail = null, string? SupportPhone = null, string? WhatsApp = null,
+    bool? AnnouncementOn = null, string? Announcement = null, string? AnnouncementTone = null, bool? Maintenance = null, string? MaintenanceNote = null,
+    int? PasswordMinLength = null, int? MaxLoginAttempts = null, int? LockoutMinutes = null, int? StaffIdleMinutes = null);
+
+public record SettingsChangeDto(long Id, DateTimeOffset At, string UserName, string Field, string? OldValue, string? NewValue);
+
+public record PreferencesDto(bool NotifyOutbid, bool NotifyReminders, bool NotifyResults, bool NotifyRequests);
+
+/// <summary>one signed-in device (a refresh-token family)</summary>
+public record SessionDto(Guid Id, DateTimeOffset SignedInAt, DateTimeOffset LastActiveAt, DateTimeOffset ExpiresAt, string? Ip, string? Device, bool Current);
+
+public record SecuritySummaryDto(DateTimeOffset? LastLoginAt, int ActiveSessions, int PasswordMinLength);
+
+// ───── messages ─────
+public record GetPublicSettingsQuery : IQuery<PublicSettingsDto>;
+public record GetAdminSettingsQuery : IQuery<AdminSettingsDto>;
+public record UpdateSettingsCommand(SettingsPatch Patch) : ICommand<AdminSettingsDto>;
+public record GetSettingsHistoryQuery(int Take = 100) : IQuery<List<SettingsChangeDto>>;
+/// <summary>emergency: ends every session on the platform except the caller's</summary>
+public record SignOutEveryoneCommand : ICommand<int>;
+
+public record GetMyPreferencesQuery : IQuery<PreferencesDto>;
+public record UpdateMyPreferencesCommand(PreferencesDto Preferences) : ICommand<PreferencesDto>;
+public record GetMySessionsQuery : IQuery<List<SessionDto>>;
+public record RevokeMySessionCommand(Guid SessionId) : ICommand<List<SessionDto>>;
+public record GetMySecurityQuery : IQuery<SecuritySummaryDto>;
+
+// ───── handlers ─────
+public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access access, SettingsStore store, ICurrentUser current,
+    IOptions<PlatformOptions> rules)
+    : IRequestHandler<GetPublicSettingsQuery, PublicSettingsDto>, IRequestHandler<GetAdminSettingsQuery, AdminSettingsDto>,
+      IRequestHandler<UpdateSettingsCommand, AdminSettingsDto>, IRequestHandler<GetSettingsHistoryQuery, List<SettingsChangeDto>>,
+      IRequestHandler<SignOutEveryoneCommand, int>, IRequestHandler<GetMyPreferencesQuery, PreferencesDto>,
+      IRequestHandler<UpdateMyPreferencesCommand, PreferencesDto>, IRequestHandler<GetMySessionsQuery, List<SessionDto>>,
+      IRequestHandler<RevokeMySessionCommand, List<SessionDto>>, IRequestHandler<GetMySecurityQuery, SecuritySummaryDto>
+{
+    private DateTimeOffset Now => clock.GetUtcNow();
+
+    public async Task<PublicSettingsDto> Handle(GetPublicSettingsQuery q, CancellationToken ct)
+    {
+        var s = await store.GetAsync(ct);
+        return new PublicSettingsDto(s.RequestsOpen, s.RequestsClosedNote, s.CompoundOpen, s.CompoundClosedNote, s.ResaleAuctionOpen, s.InstantSaleOpen,
+            s.SaleClosedNote, s.InvestmentOpen, s.InvestmentClosedNote, s.SignupOpen, s.SupportEmail, s.SupportPhone, s.WhatsApp,
+            s.AnnouncementOn ? s.Announcement : null, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote, s.PasswordMinLength, s.StaffIdleMinutes);
+    }
+
+    private AdminSettingsDto Admin(PlatformSettings s)
+    {
+        var r = rules.Value;
+        return new AdminSettingsDto(s.RequestsOpen, s.RequestsClosedNote, s.CompoundOpen, s.CompoundClosedNote, s.ResaleAuctionOpen, s.InstantSaleOpen,
+            s.SaleClosedNote, s.InvestmentOpen, s.InvestmentClosedNote, s.SignupOpen, s.SupportEmail, s.SupportPhone, s.WhatsApp,
+            s.AnnouncementOn, s.Announcement, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote,
+            s.PasswordMinLength, s.MaxLoginAttempts, s.LockoutMinutes, s.StaffIdleMinutes, s.UpdatedAt, s.UpdatedBy,
+            new RulesDto(r.DepositAmount, r.NamesPerRequest, r.OpeningPrice, r.MinIncrement, r.ExtendMinutes, r.VatRate, r.InvestFee, r.InvestOwnerShare,
+                r.InvestMaxNames, r.ResaleNoticeHours, r.ResaleAuctionDays, r.ResaleCommission, r.ResaleBidDeposit, r.InstantSaleHours, r.InstantCommission));
+    }
+
+    public async Task<AdminSettingsDto> Handle(GetAdminSettingsQuery q, CancellationToken ct)
+    {
+        await access.AdminAsync(ct);
+        return Admin(await store.GetAsync(ct));
+    }
+
+    public async Task<AdminSettingsDto> Handle(UpdateSettingsCommand cmd, CancellationToken ct)
+    {
+        var me = await access.AdminAsync(ct);
+        var p = cmd.Patch;
+        var s = await store.ForUpdateAsync(ct);
+        var changes = new List<SettingsChange>();
+
+        void Add(string field, string? old, string? value) =>
+            changes.Add(new SettingsChange { At = Now, UserId = me.Id, UserName = me.FullName, Field = field, OldValue = old, NewValue = value });
+        void SetV<T>(string field, T? value, Func<T> get, Action<T> set) where T : struct
+        {
+            if (value is not { } v || EqualityComparer<T>.Default.Equals(get(), v)) return;
+            Add(field, Show(get()), Show(v));
+            set(v);
+        }
+        void SetS(string field, string? value, Func<string> get, Action<string> set)
+        {
+            if (value is null || get() == value) return;
+            Add(field, get(), value);
+            set(value);
+        }
+        static string? Note(string? v, int max = 300) => v == null ? null : v.Trim().Length == 0 ? "" : v.Trim()[..Math.Min(v.Trim().Length, max)];
+        static int Range(int? v, int min, int max, string label) => v is { } x && (x < min || x > max) ? throw new DomainException($"{label} بين {min} و{max}") : v ?? 0;
+
+        if (p.SupportEmail is { Length: > 0 } em && !System.Text.RegularExpressions.Regex.IsMatch(em.Trim(), @"^[^\s@]+@[^\s@]+\.[^\s@]+$")) throw new DomainException("بريد الدعم غير صحيح");
+        if (p.AnnouncementTone != null && p.AnnouncementTone is not ("info" or "warn" or "ok")) throw new DomainException("لون الإعلان غير معروف");
+        if (p.PasswordMinLength != null) Range(p.PasswordMinLength, 8, 32, "طول كلمة المرور");
+        if (p.MaxLoginAttempts != null) Range(p.MaxLoginAttempts, 3, 20, "محاولات الدخول");
+        if (p.LockoutMinutes != null) Range(p.LockoutMinutes, 1, 1440, "مدة القفل بالدقائق");
+        if (p.StaffIdleMinutes != null) Range(p.StaffIdleMinutes, 0, 480, "مهلة الخمول بالدقائق");
+
+        SetV("RequestsOpen", p.RequestsOpen, () => s.RequestsOpen, v => s.RequestsOpen = v);
+        SetS("RequestsClosedNote", Note(p.RequestsClosedNote), () => s.RequestsClosedNote ?? "", v => s.RequestsClosedNote = v);
+        SetV("CompoundOpen", p.CompoundOpen, () => s.CompoundOpen, v => s.CompoundOpen = v);
+        SetS("CompoundClosedNote", Note(p.CompoundClosedNote), () => s.CompoundClosedNote ?? "", v => s.CompoundClosedNote = v);
+        SetV("ResaleAuctionOpen", p.ResaleAuctionOpen, () => s.ResaleAuctionOpen, v => s.ResaleAuctionOpen = v);
+        SetV("InstantSaleOpen", p.InstantSaleOpen, () => s.InstantSaleOpen, v => s.InstantSaleOpen = v);
+        SetS("SaleClosedNote", Note(p.SaleClosedNote), () => s.SaleClosedNote ?? "", v => s.SaleClosedNote = v);
+        SetV("InvestmentOpen", p.InvestmentOpen, () => s.InvestmentOpen, v => s.InvestmentOpen = v);
+        SetS("InvestmentClosedNote", Note(p.InvestmentClosedNote), () => s.InvestmentClosedNote ?? "", v => s.InvestmentClosedNote = v);
+        SetV("SignupOpen", p.SignupOpen, () => s.SignupOpen, v => s.SignupOpen = v);
+        SetS("SupportEmail", Note(p.SupportEmail, 160), () => s.SupportEmail, v => s.SupportEmail = v);
+        SetS("SupportPhone", Note(p.SupportPhone, 30), () => s.SupportPhone, v => s.SupportPhone = v);
+        SetS("WhatsApp", Note(p.WhatsApp, 30), () => s.WhatsApp, v => s.WhatsApp = v);
+        SetV("AnnouncementOn", p.AnnouncementOn, () => s.AnnouncementOn, v => s.AnnouncementOn = v);
+        SetS("Announcement", Note(p.Announcement, 400), () => s.Announcement ?? "", v => s.Announcement = v);
+        SetS("AnnouncementTone", p.AnnouncementTone, () => s.AnnouncementTone, v => s.AnnouncementTone = v);
+        SetV("Maintenance", p.Maintenance, () => s.Maintenance, v => s.Maintenance = v);
+        SetS("MaintenanceNote", Note(p.MaintenanceNote), () => s.MaintenanceNote ?? "", v => s.MaintenanceNote = v);
+        SetV("PasswordMinLength", p.PasswordMinLength, () => s.PasswordMinLength, v => s.PasswordMinLength = v);
+        SetV("MaxLoginAttempts", p.MaxLoginAttempts, () => s.MaxLoginAttempts, v => s.MaxLoginAttempts = v);
+        SetV("LockoutMinutes", p.LockoutMinutes, () => s.LockoutMinutes, v => s.LockoutMinutes = v);
+        SetV("StaffIdleMinutes", p.StaffIdleMinutes, () => s.StaffIdleMinutes, v => s.StaffIdleMinutes = v);
+
+        if (changes.Count > 0)
+        {
+            s.UpdatedAt = Now;
+            s.UpdatedBy = me.FullName;
+            db.SettingsChanges.AddRange(changes);
+            await db.SaveChangesAsync(ct);
+            store.Invalidate();
+        }
+        return Admin(s);
+    }
+
+    private static string? Show<T>(T v) => v switch
+    {
+        null => null,
+        bool b => b ? "مفعّل" : "متوقف",
+        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+        _ => v.ToString(),
+    };
+
+    public async Task<List<SettingsChangeDto>> Handle(GetSettingsHistoryQuery q, CancellationToken ct)
+    {
+        await access.AdminAsync(ct);
+        return await db.SettingsChanges.AsNoTracking().OrderByDescending(c => c.Id).Take(Math.Clamp(q.Take, 1, 500))
+            .Select(c => new SettingsChangeDto(c.Id, c.At, c.UserName, c.Field, c.OldValue, c.NewValue)).ToListAsync(ct);
+    }
+
+    public async Task<int> Handle(SignOutEveryoneCommand cmd, CancellationToken ct)
+    {
+        var me = await access.AdminAsync(ct);
+        var users = await db.Users.Where(u => u.Id != me.Id).ToListAsync(ct);
+        foreach (var u in users) u.SecurityStamp = Guid.NewGuid().ToString("N");
+        var now = Now;
+        await db.RefreshTokens.Where(t => t.UserId != me.Id && t.RevokedAt == null)
+            .ExecuteUpdateAsync(x => x.SetProperty(t => t.RevokedAt, now).SetProperty(t => t.RevokedReason, "admin"), ct);
+        db.SettingsChanges.Add(new SettingsChange { At = now, UserId = me.Id, UserName = me.FullName, Field = "SignOutEveryone", NewValue = users.Count.ToString(CultureInfo.InvariantCulture) });
+        await db.SaveChangesAsync(ct);
+        return users.Count;
+    }
+
+    // ───── personal settings (owners and staff) ─────
+    private static PreferencesDto Prefs(User u) => new(u.NotifyOutbid, u.NotifyReminders, u.NotifyResults, u.NotifyRequests);
+
+    public async Task<PreferencesDto> Handle(GetMyPreferencesQuery q, CancellationToken ct) => Prefs(await access.MeAsync(ct));
+
+    public async Task<PreferencesDto> Handle(UpdateMyPreferencesCommand cmd, CancellationToken ct)
+    {
+        var u = await access.MeAsync(ct);
+        var p = cmd.Preferences;
+        u.NotifyOutbid = p.NotifyOutbid;
+        u.NotifyReminders = p.NotifyReminders;
+        u.NotifyResults = p.NotifyResults;
+        u.NotifyRequests = p.NotifyRequests;
+        await db.SaveChangesAsync(ct);
+        return Prefs(u);
+    }
+
+    private async Task<List<SessionDto>> SessionsOfAsync(Guid userId, CancellationToken ct)
+    {
+        var now = Now;
+        var rows = await db.RefreshTokens.AsNoTracking().Where(t => t.UserId == userId && t.CreatedAt > now.AddDays(-60))
+            .Select(t => new { t.FamilyId, t.CreatedAt, t.ExpiresAt, t.RevokedAt, t.RevokedReason, t.CreatedByIp, t.UserAgent }).ToListAsync(ct);
+        return rows.GroupBy(r => r.FamilyId)
+            // a family is live while its newest token is neither revoked (other than by rotation) nor expired
+            .Select(g => (Family: g.Key, First: g.MinBy(x => x.CreatedAt)!, Last: g.MaxBy(x => x.CreatedAt)!))
+            .Where(x => x.Last.RevokedAt == null && x.Last.ExpiresAt > now)
+            .OrderByDescending(x => x.Last.CreatedAt)
+            .Select(x => new SessionDto(x.Family, x.First.CreatedAt, x.Last.CreatedAt, x.Last.ExpiresAt, x.Last.CreatedByIp, Device(x.Last.UserAgent), x.Family == current.SessionId))
+            .ToList();
+    }
+
+    /// <summary>"Chrome · Windows" from the user agent</summary>
+    public static string? Device(string? ua)
+    {
+        if (string.IsNullOrWhiteSpace(ua)) return null;
+        var browser = ua.Contains("Edg/") ? "Edge" : ua.Contains("OPR/") ? "Opera" : ua.Contains("Chrome/") ? "Chrome" : ua.Contains("Firefox/") ? "Firefox" : ua.Contains("Safari/") ? "Safari" : null;
+        var os = ua.Contains("Windows") ? "Windows" : ua.Contains("iPhone") ? "iPhone" : ua.Contains("iPad") ? "iPad" : ua.Contains("Android") ? "Android" : ua.Contains("Mac OS") ? "macOS" : ua.Contains("Linux") ? "Linux" : null;
+        return browser == null && os == null ? ua[..Math.Min(ua.Length, 60)] : string.Join(" · ", new[] { browser, os }.Where(x => x != null));
+    }
+
+    public async Task<List<SessionDto>> Handle(GetMySessionsQuery q, CancellationToken ct) => await SessionsOfAsync((await access.MeAsync(ct)).Id, ct);
+
+    public async Task<List<SessionDto>> Handle(RevokeMySessionCommand cmd, CancellationToken ct)
+    {
+        var u = await access.MeAsync(ct);
+        if (cmd.SessionId == current.SessionId) throw new DomainException("هذا جهازك الحالي، استخدم «تسجيل الخروج»");
+        var now = Now;
+        var n = await db.RefreshTokens.Where(t => t.UserId == u.Id && t.FamilyId == cmd.SessionId && t.RevokedAt == null)
+            .ExecuteUpdateAsync(x => x.SetProperty(t => t.RevokedAt, now).SetProperty(t => t.RevokedReason, "user"), ct);
+        if (n == 0 && !await db.RefreshTokens.AnyAsync(t => t.UserId == u.Id && t.FamilyId == cmd.SessionId, ct)) throw DomainException.NotFound("الجلسة غير موجودة");
+        return await SessionsOfAsync(u.Id, ct);
+    }
+
+    public async Task<SecuritySummaryDto> Handle(GetMySecurityQuery q, CancellationToken ct)
+    {
+        var u = await access.MeAsync(ct);
+        return new SecuritySummaryDto(u.LastLoginAt, (await SessionsOfAsync(u.Id, ct)).Count, (await store.GetAsync(ct)).PasswordMinLength);
+    }
+}

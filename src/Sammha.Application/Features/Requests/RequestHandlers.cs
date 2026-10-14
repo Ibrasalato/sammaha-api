@@ -9,7 +9,7 @@ using Sammha.Domain;
 namespace Sammha.Application.Features.Requests;
 
 /// <summary>Logo requests (three names), compound names and «استثمار الاسم», as their owner sees them.</summary>
-public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Matching matching, Money money, IOptions<PlatformOptions> rules)
+public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Matching matching, Money money, SettingsStore settings, IOptions<PlatformOptions> rules)
     : IRequestHandler<GetMyRequestsQuery, List<RequestDto>>, IRequestHandler<GetRequestQuery, RequestDto>, IRequestHandler<CreateRequestCommand, RequestDto>, IRequestHandler<CreateCompoundRequestCommand, RequestDto>, IRequestHandler<CreateInvestmentRequestCommand, RequestDto>, IRequestHandler<GetMyInvestmentsQuery, List<InvestmentItemDto>>, IRequestHandler<PayDepositCommand, RequestDto>, IRequestHandler<CancelMyRequestCommand, CancelResult>, IRequestHandler<WithdrawNameCommand, WithdrawResult>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -61,6 +61,7 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
     private async Task<RequestDto> CreateAsync(string type, List<string> names, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
+        await settings.EnsureOpenAsync(Intakes.Requests, ct);
         if (!NameTypes.IsValid(type)) throw new DomainException("اختر النوع");
         if (names.Count != R.NamesPerRequest) throw new DomainException($"أدخل {R.NamesPerRequest} أسماء");
         var checks = await matching.CheckAsync(names, null, ct);
@@ -74,6 +75,7 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
     private async Task<RequestDto> CreateCompoundAsync(Guid reservedId, string fullName, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
+        await settings.EnsureOpenAsync(Intakes.Compound, ct);
         var b = await db.ReservedNames.FirstOrDefaultAsync(x => x.Id == reservedId && x.OwnerId == u.Id, ct) ?? throw new DomainException("اختر اسمًا من أسمائك المسجلة");
         var unpaid = await db.Invoices.FirstOrDefaultAsync(i => i.UserId == u.Id && i.Name == b.Name && i.Status == InvoiceStatuses.Unpaid, ct);
         if (unpaid != null) throw new DomainException($"سدّد فاتورة «{b.Name}» أولًا ({unpaid.Number})");
@@ -99,6 +101,7 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
     private async Task<RequestDto> CreateInvestmentAsync(string type, List<string> names, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
+        await settings.EnsureOpenAsync(Intakes.Investment, ct);
         if (!NameTypes.IsValid(type)) throw new DomainException("اختر النوع");
         var list = names.Select(x => (x ?? "").Trim()).Where(x => x.Length > 0).ToList();
         if (list.Count == 0) throw new DomainException("اكتب اسمًا واحدًا على الأقل");

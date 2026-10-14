@@ -90,7 +90,7 @@ public class Api(HttpClient http)
     public string? Token { get; set; }
     public string? Refresh { get; set; }
 
-    private async Task<T> Send<T>(HttpMethod method, string url, object? body)
+    public async Task<T> Send<T>(HttpMethod method, string url, object? body)
     {
         using var req = new HttpRequestMessage(method, url);
         if (body != null) req.Content = JsonContent.Create(body);

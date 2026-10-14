@@ -16,7 +16,18 @@ public class Notifier(IAppDbContext db, TimeProvider clock, IPostCommit postComm
         var url = opt.Value.NotifyWebhookUrl;
         if (string.IsNullOrWhiteSpace(url)) return;
         var u = await db.Users.FindAsync([userId], ct);
+        if (u != null && !Wants(u, kind)) return; // the user turned off SMS / WhatsApp for this kind (the in-app notice stays)
         var payload = new { kind, title, body, link, userId, phone = u?.Phone, email = u?.Email, name = u?.FullName, createdAt = n.CreatedAt };
         postCommit.Enqueue(() => webhooks.PublishAsync(url, payload));
     }
+
+    /// <summary>notification categories the user can switch off in their settings</summary>
+    public static bool Wants(User u, string kind) => kind switch
+    {
+        "outbid" => u.NotifyOutbid,
+        "reminder" or "auction_opened" => u.NotifyReminders,
+        "won" or "lost" or "refund" => u.NotifyResults,
+        "reviewed" => u.NotifyRequests,
+        _ => true, // tickets, payments and account notices always go out
+    };
 }

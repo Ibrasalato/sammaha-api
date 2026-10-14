@@ -27,7 +27,7 @@ public class Sessions(IAppDbContext db, TimeProvider clock, ITokenIssuer tokens,
         };
         db.RefreshTokens.Add(row);
         await db.SaveChangesAsync(ct);
-        var access = tokens.Issue(u);
+        var access = tokens.Issue(u, row.FamilyId);
         return new AuthResult(Mapper.User(u), access.Token, access.ExpiresAt, refresh, row.ExpiresAt);
     }
 

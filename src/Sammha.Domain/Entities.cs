@@ -15,6 +15,76 @@ public class User
     public bool Active { get; set; } = true;
     /// <summary>changes on password change or suspension; access tokens carrying an old stamp stop working at once</summary>
     public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
+
+    // notification preferences: in-app notices always arrive; these switch the SMS / WhatsApp copy per category
+    public bool NotifyOutbid { get; set; } = true;
+    public bool NotifyReminders { get; set; } = true;
+    public bool NotifyResults { get; set; } = true;
+    public bool NotifyRequests { get; set; } = true;
+
+    /// <summary>wrong passwords in a row; reaching the limit locks sign-in until LockedUntil</summary>
+    public int FailedLogins { get; set; }
+    public DateTimeOffset? LockedUntil { get; set; }
+    public DateTimeOffset? LastLoginAt { get; set; }
+}
+
+/// <summary>
+/// Platform settings the super admin changes from the dashboard (one row, Id = 1).
+/// Fees and rules stay in configuration (PlatformOptions); these are the operational switches.
+/// </summary>
+public class PlatformSettings
+{
+    public int Id { get; set; } = 1;
+
+    // ───── owner requests intake ─────
+    /// <summary>new logo (name) requests</summary>
+    public bool RequestsOpen { get; set; } = true;
+    public string? RequestsClosedNote { get; set; }
+    /// <summary>compound names for a name the owner holds</summary>
+    public bool CompoundOpen { get; set; } = true;
+    public string? CompoundClosedNote { get; set; }
+    /// <summary>«بيع اسم»: resale auctions and fixed-price sales</summary>
+    public bool ResaleAuctionOpen { get; set; } = true;
+    public bool InstantSaleOpen { get; set; } = true;
+    public string? SaleClosedNote { get; set; }
+    /// <summary>«استثمار الاسم»</summary>
+    public bool InvestmentOpen { get; set; } = true;
+    public string? InvestmentClosedNote { get; set; }
+
+    // ───── general ─────
+    public bool SignupOpen { get; set; } = true;
+    public string SupportEmail { get; set; } = "";
+    public string SupportPhone { get; set; } = "";
+    public string WhatsApp { get; set; } = "";
+    public bool AnnouncementOn { get; set; }
+    public string? Announcement { get; set; }
+    /// <summary>info | warn | ok</summary>
+    public string AnnouncementTone { get; set; } = "info";
+    /// <summary>owners can browse but not submit, bid or pay; staff work normally</summary>
+    public bool Maintenance { get; set; }
+    public string? MaintenanceNote { get; set; }
+
+    // ───── security ─────
+    public int PasswordMinLength { get; set; } = 8;
+    public int MaxLoginAttempts { get; set; } = 5;
+    public int LockoutMinutes { get; set; } = 15;
+    /// <summary>staff dashboards sign out after this many idle minutes (0 = never)</summary>
+    public int StaffIdleMinutes { get; set; } = 30;
+
+    public DateTimeOffset UpdatedAt { get; set; }
+    public string? UpdatedBy { get; set; }
+}
+
+/// <summary>Audit trail of settings changes and security actions.</summary>
+public class SettingsChange
+{
+    public long Id { get; set; }
+    public DateTimeOffset At { get; set; }
+    public Guid UserId { get; set; }
+    public string UserName { get; set; } = "";
+    public string Field { get; set; } = "";
+    public string? OldValue { get; set; }
+    public string? NewValue { get; set; }
 }
 
 /// <summary>Long-lived token that buys new access tokens. Only its SHA-256 hash is stored; each use rotates it.</summary>

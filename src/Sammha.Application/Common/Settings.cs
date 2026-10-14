@@ -1,0 +1,80 @@
+using Microsoft.EntityFrameworkCore;
+using Sammha.Domain;
+
+namespace Sammha.Application.Common;
+
+/// <summary>
+/// Reads the platform settings row (created with defaults on first use). Cached for a few seconds per process,
+/// so every request can check the switches without a database round trip; a change made here clears the cache at once,
+/// and other API instances pick it up within the cache window.
+/// </summary>
+public class SettingsStore(IAppDbContext db, TimeProvider clock, SettingsCache cache)
+{
+    public async Task<PlatformSettings> GetAsync(CancellationToken ct = default)
+    {
+        if (cache.TryGet(out var hit)) return hit;
+        var s = await db.Settings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1, ct) ?? new PlatformSettings();
+        cache.Set(s);
+        return s;
+    }
+
+    /// <summary>the tracked row for editing (inserted with defaults if missing)</summary>
+    public async Task<PlatformSettings> ForUpdateAsync(CancellationToken ct = default)
+    {
+        var s = await db.Settings.FirstOrDefaultAsync(x => x.Id == 1, ct);
+        if (s == null) { s = new PlatformSettings { UpdatedAt = clock.GetUtcNow() }; db.Settings.Add(s); }
+        return s;
+    }
+
+    public void Invalidate() => cache.Clear();
+
+    /// <summary>throws when the admin has closed this intake</summary>
+    public async Task EnsureOpenAsync(string intake, CancellationToken ct = default)
+    {
+        var s = await GetAsync(ct);
+        var (open, note, label) = intake switch
+        {
+            Intakes.Requests => (s.RequestsOpen, s.RequestsClosedNote, "استقبال طلبات الشعارات"),
+            Intakes.Compound => (s.CompoundOpen, s.CompoundClosedNote, "استقبال طلبات الأسماء المركبة"),
+            Intakes.ResaleAuction => (s.ResaleAuctionOpen, s.SaleClosedNote, "عرض الأسماء في مزاد إعادة البيع"),
+            Intakes.InstantSale => (s.InstantSaleOpen, s.SaleClosedNote, "البيع الفوري للأسماء"),
+            Intakes.Investment => (s.InvestmentOpen, s.InvestmentClosedNote, "استقبال طلبات استثمار الاسم"),
+            _ => (true, null, ""),
+        };
+        if (!open) throw new DomainException(string.IsNullOrWhiteSpace(note) ? $"{label} متوقف مؤقتًا، تابعنا لمعرفة موعد الفتح" : $"{label} متوقف مؤقتًا: {note}", 403);
+    }
+
+    public async Task EnsurePasswordAsync(string? password, CancellationToken ct = default)
+    {
+        var min = (await GetAsync(ct)).PasswordMinLength;
+        if ((password ?? "").Length < min) throw new DomainException($"كلمة المرور {min} أحرف على الأقل");
+        if ((password ?? "").Length > 128) throw new DomainException("كلمة المرور طويلة جدًا");
+    }
+}
+
+/// <summary>Per-process cache of the settings row (a singleton), refreshed every few seconds.</summary>
+public class SettingsCache
+{
+    private const long TtlMs = 10_000;
+    private PlatformSettings? _value;
+    private long _at;
+
+    public bool TryGet(out PlatformSettings value)
+    {
+        var v = _value;
+        value = v!;
+        return v != null && Environment.TickCount64 - Volatile.Read(ref _at) < TtlMs;
+    }
+
+    public void Set(PlatformSettings s) { _value = s; Volatile.Write(ref _at, Environment.TickCount64); }
+    public void Clear() => _value = null;
+}
+
+public static class Intakes
+{
+    public const string Requests = "requests";
+    public const string Compound = "compound";
+    public const string ResaleAuction = "resale";
+    public const string InstantSale = "instant";
+    public const string Investment = "investment";
+}

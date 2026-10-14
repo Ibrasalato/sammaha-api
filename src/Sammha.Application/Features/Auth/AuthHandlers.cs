@@ -10,7 +10,7 @@ namespace Sammha.Application.Features.Auth;
 
 /// <summary>Sign-up, two-step sign-in (password then one-time code) and account changes.</summary>
 public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, IPasswordHasher hasher, Sessions sessions, ISmsSender sms,
-    IOptions<OtpOptions> otpOpt)
+    SettingsStore settings, IOptions<OtpOptions> otpOpt)
     : IRequestHandler<GetCurrentUserQuery, UserDto?>, IRequestHandler<SignUpCommand, AuthResult>, IRequestHandler<StartSignInCommand, OtpChallengeDto>, IRequestHandler<CompleteSignInCommand, AuthResult>, IRequestHandler<ResendOtpCommand, OtpChallengeDto>, IRequestHandler<ChangePasswordCommand, AuthResult>, IRequestHandler<RefreshSessionCommand, AuthResult>, IRequestHandler<SignOutCommand, MediatR.Unit>, IRequestHandler<UpdateProfileCommand, UserDto>, IRequestHandler<UpdateAccountCommand, UserDto>, IRequestHandler<RequestEmailChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailChangeCommand, UserDto>, IRequestHandler<RequestPhoneChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmPhoneChangeCommand, UserDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -22,12 +22,13 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
 
     private async Task<AuthResult> SignUpAsync(SignUpInput i, CancellationToken ct)
     {
+        if (!(await settings.GetAsync(ct)).SignupOpen) throw new DomainException("التسجيل في المنصة متوقف مؤقتًا", 403);
         var phone = NameMatcher.NormalizePhone(i.Phone);
         var email = (i.Email ?? "").Trim();
         if (!NameMatcher.IsSaudiMobile(phone)) throw new DomainException("رقم الجوال يبدأ بـ 05 ويتكون من 10 أرقام");
         if ((i.FullName ?? "").Trim().Length < 3) throw new DomainException("اكتب الاسم الرباعي");
         if (!EmailRx().IsMatch(email)) throw new DomainException("البريد الإلكتروني غير صحيح");
-        if ((i.Password ?? "").Length < 6) throw new DomainException("كلمة المرور 6 أحرف على الأقل");
+        await settings.EnsurePasswordAsync(i.Password, ct);
         var nid = i.NationalId?.Trim();
         if (!string.IsNullOrEmpty(nid) && !NationalIdRx().IsMatch(nid)) throw new DomainException("رقم الهوية أو الإقامة 10 أرقام يبدأ بـ 1 أو 2");
         if (await db.Users.AnyAsync(u => u.Phone == phone, ct)) throw new DomainException("رقم الجوال مسجل مسبقًا، سجّل الدخول");
@@ -47,8 +48,19 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         var u = await db.Users.FirstOrDefaultAsync(x => x.Phone == phone || x.Email == l, ct);
         var wrong = new DomainException(portal == "staff" ? "البيانات غير صحيحة" : "رقم الجوال أو كلمة المرور غير صحيحة");
         if (u == null || (portal == "staff") != Roles.IsStaff(u.Role)) throw wrong;
-        if (!hasher.Verify(u.PasswordHash, password ?? "")) throw wrong;
+        var policy = await settings.GetAsync(ct);
+        if (u.LockedUntil is { } until && until > Now)
+            throw new DomainException($"تم إيقاف الدخول مؤقتًا بعد محاولات خاطئة متكررة، حاول بعد {Math.Max(1, (int)Math.Ceiling((until - Now).TotalMinutes))} دقيقة", 429);
+        if (!hasher.Verify(u.PasswordHash, password ?? ""))
+        {
+            // counted and saved even though sign-in fails, so guessing stops at the limit
+            u.FailedLogins += 1;
+            if (u.FailedLogins >= policy.MaxLoginAttempts) { u.LockedUntil = Now.AddMinutes(policy.LockoutMinutes); u.FailedLogins = 0; }
+            await db.SaveChangesAsync(ct);
+            throw wrong;
+        }
         if (!u.Active) throw new DomainException("هذا الحساب موقوف، تواصل مع مدير النظام");
+        if (u.FailedLogins != 0 || u.LockedUntil != null) { u.FailedLogins = 0; u.LockedUntil = null; await db.SaveChangesAsync(ct); }
         return await IssueOtpAsync(u.Id, OtpPurposes.Login, u.Phone, ct);
     }
 
@@ -57,6 +69,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         var c = await ConsumeOtpAsync(challenge, code, OtpPurposes.Login, ct);
         var u = await db.Users.FirstOrDefaultAsync(x => x.Id == c.UserId, ct);
         if (u == null || !u.Active) throw new DomainException("تعذّر الدخول");
+        u.LastLoginAt = Now;
         return await sessions.IssueAsync(u, null, ct);
     }
 
@@ -72,7 +85,8 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     {
         var u = await access.MeAsync(ct);
         if (!hasher.Verify(u.PasswordHash, current ?? "")) throw new DomainException("كلمة المرور الحالية غير صحيحة");
-        if ((next ?? "").Length < 8) throw new DomainException("كلمة المرور الجديدة 8 أحرف على الأقل");
+        await settings.EnsurePasswordAsync(next, ct);
+        if (next == current) throw new DomainException("اختر كلمة مرور مختلفة عن الحالية");
         u.PasswordHash = hasher.Hash(next!);
         await sessions.RevokeAllAsync(u, "password", ct); // every other device is signed out
         await db.SaveChangesAsync(ct);
