@@ -1248,6 +1248,10 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<decimal?>("CompoundFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<bool>("CompoundOpen")
                         .HasColumnType("bit");
 
@@ -1260,8 +1264,16 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
 
+                    b.Property<decimal?>("InstantCommission")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<bool>("InstantSaleOpen")
                         .HasColumnType("bit");
+
+                    b.Property<decimal?>("InvestFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
 
                     b.Property<string>("InvestmentClosedNote")
                         .HasMaxLength(300)
@@ -1304,9 +1316,20 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<bool>("ResaleAuctionOpen")
                         .HasColumnType("bit");
 
+                    b.Property<decimal?>("ResaleCommission")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<string>("SaleClosedNote")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("ServiceTextsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValue("{}");
 
                     b.Property<bool>("SignupOpen")
                         .HasColumnType("bit");

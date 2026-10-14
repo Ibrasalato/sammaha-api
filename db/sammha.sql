@@ -2065,3 +2065,56 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014163310_ServicePrices'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [CompoundFee] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014163310_ServicePrices'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [InstantCommission] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014163310_ServicePrices'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [InvestFee] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014163310_ServicePrices'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [ResaleCommission] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014163310_ServicePrices'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [ServiceTextsJson] nvarchar(max) NOT NULL DEFAULT N'{}';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014163310_ServicePrices'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014163310_ServicePrices', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
