@@ -441,3 +441,32 @@ dotnet Sammha.Api.dll legacy import --source "…" --map legacy-map.json --commi
 2. **قرار الموظف:** الموظف يضغط «موافقة وتحويل مباشر»، والمنصة بتبعت الفلوس للآيبان عن طريق بوابة التحويل (`IPayoutGateway`).
 3. **متابعة التحويل:** لو البنك لسه بيعالج التحويل بتبقى حالته `processing`، والـ sweeper بيتابعها تلقائيًا. لو التحويل فشل، الطلب بيرجع لـ «قيد التنفيذ» ومعاه سبب الفشل.
 4. **البوابة الحالية:** حاليًا شغالة محاكاة (لما `Payments:Simulate` يبقى مفعّل)، وغير كده التحويل يدوي برقم الحوالة. ربط HyperPay مستني توثيق واجهة التحويلات (HyperSplit) وبيانات الحساب.
+
+## الدفع الإلكتروني (HyperPay)
+
+المنصة مربوطة بـ HyperPay عن طريق COPYandPAY، وبتشتغل أول ما تحط بيانات الحساب في الإعدادات (user-secrets أو متغيرات البيئة). البيانات دي ما تتحطش في المستودع أبدًا.
+
+```json
+"Payments": {
+  "Simulate": false,
+  "Provider": "hyperpay",
+  "PublicApiUrl": "https://api.sammha.ico.org.sa",
+  "HyperPay": {
+    "BaseUrl": "https://eu-test.oppwa.com/",
+    "AccessToken": "…",
+    "EntityId": "… (فيزا وماستركارد)",
+    "MadaEntityId": "… (مدى)",
+    "ApplePayEntityId": "… (Apple Pay)",
+    "TestMode": "EXTERNAL"
+  }
+}
+```
+
+- **البيئة الحقيقية:** `BaseUrl` يتغير لـ `https://eu-prod.oppwa.com/`، و`TestMode` يتساب فاضي.
+- **الخطوات:**
+  1. المالك يختار وسيلة الدفع، والخادم يجهّز checkout بالـ entity بتاعها.
+  2. المالك بيتحول لصفحة الدفع `GET /api/payments/hyperpay/{id}/form`، وفيها نموذج HyperPay.
+  3. HyperPay يرجّع المالك على `/api/payments/hyperpay/return`.
+  4. الخادم يسأل HyperPay عن نتيجة الدفع، ويقارن المبلغ والعملة ورقم العملية.
+  5. لو الدفع نجح، المبلغ ينضاف للمحفظة والعملية تكمل (فاتورة أو ضمان أو رسوم…)، والمالك يرجع للصفحة اللي كان فيها.
+- **وسائل الدفع:** الوسيلة اللي ملهاش entity id ما بتظهرش للمالك.
