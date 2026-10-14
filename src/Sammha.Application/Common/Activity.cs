@@ -43,6 +43,7 @@ public static class ActivityLabels
         ["CreateCompoundRequestCommand"] = ("طلب اسم مركب", ActivityCategories.Requests), ["CreateInvestmentRequestCommand"] = ("طلب استثمار اسم", ActivityCategories.Requests),
         ["ReviewRequestCommand"] = ("اعتماد قرار طلب", ActivityCategories.Requests), ["RejectRequestCommand"] = ("رفض طلب", ActivityCategories.Requests),
         ["CancelRequestCommand"] = ("إلغاء طلب من الإدارة", ActivityCategories.Requests),
+        ["GrantExceptionCommand"] = ("استثناء اسم من المزاد", ActivityCategories.Requests),
         ["ScheduleAuctionsCommand"] = ("فتح مزادات", ActivityCategories.Auctions), ["PauseAuctionsCommand"] = ("إيقاف مزادات مؤقتًا", ActivityCategories.Auctions),
         ["ResumeAuctionsCommand"] = ("استئناف مزادات", ActivityCategories.Auctions), ["ExtendAuctionsCommand"] = ("تمديد مزادات", ActivityCategories.Auctions),
         ["CancelAuctionsCommand"] = ("إلغاء مزادات", ActivityCategories.Auctions), ["PlaceBidCommand"] = ("مزايدة", ActivityCategories.Auctions),

@@ -35,6 +35,10 @@ public class AdminController(ISender mediator) : ControllerBase
     [HttpGet("schedule")]
     public Task<List<AwaitingDto>> Awaiting(CancellationToken ct) => mediator.Send(new GetAwaitingScheduleQuery(), ct);
 
+    /// <summary>«استثناء اسم من المزاد»: register an accepted name to its requester for a fee, without an auction (requests.exception)</summary>
+    [HttpPost("candidates/{id:guid}/exception")]
+    public Task<RequestDto> Exception(Guid id, ExceptionBody b, CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Admin.GrantExceptionCommand(id, b.Fee, b.Reason), ct);
+
     [HttpPost("schedule")]
     public Task<List<AuctionDto>> Schedule(ScheduleBody b, CancellationToken ct) => mediator.Send(new ScheduleAuctionsCommand(b.CandidateIds, b.StartsAt, b.EndsAt, b.StaggerMinutes), ct);
 

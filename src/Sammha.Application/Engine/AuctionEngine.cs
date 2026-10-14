@@ -76,7 +76,7 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
         await NotifyLosersAsync(a, winnerId, price, ct);
         // every auction of the request settled and the requester won none → refund the guarantee
         var others = await db.Auctions.Where(x => x.RequestId == r.Id && x.Id != a.Id).Select(x => x.Settled).ToListAsync(ct);
-        var pendingNames = r.Candidates.Any(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null);
+        var pendingNames = r.Candidates.Any(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.ExceptedAt == null);
         if (!pendingNames && others.All(s => s) && r.DepositState == DepositStates.Held) await money.RefundDepositAsync(r, "لم يُرسَ عليك أي اسم", ct);
     }
 

@@ -201,6 +201,11 @@ public class Candidate
     public string? RejectReason { get; set; }
     public Guid? AuctionId { get; set; }
     public DateTimeOffset? WithdrawnAt { get; set; }
+    /// <summary>«استثناء من المزاد»: the committee registered the name to the requester for a fee, without an auction</summary>
+    public DateTimeOffset? ExceptedAt { get; set; }
+    public decimal? ExceptionFee { get; set; }
+    public string? ExceptionReason { get; set; }
+    public string? ExceptedBy { get; set; }
 }
 
 public class Auction

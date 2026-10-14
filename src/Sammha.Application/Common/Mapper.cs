@@ -44,6 +44,7 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
     {
         if (r.Status is RequestStatuses.PendingPayment or RequestStatuses.UnderReview) return true;
         if (r.Status != RequestStatuses.Accepted || r.Kind == RequestKinds.Compound) return false;
+        if (r.Candidates.Any(c => c.ExceptedAt != null)) return false;
         return r.Candidates.All(c => c.AuctionId is not { } aid || !auctions.TryGetValue(aid, out var a) || (now < a.StartsAt && a.BidCount == 0));
     }
 
@@ -52,7 +53,7 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
     {
         if (r.Status is not (RequestStatuses.PendingPayment or RequestStatuses.UnderReview or RequestStatuses.Accepted)) return false;
         if (r.Kind == RequestKinds.Compound) return false;
-        if (c.Status is not (CandidateStatuses.Pending or CandidateStatuses.Accepted)) return false;
+        if (c.Status is not (CandidateStatuses.Pending or CandidateStatuses.Accepted) || c.ExceptedAt != null) return false;
         return c.AuctionId is not { } aid || !auctions.TryGetValue(aid, out var a) || (now < a.StartsAt && a.BidCount == 0);
     }
 
@@ -64,7 +65,8 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
     }
 
     public CandidateDto Candidate(LogoRequest r, Candidate c, IReadOnlyDictionary<Guid, Auction> auctions) =>
-        new(c.Id, c.Name, c.Normalized, c.Status, Hits(c.SimilarJson), c.RejectReason, c.AuctionId, c.WithdrawnAt, Withdrawable(r, c, auctions, Now));
+        new(c.Id, c.Name, c.Normalized, c.Status, Hits(c.SimilarJson), c.RejectReason, c.AuctionId, c.WithdrawnAt, Withdrawable(r, c, auctions, Now),
+            c.ExceptedAt, c.ExceptionFee, c.ExceptionReason);
 
     public RequestDto Request(LogoRequest r, IReadOnlyDictionary<Guid, Auction> auctions) =>
         new(r.Id, r.Number, r.UserId, r.User?.FullName ?? "", r.Type, r.Candidates.OrderBy(c => c.Position).Select(c => Candidate(r, c, auctions)).ToList(), r.Status,

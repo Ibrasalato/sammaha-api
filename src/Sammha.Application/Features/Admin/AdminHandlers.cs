@@ -25,7 +25,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         var now = Now;
         return new AdminOverviewDto(
             await db.Requests.CountAsync(r => r.Status == RequestStatuses.UnderReview, ct),
-            await db.Candidates.CountAsync(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.Request.Status == RequestStatuses.Accepted && c.Request.Kind != RequestKinds.Compound, ct),
+            await db.Candidates.CountAsync(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.ExceptedAt == null && c.Request.Status == RequestStatuses.Accepted && c.Request.Kind != RequestKinds.Compound, ct),
             await db.Auctions.CountAsync(a => a.StartsAt <= now && a.EndsAt > now, ct),
             await db.Auctions.CountAsync(a => a.StartsAt > now, ct),
             await db.Invoices.CountAsync(i => i.Status == InvoiceStatuses.Unpaid, ct),
@@ -147,6 +147,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         var r = await Full.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (r == null || r.Status is not (RequestStatuses.UnderReview or RequestStatuses.Accepted)) throw new DomainException("لا يمكن إلغاء هذا الطلب");
         if (r.Candidates.Any(c => c.AuctionId != null)) throw new DomainException("لا يمكن إلغاء طلب فُتح له مزاد");
+        if (r.Candidates.Any(c => c.ExceptedAt != null)) throw new DomainException("لا يمكن إلغاء طلب سُجّل أحد أسمائه استثناءً");
         r.Status = RequestStatuses.Cancelled;
         r.ReviewedAt = Now;
         r.ReviewerId = staff.Id;
@@ -166,13 +167,13 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     {
         await access.RequireAsync(Permissions.AuctionsSchedule, ct);
         var list = await Full.AsNoTracking()
-            .Where(r => r.Status == RequestStatuses.Accepted && r.Kind != RequestKinds.Compound && r.Candidates.Any(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null))
+            .Where(r => r.Status == RequestStatuses.Accepted && r.Kind != RequestKinds.Compound && r.Candidates.Any(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.ExceptedAt == null))
             .OrderBy(r => r.ReviewedAt).ToListAsync(ct);
         var auctions = await map.AuctionsOfAsync(list, ct);
         return list.SelectMany(r =>
         {
             var dto = map.Request(r, auctions);
-            return r.Candidates.Where(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null).OrderBy(c => c.Position).Select(c =>
+            return r.Candidates.Where(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.ExceptedAt == null).OrderBy(c => c.Position).Select(c =>
             {
                 var cd = map.Candidate(r, c, auctions);
                 return new AwaitingDto(cd.Id, cd.Name, cd.Normalized, cd.Status, cd.Similar, cd.RejectReason, cd.AuctionId, cd.WithdrawnAt, cd.Withdrawable, dto);
@@ -189,7 +190,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         if (stagger is < 0 or > 1440) throw new DomainException("الفاصل بين الشعارات من 0 إلى 1440 دقيقة");
         await using var uow = await db.BeginAsync(["schedule"], ct);
         var cands = await db.Candidates.Include(c => c.Request)
-            .Where(c => candidateIds.Contains(c.Id) && c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.Request.Status == RequestStatuses.Accepted && c.Request.Kind != RequestKinds.Compound)
+            .Where(c => candidateIds.Contains(c.Id) && c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.ExceptedAt == null && c.Request.Status == RequestStatuses.Accepted && c.Request.Kind != RequestKinds.Compound)
             .ToListAsync(ct);
         // the order the committee chose; with a stagger each mark opens and closes after the previous one
         var order = candidateIds.Select((id, i) => (id, i)).GroupBy(x => x.id).ToDictionary(g => g.Key, g => g.First().i);

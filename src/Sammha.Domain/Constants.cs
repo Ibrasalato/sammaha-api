@@ -38,7 +38,7 @@ public static class CandidateStatuses
 
 public static class ReservedSources
 {
-    public const string Auction = "auction", Legacy = "legacy", Compound = "compound", Investment = "investment", Resale = "resale";
+    public const string Auction = "auction", Legacy = "legacy", Compound = "compound", Investment = "investment", Resale = "resale", Exception = "exception";
 }
 
 public static class TxKinds

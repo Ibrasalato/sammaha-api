@@ -14,7 +14,7 @@ public record ActingDto(Guid DelegationId, Guid ActorId, string ActorName, strin
 public record SimilarHitDto(string Name, string Type, string Source, double Score);
 
 public record CandidateDto(Guid Id, string Name, string Normalized, string Status, List<SimilarHitDto> Similar, string? RejectReason,
-    Guid? AuctionId, DateTimeOffset? WithdrawnAt, bool? Withdrawable);
+    Guid? AuctionId, DateTimeOffset? WithdrawnAt, bool? Withdrawable, DateTimeOffset? ExceptedAt = null, decimal? ExceptionFee = null, string? ExceptionReason = null);
 
 public record RequestDto(Guid Id, string Number, Guid UserId, string OwnerName, string Type, List<CandidateDto> Candidates, string Status,
     decimal DepositAmount, bool DepositPaid, string DepositState, DateTimeOffset CreatedAt, DateTimeOffset? SubmittedAt, DateTimeOffset? ReviewedAt,
