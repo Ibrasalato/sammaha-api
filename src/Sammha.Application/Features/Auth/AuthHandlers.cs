@@ -130,9 +130,9 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
             var uid = u.Id;
             await db.Users.Where(x => x.Id == uid).ExecuteUpdateAsync(x => x.SetProperty(v => v.FailedLogins, v => v.FailedLogins + 1), ct);
             var max = Math.Max(1, policy.MaxLoginAttempts);
-            var until = Now.AddMinutes(policy.LockoutMinutes);
+            var lockUntil = Now.AddMinutes(policy.LockoutMinutes);
             await db.Users.Where(x => x.Id == uid && x.FailedLogins >= max)
-                .ExecuteUpdateAsync(x => x.SetProperty(v => v.LockedUntil, until).SetProperty(v => v.FailedLogins, 0), ct);
+                .ExecuteUpdateAsync(x => x.SetProperty(v => v.LockedUntil, lockUntil).SetProperty(v => v.FailedLogins, 0), ct);
             throw wrong;
         }
         if (!u.Active) throw new DomainException("هذا الحساب موقوف، تواصل مع مدير النظام");
