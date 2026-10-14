@@ -2118,3 +2118,48 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014172937_HyperPay'
+)
+BEGIN
+    ALTER TABLE [Payments] ADD [CallbackUrl] nvarchar(1000) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014172937_HyperPay'
+)
+BEGIN
+    ALTER TABLE [Payments] ADD [Integrity] nvarchar(200) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014172937_HyperPay'
+)
+BEGIN
+    ALTER TABLE [Payments] ADD [Method] nvarchar(16) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014172937_HyperPay'
+)
+BEGIN
+    ALTER TABLE [Payments] ADD [ResultCode] nvarchar(40) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014172937_HyperPay'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014172937_HyperPay', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
