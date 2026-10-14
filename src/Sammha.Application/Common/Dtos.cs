@@ -20,7 +20,7 @@ public record RequestDto(Guid Id, string Number, Guid UserId, string OwnerName, 
 public record AuctionDto(Guid Id, Guid? RequestId, Guid? CandidateId, string Name, string Type, Guid RequesterId, decimal OpeningPrice, decimal MinIncrement,
     DateTimeOffset StartsAt, DateTimeOffset EndsAt, decimal CurrentPrice, int BidCount, Guid? LeaderId, string? LeaderLabel, bool Settled,
     Guid? WinnerId, string? WinnerName, decimal? FinalPrice, bool? WonByRequester, int? Extensions, bool? Investment, Guid? ListingId, decimal? BidDeposit,
-    bool? Paused = null, DateTimeOffset? PausedAt = null, string? PauseReason = null, bool? Cancelled = null, string? CancelReason = null);
+    bool? Paused = null, DateTimeOffset? PausedAt = null, string? PauseReason = null, bool? Cancelled = null, string? CancelReason = null, string? Number = null);
 
 public record BidDto(Guid Id, Guid AuctionId, Guid UserId, string BidderLabel, decimal Amount, DateTimeOffset CreatedAt, bool? Auto);
 

@@ -19,6 +19,16 @@ public class DbSeeder(SammhaDbContext db, IPasswordHasher hasher, IOptions<Platf
         await SuperAdminAsync(ct);
         await EventsAsync(ct);
         if (cfg.GetValue<bool>("Seed:Demo")) await DemoAsync(ct);
+        await AuctionNumbersAsync(ct);
+    }
+
+    /// <summary>auctions created before serial numbers get one, oldest first</summary>
+    private async Task AuctionNumbersAsync(CancellationToken ct)
+    {
+        var missing = await db.Auctions.Where(a => a.Number == "").OrderBy(a => a.StartsAt).ToListAsync(ct);
+        if (missing.Count == 0) return;
+        foreach (var a in missing) a.Number = $"AU-{await db.NextNumberAsync("AuctionNo", ct)}";
+        await db.SaveChangesAsync(ct);
     }
 
     private async Task SuperAdminAsync(CancellationToken ct)

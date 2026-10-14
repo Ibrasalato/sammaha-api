@@ -10,6 +10,16 @@ public static class Permissions
     public const string RequestsView = "requests.view";
     public const string RequestsReview = "requests.review";
     public const string RequestsCancel = "requests.cancel";
+    public const string RequestsAudit = "requests.audit";
+    public const string OwnersView = "owners.view";
+    public const string OwnersFull = "owners.full";
+    public const string ReportsMarks = "reports.marks";
+    public const string WalletsView = "wallets.view";
+    public const string WalletsRefund = "wallets.refund";
+    public const string WalletsAdjust = "wallets.adjust";
+    public const string BanksVerify = "banks.verify";
+    public const string DepositsView = "deposits.view";
+    public const string DepositsRefund = "deposits.refund";
     public const string AuctionsSchedule = "auctions.schedule";
     public const string AuctionsManage = "auctions.manage";
     public const string AuctionsCancel = "auctions.cancel";
@@ -37,15 +47,25 @@ public static class Permissions
         new(RequestsView, "طلبات الملاك", "عرض الطلبات", "قائمة طلبات الشعارات والأسماء المركبة والاستثمار وتفاصيلها"),
         new(RequestsReview, "طلبات الملاك", "مراجعة طلبات الشعارات", "قبول الأسماء أو رفضها، ورفض الطلب كاملًا"),
         new(RequestsCancel, "طلبات الملاك", "إلغاء الطلبات", "إلغاء طلب مع رد الضمان للمالك"),
+        new(RequestsAudit, "طلبات الملاك", "تقرير تدقيق الشعارات", "المطابق والمشابه (بـ«ال» أو بدونها، جمع أو مفرد) وأعلى سعر لشعار مشابه، مع الطباعة"),
         new(AuctionsSchedule, "المزادات", "فتح المزادات", "جدولة الأسماء المقبولة في مزادات"),
         new(AuctionsManage, "المزادات", "التحكم في المزادات", "إيقاف مؤقت واستئناف وتمديد، لمزاد محدد أو لكل المزادات"),
         new(AuctionsCancel, "المزادات", "إلغاء المزادات", "إلغاء مزاد دون بيع وإعادة الاسم لقائمة الجدولة أو لمالكه"),
         new(InvoicesView, "المالية", "عرض الفواتير", "كل فواتير المنصة"),
         new(InvoicesMarkPaid, "المالية", "تأكيد السداد", "تعليم فاتورة مدفوعة يدويًا (تحويل بنكي مثلًا)"),
+        new(WalletsView, "المالية", "تقرير المحافظ", "أرصدة محافظ الملاك وحركاتها وطلبات الاسترداد"),
+        new(WalletsRefund, "المالية", "الاسترداد للحساب البنكي", "تنفيذ طلبات الاسترداد أو رفضها، واسترداد مباشر برقم التحويل"),
+        new(BanksVerify, "المالية", "اعتماد الحسابات البنكية", "مراجعة شهادة الآيبان التي رفعها المالك واعتماد حسابه أو رفضه"),
+        new(WalletsAdjust, "المالية", "تسوية رصيد المحفظة", "إضافة مبلغ أو خصمه من محفظة مالك مع ذكر السبب"),
+        new(DepositsView, "المالية", "تقرير الضمانات", "ضمانات طلبات الشعارات وضمانات دخول مزادات إعادة البيع"),
+        new(DepositsRefund, "المالية", "استرداد الضمان", "إعادة ضمان محجوز إلى محفظة صاحبه مع ذكر السبب"),
+        new(ReportsMarks, "التقارير", "تقرير الشعارات", "كل المزادات برقمها: الطلب والمالك والفائز وقيمة الفوز والفاتورة، مع الطباعة والتصدير"),
         new(TicketsView, "الدعم", "عرض الشكاوى والبلاغات", "قائمة التذاكر وتفاصيلها"),
         new(TicketsReply, "الدعم", "الرد على التذاكر", "الرد على العميل وكتابة ملاحظات داخلية"),
         new(TicketsManage, "الدعم", "إدارة التذاكر", "تغيير الحالة والأولوية والإسناد"),
         new(EventsManage, "المحتوى", "المواعيد والفعاليات", "إضافة فعاليات الإبل وتعديلها وحذفها"),
+        new(OwnersView, "العملاء", "بيانات العملاء (CRM)", "قائمة الملاك وشعاراتهم حسب الفئة؛ الهوية والجوال يظهران مخفيين جزئيًا"),
+        new(OwnersFull, "العملاء", "البيانات الكاملة والطباعة والتصدير", "إظهار رقم الهوية والجوال كاملين، وطباعة التقرير وتصديره (يُسجَّل في سجل التغييرات)"),
         new(UsersView, "المستخدمون", "عرض المستخدمين", "قائمة الملاك والموظفين"),
         new(UsersCreate, "المستخدمون", "إنشاء مستخدم", "إضافة حسابات موظفين جديدة"),
         new(UsersRoles, "المستخدمون", "تحديد دور الموظف", "تغيير دور الموظف وصلاحياته"),

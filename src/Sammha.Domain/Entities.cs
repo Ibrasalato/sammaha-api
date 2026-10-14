@@ -202,6 +202,8 @@ public class Candidate
 public class Auction
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    /// <summary>serial auction number, AU-1001 onwards</summary>
+    public string Number { get; set; } = "";
     public Guid? RequestId { get; set; }
     public Guid? CandidateId { get; set; }
     /// <summary>set for «بيع اسم» resale auctions</summary>
@@ -286,6 +288,26 @@ public class ReservedName
     public string CertCode { get; set; } = "";
 
     public static string CertFor(Guid id) => "SMC-" + id.ToString("N")[^8..].ToUpperInvariant();
+}
+
+/// <summary>money paid out of an owner's wallet to their bank account; the amount leaves the wallet when requested and returns if rejected</summary>
+public class Withdrawal
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Number { get; set; } = "";
+    public Guid UserId { get; set; }
+    public decimal Amount { get; set; }
+    public string Iban { get; set; } = "";
+    public string BankName { get; set; } = "";
+    public string AccountName { get; set; } = "";
+    public string Status { get; set; } = WithdrawalStatuses.Pending;
+    /// <summary>true when the finance team started it (no owner request)</summary>
+    public bool ByStaff { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? ProcessedAt { get; set; }
+    public string? ProcessedBy { get; set; }
+    public string? TransferRef { get; set; }
+    public string? Note { get; set; }
 }
 
 public class WalletTx

@@ -29,6 +29,8 @@ public interface IAppDbContext
     DbSet<SettingsChange> SettingsChanges { get; }
     DbSet<StaffRole> StaffRoles { get; }
     DbSet<TicketRoute> TicketRoutes { get; }
+    DbSet<Withdrawal> Withdrawals { get; }
+    DbSet<BankAccount> BankAccounts { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     /// <summary>next value of a database sequence (RequestNo, InvoiceNo, ListingNo, TicketNo)</summary>

@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sammha.Application.Common;
+using Sammha.Application.Features.Admin;
 using Sammha.Application.Features.Auctions;
 using Sammha.Application.Features.Staff;
 
@@ -64,4 +65,17 @@ public class AuctionControlController(ISender mediator) : ControllerBase
 
     [HttpPost("cancel")]
     public Task<AuctionActionResult> Cancel(CancelBody b, CancellationToken ct) => mediator.Send(new CancelAuctionsCommand(b.Scope, b.Reason), ct);
+}
+
+public record OwnersReportBody(string Kind, int Count, string? Filter);
+
+/// <summary>Customers (camel owners) and the names they own. Full ID and phone, printing and export need «owners.full».</summary>
+[ApiController, Route("api/admin/owners"), Authorize(Policy = "staff")]
+public class OwnersController(ISender mediator) : ControllerBase
+{
+    [HttpGet]
+    public Task<List<OwnerCrmDto>> List(CancellationToken ct) => mediator.Send(new ListOwnersQuery(), ct);
+
+    [HttpPost("report")]
+    public async Task<IActionResult> Report(OwnersReportBody b, CancellationToken ct) { await mediator.Send(new LogOwnersReportCommand(b.Kind, b.Count, b.Filter), ct); return NoContent(); }
 }

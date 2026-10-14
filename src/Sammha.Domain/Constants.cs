@@ -44,7 +44,13 @@ public static class ReservedSources
 public static class TxKinds
 {
     public const string TopUp = "topup", Deposit = "deposit", Refund = "refund", InvoicePayment = "invoice_payment", ServiceFee = "service_fee",
-        InvestmentPayout = "investment_payout", BidDeposit = "bid_deposit", SalePayout = "sale_payout", Purchase = "purchase";
+        InvestmentPayout = "investment_payout", BidDeposit = "bid_deposit", SalePayout = "sale_payout", Purchase = "purchase",
+        Withdrawal = "withdrawal", Adjustment = "adjustment";
+}
+
+public static class WithdrawalStatuses
+{
+    public const string Pending = "pending", Completed = "completed", Rejected = "rejected";
 }
 
 public static class InvoiceStatuses

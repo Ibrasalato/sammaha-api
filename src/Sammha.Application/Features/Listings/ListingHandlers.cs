@@ -47,6 +47,7 @@ public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access
         {
             var a = new Auction
             {
+                Number = $"AU-{await db.NextNumberAsync("AuctionNo", ct)}",
                 ListingId = l.Id, Name = l.Name, Type = l.Type, RequesterId = u.Id, OpeningPrice = p, MinIncrement = R.MinIncrement,
                 StartsAt = starts, EndsAt = ends, CurrentPrice = p, BidDeposit = R.ResaleBidDeposit,
             };

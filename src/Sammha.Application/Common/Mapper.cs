@@ -92,7 +92,7 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
             a.LeaderId, a.LeaderId is { } l && names.TryGetValue(l, out var ln) ? NameMatcher.MaskName(ln) : null, a.Settled,
             a.WinnerId, a.WinnerId is { } w && names.TryGetValue(w, out var wn) ? wn : null, a.FinalPrice, a.WonByRequester,
             a.Extensions > 0 ? a.Extensions : null, a.IsInvestment ? true : null, a.ListingId, a.BidDeposit,
-            a.PausedAt != null ? true : null, a.PausedAt, a.PausedAt != null ? a.PauseReason : null, a.CancelledAt != null ? true : null, a.CancelReason);
+            a.PausedAt != null ? true : null, a.PausedAt, a.PausedAt != null ? a.PauseReason : null, a.CancelledAt != null ? true : null, a.CancelReason, string.IsNullOrEmpty(a.Number) ? null : a.Number);
 
     public async Task<List<AuctionDto>> AuctionsAsync(List<Auction> list, CancellationToken ct)
     {

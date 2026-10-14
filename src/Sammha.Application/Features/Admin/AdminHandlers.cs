@@ -190,6 +190,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         {
             var a = new Auction
             {
+                Number = $"AU-{await db.NextNumberAsync("AuctionNo", ct)}",
                 RequestId = c.RequestId, CandidateId = c.Id, Name = c.Name, Type = c.Request.Type, RequesterId = c.Request.UserId,
                 OpeningPrice = R.OpeningPrice, MinIncrement = R.MinIncrement, StartsAt = startsAt, EndsAt = endsAt, CurrentPrice = R.OpeningPrice,
                 IsInvestment = c.Request.Kind == RequestKinds.Investment,

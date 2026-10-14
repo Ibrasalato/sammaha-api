@@ -21,7 +21,7 @@ public class RequestAuditHandler(IAppDbContext db, Access access, IOptions<Platf
 
     public async Task<List<AuditRowDto>> Handle(RequestsAuditQuery q, CancellationToken ct)
     {
-        await access.RequireAsync(Permissions.RequestsView, ct);
+        await access.RequireAsync(Permissions.RequestsAudit, ct);
         var status = string.IsNullOrEmpty(q.Status) ? RequestStatuses.UnderReview : q.Status;
         var rq = db.Requests.AsNoTracking().Include(r => r.User).Include(r => r.Candidates).Where(r => r.Status != RequestStatuses.PendingPayment);
         if (status != "all") rq = rq.Where(r => r.Status == status);

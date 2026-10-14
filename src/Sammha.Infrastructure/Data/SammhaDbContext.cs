@@ -39,6 +39,8 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<SettingsChange> SettingsChanges => Set<SettingsChange>();
     public DbSet<StaffRole> StaffRoles => Set<StaffRole>();
     public DbSet<TicketRoute> TicketRoutes => Set<TicketRoute>();
+    public DbSet<Withdrawal> Withdrawals => Set<Withdrawal>();
+    public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
     {
@@ -52,6 +54,8 @@ public class SammhaDbContext : DbContext, IAppDbContext
         b.HasSequence<int>("InvoiceNo").StartsAt(1);
         b.HasSequence<int>("ListingNo").StartsAt(1001);
         b.HasSequence<int>("TicketNo").StartsAt(1);
+        b.HasSequence<int>("AuctionNo").StartsAt(1001);
+        b.HasSequence<int>("WithdrawalNo").StartsAt(1001);
 
         b.Entity<User>(e =>
         {
@@ -194,6 +198,34 @@ public class SammhaDbContext : DbContext, IAppDbContext
             });
         });
         b.Entity<User>().HasOne<StaffRole>().WithMany().HasForeignKey(u => u.StaffRoleId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<BankAccount>(e =>
+        {
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.Iban).HasMaxLength(34);
+            e.Property(x => x.BankName).HasMaxLength(80);
+            e.Property(x => x.AccountName).HasMaxLength(120);
+            e.Property(x => x.DocName).HasMaxLength(120);
+            e.Property(x => x.DocType).HasMaxLength(40);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.RejectReason).HasMaxLength(300);
+            e.Property(x => x.ReviewedBy).HasMaxLength(120);
+            e.HasIndex(x => x.Status);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<Withdrawal>(e =>
+        {
+            e.Property(x => x.Number).HasMaxLength(20);
+            e.Property(x => x.Iban).HasMaxLength(34);
+            e.Property(x => x.BankName).HasMaxLength(80);
+            e.Property(x => x.AccountName).HasMaxLength(120);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.ProcessedBy).HasMaxLength(120);
+            e.Property(x => x.TransferRef).HasMaxLength(60);
+            e.Property(x => x.Note).HasMaxLength(300);
+            e.HasIndex(x => new { x.Status, x.CreatedAt });
+            e.HasIndex(x => x.UserId);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<TicketRoute>(e =>
         {
             e.HasKey(x => new { x.Kind, x.UserId });
@@ -205,6 +237,8 @@ public class SammhaDbContext : DbContext, IAppDbContext
         {
             e.Property(x => x.PauseReason).HasMaxLength(300);
             e.Property(x => x.CancelReason).HasMaxLength(300);
+            e.Property(x => x.Number).HasMaxLength(20);
+            e.HasIndex(x => x.Number);
         });
         b.Entity<PlatformSettings>(e =>
         {
@@ -225,7 +259,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
 
     public async Task<int> NextNumberAsync(string sequence, CancellationToken ct = default)
     {
-        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
+        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
         var conn = Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await Database.OpenConnectionAsync(ct);
         await using var cmd = conn.CreateCommand();
