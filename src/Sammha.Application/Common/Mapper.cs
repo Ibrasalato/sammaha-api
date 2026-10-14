@@ -92,7 +92,7 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
             a.LeaderId, a.LeaderId is { } l && names.TryGetValue(l, out var ln) ? NameMatcher.MaskName(ln) : null, a.Settled,
             a.WinnerId, a.WinnerId is { } w && names.TryGetValue(w, out var wn) ? wn : null, a.FinalPrice, a.WonByRequester,
             a.Extensions > 0 ? a.Extensions : null, a.IsInvestment ? true : null, a.ListingId, a.BidDeposit,
-            a.PausedAt != null ? true : null, a.PausedAt, a.PausedAt != null ? a.PauseReason : null, a.CancelledAt != null ? true : null, a.CancelReason, string.IsNullOrEmpty(a.Number) ? null : a.Number);
+            a.PausedAt != null ? true : null, a.PausedAt, a.PausedAt != null ? a.PauseReason : null, a.CancelledAt != null ? true : null, a.CancelReason, string.IsNullOrEmpty(a.Number) ? null : a.Number, Transliterator.ToLatin(a.Name));
 
     public async Task<List<AuctionDto>> AuctionsAsync(List<Auction> list, CancellationToken ct)
     {
@@ -121,7 +121,11 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
 
     // ───── registry ─────
     public static ReservedNameDto Reserved(ReservedName r, string? avatar = null, Guid? listingId = null) =>
-        new(r.Id, r.Name, r.Normalized, r.Type, r.OwnerId, r.OwnerName, r.Price, r.AcquiredAt, r.Source, r.BaseName, avatar, listingId);
+        new(r.Id, r.Name, r.Normalized, r.Type, r.OwnerId, r.OwnerName, r.Price, r.AcquiredAt, r.Source, r.BaseName, avatar, listingId,
+            LatinOf(r), string.IsNullOrWhiteSpace(r.LatinName) ? null : true);
+
+    /// <summary>the registry's Latin spelling: staff's override, or the transliteration</summary>
+    public static string LatinOf(ReservedName r) => string.IsNullOrWhiteSpace(r.LatinName) ? Transliterator.ToLatin(r.Name) : r.LatinName!;
 
     // ───── money ─────
     public static WalletTxDto Tx(WalletTx t) => new(t.Id, t.UserId, t.Amount, t.Kind, t.Note, t.CreatedAt);

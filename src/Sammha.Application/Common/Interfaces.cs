@@ -32,6 +32,7 @@ public interface IAppDbContext
     DbSet<Withdrawal> Withdrawals { get; }
     DbSet<BankAccount> BankAccounts { get; }
     DbSet<Delegation> Delegations { get; }
+    DbSet<Certificate> Certificates { get; }
     DbSet<ActivityLog> ActivityLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
@@ -96,6 +97,13 @@ public interface IPaymentGateway
 }
 
 public record AccessToken(string Token, DateTimeOffset ExpiresAt);
+
+/// <summary>Signs certificate content so a printed code and its QR can be checked against the registry.</summary>
+public interface ICertificateSigner
+{
+    /// <summary>a short, grouped HMAC of the content: ABCD-EFGH-JKLM-NPQR</summary>
+    string Sign(string content);
+}
 
 public interface ITokenIssuer
 {

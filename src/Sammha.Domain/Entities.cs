@@ -30,6 +30,8 @@ public class User
     public Guid? StaffRoleId { get; set; }
 
     // ───── owner profile (sign-up) ─────
+    /// <summary>the owner's name in Latin letters as in their passport, for English certificates</summary>
+    public string? FullNameEn { get; set; }
     public string? FirstName { get; set; }
     public string? FatherName { get; set; }
     public string? GrandfatherName { get; set; }
@@ -286,6 +288,8 @@ public class ReservedName
     public string Source { get; set; } = ReservedSources.Legacy;
     public string? BaseName { get; set; }
     public Guid? AuctionId { get; set; }
+    /// <summary>the registry's Latin spelling, when staff set one; otherwise it is transliterated</summary>
+    public string? LatinName { get; set; }
     /// <summary>public certificate code (SMC-XXXXXXXX), derived from the id</summary>
     public string CertCode { get; set; } = "";
 

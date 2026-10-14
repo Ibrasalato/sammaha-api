@@ -42,6 +42,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<Withdrawal> Withdrawals => Set<Withdrawal>();
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
     public DbSet<Delegation> Delegations => Set<Delegation>();
+    public DbSet<Certificate> Certificates => Set<Certificate>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
@@ -58,12 +59,14 @@ public class SammhaDbContext : DbContext, IAppDbContext
         b.HasSequence<int>("TicketNo").StartsAt(1);
         b.HasSequence<int>("AuctionNo").StartsAt(1001);
         b.HasSequence<int>("WithdrawalNo").StartsAt(1001);
+        b.HasSequence<int>("CertificateNo").StartsAt(1);
 
         b.Entity<User>(e =>
         {
             e.HasIndex(x => x.Phone).IsUnique();
             e.HasIndex(x => x.Email).IsUnique();
             e.Property(x => x.FullName).HasMaxLength(120);
+            e.Property(x => x.FullNameEn).HasMaxLength(120);
             e.Property(x => x.Phone).HasMaxLength(16);
             e.HasIndex(x => x.NationalId).IsUnique().HasFilter("[NationalId] IS NOT NULL");
             e.Property(x => x.NationalId).HasMaxLength(20);
@@ -117,6 +120,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.HasIndex(x => x.OwnerId);
             e.HasIndex(x => x.CertCode);
             e.Property(x => x.Name).HasMaxLength(60);
+            e.Property(x => x.LatinName).HasMaxLength(80);
         });
 
         b.Entity<WalletTx>(e => e.HasIndex(x => new { x.UserId, x.CreatedAt }));
@@ -200,6 +204,20 @@ public class SammhaDbContext : DbContext, IAppDbContext
             });
         });
         b.Entity<User>().HasOne<StaffRole>().WithMany().HasForeignKey(u => u.StaffRoleId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Certificate>(e =>
+        {
+            e.Property(x => x.Number).HasMaxLength(24);
+            e.HasIndex(x => x.Number).IsUnique();
+            e.HasIndex(x => x.OwnerId);
+            e.Property(x => x.Scope).HasMaxLength(12);
+            e.Property(x => x.OwnerNameAr).HasMaxLength(160);
+            e.Property(x => x.OwnerNameEn).HasMaxLength(160);
+            e.Property(x => x.NationalId).HasMaxLength(20);
+            e.Property(x => x.Nationality).HasMaxLength(4);
+            e.Property(x => x.Signature).HasMaxLength(40);
+            e.Property(x => x.RevokedBy).HasMaxLength(120);
+            e.Property(x => x.RevokeReason).HasMaxLength(300);
+        });
         b.Entity<Delegation>(e =>
         {
             e.Property(x => x.FullName).HasMaxLength(120);
@@ -291,7 +309,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
 
     public async Task<int> NextNumberAsync(string sequence, CancellationToken ct = default)
     {
-        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
+        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo" or "CertificateNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
         var conn = Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await Database.OpenConnectionAsync(ct);
         await using var cmd = conn.CreateCommand();

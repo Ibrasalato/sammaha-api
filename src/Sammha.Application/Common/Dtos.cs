@@ -24,7 +24,7 @@ public record RequestDto(Guid Id, string Number, Guid UserId, string OwnerName, 
 public record AuctionDto(Guid Id, Guid? RequestId, Guid? CandidateId, string Name, string Type, Guid RequesterId, decimal OpeningPrice, decimal MinIncrement,
     DateTimeOffset StartsAt, DateTimeOffset EndsAt, decimal CurrentPrice, int BidCount, Guid? LeaderId, string? LeaderLabel, bool Settled,
     Guid? WinnerId, string? WinnerName, decimal? FinalPrice, bool? WonByRequester, int? Extensions, bool? Investment, Guid? ListingId, decimal? BidDeposit,
-    bool? Paused = null, DateTimeOffset? PausedAt = null, string? PauseReason = null, bool? Cancelled = null, string? CancelReason = null, string? Number = null);
+    bool? Paused = null, DateTimeOffset? PausedAt = null, string? PauseReason = null, bool? Cancelled = null, string? CancelReason = null, string? Number = null, string? Latin = null);
 
 public record BidDto(Guid Id, Guid AuctionId, Guid UserId, string BidderLabel, decimal Amount, DateTimeOffset CreatedAt, bool? Auto);
 
@@ -35,7 +35,7 @@ public record AuctionMineDto(bool Watching, decimal? AutoMax, bool? DepositPaid)
 public record AuctionViewDto(AuctionDto Auction, List<BidDto> Bids, AuctionMineDto? Mine);
 
 public record ReservedNameDto(Guid Id, string Name, string Normalized, string Type, Guid? OwnerId, string OwnerName, decimal Price, DateTimeOffset AcquiredAt,
-    string Source, string? BaseName, string? OwnerAvatar, Guid? ListingId);
+    string Source, string? BaseName, string? OwnerAvatar, Guid? ListingId, string? Latin = null, bool? LatinOverride = null);
 
 public record WalletTxDto(Guid Id, Guid UserId, decimal Amount, string Kind, string Note, DateTimeOffset CreatedAt);
 public record WalletDto(decimal Balance, List<WalletTxDto> Txs);

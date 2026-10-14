@@ -75,7 +75,7 @@ public static class BidDepositStates
 
 public static class NotificationKinds
 {
-    public const string Outbid = "outbid", Won = "won", Lost = "lost", Reviewed = "reviewed", AuctionOpened = "auction_opened", AuctionUpdate = "auction_update", Refund = "refund", Ticket = "ticket", Reminder = "reminder", Delegation = "delegation";
+    public const string Outbid = "outbid", Won = "won", Lost = "lost", Reviewed = "reviewed", AuctionOpened = "auction_opened", AuctionUpdate = "auction_update", Refund = "refund", Ticket = "ticket", Reminder = "reminder", Delegation = "delegation", Certificate = "certificate";
 }
 
 public static class TicketKinds

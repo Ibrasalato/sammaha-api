@@ -23,6 +23,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
 builder.Services.Configure<JwtOptions>(cfg.GetSection("Jwt"));
 builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
+builder.Services.AddSingleton<ICertificateSigner, HmacCertificateSigner>();
 builder.Services.AddSingleton<IAuctionRealtime, SignalRAuctionRealtime>();
 builder.Services.AddHostedService<SweeperHost>();
 builder.Services.AddExceptionHandler<ErrorHandler>();

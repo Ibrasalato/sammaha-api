@@ -63,6 +63,16 @@ public class CatalogHandlers(IAppDbContext db, TimeProvider clock, Mapper map, M
     {
         var query = db.ReservedNames.AsNoTracking();
         if (NameTypes.IsValid(type)) query = query.Where(r => r.Type == type);
+        if (!string.IsNullOrWhiteSpace(q) && Transliterator.IsLatin(q))
+        {
+            // Latin search: match the registry's Latin spellings (overrides or transliterations) in memory
+            var key = Transliterator.Key(q.Trim());
+            var all = await query.OrderByDescending(r => r.AcquiredAt).Take(5000).ToListAsync(ct);
+            var hits = all.Where(r => Transliterator.Key(Mapper.LatinOf(r)).Contains(key)).Take(1000).ToList();
+            var ids = hits.Where(r => r.OwnerId != null).Select(r => r.OwnerId!.Value).Distinct().ToList();
+            var av = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id) && u.ShowAvatar && u.AvatarUrl != null).ToDictionaryAsync(u => u.Id, u => u.AvatarUrl, ct);
+            return hits.Select(r => Mapper.Reserved(r, r.OwnerId is { } o ? av.GetValueOrDefault(o) : null)).ToList();
+        }
         if (!string.IsNullOrWhiteSpace(q))
         {
             var n = NameMatcher.Normalize(q);

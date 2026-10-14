@@ -30,6 +30,25 @@ public static class SammhaClaims
 }
 
 /// <summary>
+/// HMAC-SHA256 over the certificate content. The key is Certificates:SigningKey when set, otherwise derived from Jwt:Key,
+/// so no extra secret has to be committed; rotating the key invalidates printed signature codes (the number still verifies).
+/// </summary>
+public class HmacCertificateSigner(IOptions<JwtOptions> jwt, IConfiguration cfg) : ICertificateSigner
+{
+    private const string Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private byte[] Key => System.Security.Cryptography.HMACSHA256.HashData(
+        Encoding.UTF8.GetBytes(cfg["Certificates:SigningKey"] is { Length: >= 32 } k ? k : jwt.Value.Key), Encoding.UTF8.GetBytes("sammha-certificates-v1"));
+
+    public string Sign(string content)
+    {
+        var mac = System.Security.Cryptography.HMACSHA256.HashData(Key, Encoding.UTF8.GetBytes(content));
+        var sb = new StringBuilder();
+        for (var i = 0; i < 16; i++) { if (i > 0 && i % 4 == 0) sb.Append('-'); sb.Append(Alphabet[mac[i] % Alphabet.Length]); }
+        return sb.ToString();
+    }
+}
+
+/// <summary>
 /// Signs short-lived access tokens: sub (user id), role, stamp (security stamp), jti, iat.
 /// Uses the real clock so tokens stay valid for the JWT middleware.
 /// </summary>

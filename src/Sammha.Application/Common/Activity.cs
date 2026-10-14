@@ -15,11 +15,11 @@ public interface IActivityWriter
 public static class ActivityCategories
 {
     public const string Auth = "auth", Account = "account", Requests = "requests", Auctions = "auctions", Payments = "payments", Finance = "finance",
-        Users = "users", Settings = "settings", Tickets = "tickets", Delegation = "delegation", Content = "content", Reports = "reports";
+        Users = "users", Settings = "settings", Tickets = "tickets", Delegation = "delegation", Content = "content", Reports = "reports", Certificates = "certificates";
     public static readonly Dictionary<string, string> Arabic = new()
     {
         [Auth] = "الدخول", [Account] = "الحساب", [Requests] = "طلبات الشعارات", [Auctions] = "المزادات", [Payments] = "المدفوعات", [Finance] = "المالية",
-        [Users] = "المستخدمون والأدوار", [Settings] = "الإعدادات", [Tickets] = "الشكاوى والبلاغات", [Delegation] = "التفويض", [Content] = "المحتوى", [Reports] = "التقارير",
+        [Users] = "المستخدمون والأدوار", [Settings] = "الإعدادات", [Tickets] = "الشكاوى والبلاغات", [Delegation] = "التفويض", [Content] = "المحتوى", [Reports] = "التقارير", [Certificates] = "الشهادات",
     };
 }
 
@@ -66,6 +66,8 @@ public static class ActivityLabels
         ["ReplyTicketCommand"] = ("رد على تذكرة", ActivityCategories.Tickets), ["UpdateTicketCommand"] = ("تحديث تذكرة", ActivityCategories.Tickets),
         ["SaveEventCommand"] = ("حفظ فعالية", ActivityCategories.Content), ["DeleteEventCommand"] = ("حذف فعالية", ActivityCategories.Content),
         ["LogOwnersReportCommand"] = ("طباعة أو تصدير بيانات العملاء", ActivityCategories.Reports),
+        ["IssueCertificateCommand"] = ("إصدار شهادة", ActivityCategories.Certificates), ["RevokeCertificateCommand"] = ("إلغاء شهادة", ActivityCategories.Certificates),
+        ["SetLatinNameCommand"] = ("تعديل الكتابة اللاتينية لاسم", ActivityCategories.Certificates),
         ["SaveDelegationCommand"] = ("حفظ تفويض", ActivityCategories.Delegation), ["RevokeDelegationCommand"] = ("إلغاء تفويض", ActivityCategories.Delegation),
         ["ActAsCommand"] = ("الدخول بتفويض", ActivityCategories.Delegation), ["StopActingCommand"] = ("الخروج من التفويض", ActivityCategories.Delegation),
     };

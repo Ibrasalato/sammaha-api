@@ -38,6 +38,8 @@ public static class Permissions
     public const string SecurityManage = "security.manage";
     public const string AuditView = "audit.view";
     public const string LogsView = "logs.view";
+    public const string CertificatesManage = "certificates.manage";
+    public const string NamesLatin = "names.latin";
 
     public record Info(string Key, string Group, string Label, string Description);
 
@@ -60,6 +62,8 @@ public static class Permissions
         new(WalletsAdjust, "المالية", "تسوية رصيد المحفظة", "إضافة مبلغ أو خصمه من محفظة مالك مع ذكر السبب"),
         new(DepositsView, "المالية", "تقرير الضمانات", "ضمانات طلبات الشعارات وضمانات دخول مزادات إعادة البيع"),
         new(DepositsRefund, "المالية", "استرداد الضمان", "إعادة ضمان محجوز إلى محفظة صاحبه مع ذكر السبب"),
+        new(CertificatesManage, "سجل الأسماء", "الشهادات الصادرة", "كل الشهادات التي أصدرها الملاك، والتحقق منها، وإلغاء شهادة مع ذكر السبب"),
+        new(NamesLatin, "سجل الأسماء", "الكتابة اللاتينية للأسماء", "تصحيح كتابة الأسماء بالحروف اللاتينية كما تظهر في الموقع الإنجليزي والشهادات"),
         new(ReportsMarks, "التقارير", "تقرير الشعارات", "كل المزادات برقمها: الطلب والمالك والفائز وقيمة الفوز والفاتورة، مع الطباعة والتصدير"),
         new(TicketsView, "الدعم", "عرض الشكاوى والبلاغات", "قائمة التذاكر وتفاصيلها"),
         new(TicketsReply, "الدعم", "الرد على التذاكر", "الرد على العميل وكتابة ملاحظات داخلية"),
