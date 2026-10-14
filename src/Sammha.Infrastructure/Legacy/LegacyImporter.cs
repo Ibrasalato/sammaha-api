@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using Sammha.Application.Common;
 using Sammha.Domain;
@@ -196,7 +197,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
                 if (o.I($"Order_{Pos()[p]}_BID_ID") is { } b) choiceOf.TryAdd(b, (o.Id, p + 1));
         foreach (var b in biddings)
             if (!choiceOf.ContainsKey(b.Id) && b.I("Bid_Order_FK") is { } oid && orders.ContainsKey(oid))
-                choiceOf[b.Id] = (oid, b.I("Bid_OrderOption_FK") is >= 1 and <= 3 and var op ? op.Value : 1);
+                choiceOf[b.Id] = (oid, b.I("Bid_OrderOption_FK") is int op and >= 1 and <= 3 ? op : 1);
         bool Excepted(int order, int pos) => orders.TryGetValue(order, out var o) && o.B($"Order_{Pos()[pos - 1]}_Selected") && o.B($"Order_{Pos()[pos - 1]}_Exception");
 
         string TypeOf(Row? o)
