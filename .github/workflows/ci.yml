@@ -28,7 +28,7 @@ jobs:
       - name: Vulnerable packages
         run: |
           dotnet list Sammha.slnx package --vulnerable --include-transitive | tee vuln.txt
-          if grep -q "has the following vulnerable packages" vuln.txt; then echo "::error::vulnerable NuGet packages"; exit 1; fi
+          if grep -q "has the following vulnerable packages" vuln.txt; then grep -E "^\s+>" vuln.txt | sort -u | while read -r l; do echo "::error::vulnerable: $l"; done; exit 1; fi
       - run: dotnet build Sammha.slnx -c Release --no-restore
       - name: Test (real SQL Server)
         run: dotnet test Sammha.slnx -c Release --no-build --blame-hang-timeout 4m --logger "console;verbosity=normal" --logger GitHubActions
