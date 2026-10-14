@@ -2028,3 +2028,40 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014162829_ServiceStates'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [ComingSoon] nvarchar(120) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014162829_ServiceStates'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [TransferClosedNote] nvarchar(300) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014162829_ServiceStates'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [TransferOpen] bit NOT NULL DEFAULT CAST(1 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014162829_ServiceStates'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014162829_ServiceStates', N'10.0.13');
+END;
+
+COMMIT;
+GO
+

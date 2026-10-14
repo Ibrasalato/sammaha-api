@@ -1232,6 +1232,13 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<string>("ComingSoon")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ComplaintEmails")
                         .IsRequired()
                         .HasMaxLength(400)
@@ -1325,9 +1332,18 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<bool>("TicketsRestrictToHandlers")
                         .HasColumnType("bit");
 
+                    b.Property<string>("TransferClosedNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<decimal?>("TransferFee")
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
+
+                    b.Property<bool>("TransferOpen")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
