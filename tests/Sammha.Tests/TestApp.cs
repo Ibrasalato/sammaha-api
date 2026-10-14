@@ -116,7 +116,7 @@ public class Api(HttpClient http)
         var o = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(body, Json))!.AsObject();
         o["challenge"] = ch.GetProperty("challenge").GetString();
         o["code"] = code;
-        return await SignUp(o);
+        return await Post<JsonElement>("/api/auth/signup", o);
     }
     public Task<T> Post<T>(string url, object? body = null) => Send<T>(HttpMethod.Post, url, body ?? new { });
     public Task<T> Put<T>(string url, object body) => Send<T>(HttpMethod.Put, url, body);
