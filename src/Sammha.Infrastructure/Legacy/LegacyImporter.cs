@@ -256,10 +256,13 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
             reqIds[o.Id] = req.Id;
             newOrders.Add(o.Id);
             var states = new List<string>();
+            // Order_X_Selected marks the slots the owner used (one name → First; two → First+Second; three → all)
+            var anySelected = Pos().Any(x => o.B($"Order_{x}_Selected"));
             for (var p = 1; p <= 3; p++)
             {
                 var pre = $"Order_{Pos()[p - 1]}_";
                 if (o.S(pre + "Choice") is not { } name) continue;
+                if (anySelected && !o.B(pre + "Selected")) { _r.Warn("candidates.unselectedSlotSkipped"); continue; }
                 var st = o.B(pre + "IsConvertedToBid") ? "accepted" : map.OrderStatus.GetValueOrDefault(o.I(pre + "Status_FK") ?? 0, "pending");
                 var c = new Candidate
                 {
