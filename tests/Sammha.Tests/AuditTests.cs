@@ -22,9 +22,10 @@ public class AuditTests(TestApp app) : IClassFixture<TestApp>
     [InlineData("الهدباء", "هدباء", MatchRelations.Article)]
     [InlineData("الفاخر", "الفاخر", MatchRelations.Exact)]
     [InlineData("سلاطين", "سلطان", MatchRelations.Plural)]
-    [InlineData("مزن", "مزنة", MatchRelations.Singular)]
+    [InlineData("مزن", "مزنة", MatchRelations.Gender)]
+    [InlineData("صقر", "صقور", MatchRelations.Singular)]
     [InlineData("الفاخره", "الفاخر", MatchRelations.Gender)]
-    [InlineData("نسيم", "نسمة", MatchRelations.Similar)]
+    [InlineData("الريم", "الرين", MatchRelations.Similar)]
     public void Relation_names_the_kind_of_match(string candidate, string other, string expected) =>
         Assert.Equal(expected, NameMatcher.Relation(candidate, other));
 
@@ -50,7 +51,7 @@ public class AuditTests(TestApp app) : IClassFixture<TestApp>
 
         var mazn = rows.Single(x => x.GetProperty("name").GetString() == "مزن");
         Assert.Equal("مزنة", mazn.GetProperty("topPrice").GetProperty("name").GetString());
-        Assert.Equal("singular", mazn.GetProperty("matches")[0].GetProperty("relation").GetString());
+        Assert.Equal("gender", mazn.GetProperty("matches")[0].GetProperty("relation").GetString());
         Assert.Equal("clear", rows.Single(x => x.GetProperty("name").GetString() == "نسيم الشمال").GetProperty("verdict").GetString());
 
         await Assert.ThrowsAsync<ApiException>(() => owner.Get<JsonElement>("/api/admin/requests/audit"));
