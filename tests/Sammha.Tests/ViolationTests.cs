@@ -197,7 +197,7 @@ public class ViolationTests(TestApp app) : IClassFixture<TestApp>
         Assert.Contains("الوافي", mine2.GetProperty("resolutionNote").GetString());
         Assert.False(mine2.TryGetProperty("resolvedByName", out _));
         Assert.Contains("غير متاحة", await owner.Fails(() => owner.Post<JsonElement>("/api/payments/card", new { purpose = "violation", @ref = id2, amount = 0, callback = "https://sammha.test/cb" })));
-        Assert.Contains("بتسجيل اسم", await owner.Fails(() => owner.Post<JsonElement>($"/api/me/violations/{id2}/pay")));
+        Assert.Contains("بربط اسم", await owner.Fails(() => owner.Post<JsonElement>($"/api/me/violations/{id2}/pay")));
         Assert.Contains("غلقت", await admin.Fails(() => admin.Post<JsonElement>($"/api/admin/violations/{id2}/cancel", new { reason = "إلغاء بعد التسوية" })));
 
         // 3) a type that does not take a name settlement; no payment → barred from the festival
