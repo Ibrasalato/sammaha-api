@@ -67,7 +67,7 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
         var checks = await matching.CheckAsync(names, null, ct);
         var blocked = checks.Where(c => c.Verdict is "exact" or "invalid" or "duplicate").ToList();
         if (blocked.Count > 0) throw new DomainException($"غيّر الأسماء المرفوضة: {string.Join("، ", blocked.Select(b => string.IsNullOrWhiteSpace(b.Name) ? "—" : b.Name))}");
-        var r = await NewRequestAsync(u, type, RequestKinds.Standard, R.DepositAmount, checks, ct);
+        var r = await NewRequestAsync(u, type, RequestKinds.Standard, await settings.DepositAmountAsync(R.DepositAmount, ct), checks, ct);
         await db.SaveChangesAsync(ct);
         return await map.RequestAsync(r, ct);
     }

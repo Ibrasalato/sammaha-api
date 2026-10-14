@@ -97,6 +97,8 @@ public class PlatformSettings
     public int LockoutMinutes { get; set; } = 15;
     /// <summary>staff dashboards sign out after this many idle minutes (0 = never)</summary>
     public int StaffIdleMinutes { get; set; } = 30;
+    /// <summary>the guarantee paid with a mark request; null = the server default (Platform:DepositAmount)</summary>
+    public decimal? DepositAmount { get; set; }
 
     // ───── complaints, reports and enquiries ─────
     /// <summary>when on, only the handlers of a ticket's kind (and admins) can reply to it or change it</summary>

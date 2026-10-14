@@ -18,6 +18,9 @@ public class SettingsStore(IAppDbContext db, TimeProvider clock, SettingsCache c
         return s;
     }
 
+    /// <summary>the mark request guarantee in force: the admin's value, or the server default</summary>
+    public async Task<decimal> DepositAmountAsync(decimal fallback, CancellationToken ct = default) => (await GetAsync(ct)).DepositAmount ?? fallback;
+
     /// <summary>the tracked row for editing (inserted with defaults if missing)</summary>
     public async Task<PlatformSettings> ForUpdateAsync(CancellationToken ct = default)
     {

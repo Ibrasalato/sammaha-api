@@ -72,7 +72,7 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
         var msg = await b2.Fails(() => b2.Post<JsonElement>($"/api/auctions/{a1}/bids", new { amount = 500 }));
         Assert.Equal("أنت صاحب أعلى مزايدة حاليًا", msg);
 
-        // end both; a1 sold to b2, a2 had no bids → the requester gets it at the opening price, guarantee applied
+        // end both; a1 sold to b2, a2 had no bids → the requester gets it at the opening price; the guarantee returns to the wallet, not deducted
         app.Clock.Advance(TimeSpan.FromHours(3));
         await app.SweepAsync();
         var settled = await b2.Get<JsonElement>($"/api/auctions/{a1}");
@@ -85,8 +85,11 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal("paid", inv.GetProperty("status").GetString());
 
         var ownerInv = (await owner.Get<JsonElement>("/api/me/invoices")).EnumerateArray().First(i => i.GetProperty("auctionId").GetString() == a2);
-        Assert.Equal(50, ownerInv.GetProperty("depositApplied").GetDecimal());
-        Assert.Equal("paid", ownerInv.GetProperty("status").GetString());
+        Assert.Equal(0, ownerInv.GetProperty("depositApplied").GetDecimal());
+        Assert.Equal(50, ownerInv.GetProperty("amountDue").GetDecimal());
+        Assert.Equal("unpaid", ownerInv.GetProperty("status").GetString());
+        var ownerTxs = (await owner.Get<JsonElement>("/api/me/wallet")).GetProperty("txs").EnumerateArray();
+        Assert.Contains(ownerTxs, t => t.GetProperty("kind").GetString() == "refund" && t.GetProperty("note").GetString()!.Contains(r2.GetProperty("number").GetString()!) && t.GetProperty("note").GetString()!.Contains("رسا عليك"));
 
         var names = await b2.Get<JsonElement>("/api/me/names");
         Assert.Contains(names.EnumerateArray(), n => n.GetProperty("name").GetString() == "نسيم الصبا");

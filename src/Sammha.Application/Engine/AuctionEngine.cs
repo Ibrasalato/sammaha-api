@@ -63,21 +63,17 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
         var winnerId = noBids ? a.RequesterId : a.LeaderId!.Value;
         var winner = await db.Users.FirstAsync(u => u.Id == winnerId, ct);
         var price = noBids ? a.OpeningPrice : a.CurrentPrice;
-        decimal applied = 0;
-        if (winnerId == r.UserId && r.DepositState == DepositStates.Held)
-        {
-            applied = Math.Min(r.DepositAmount, price);
-            r.DepositState = DepositStates.Applied;
-        }
-        await money.IssueInvoiceAsync(winner.Id, a.Id, null, a.Name, a.Type, price, applied, ct);
+        // the guarantee is never deducted from the invoice: the winner pays the full price (wallet or card), and the guarantee returns to the wallet
+        await money.IssueInvoiceAsync(winner.Id, a.Id, null, a.Name, a.Type, price, 0, ct);
         Register(a, winner, price, ReservedSources.Auction);
         Close(a, winner.Id, price, winnerId == r.UserId);
         await notifier.NotifyAsync(winnerId, NotificationKinds.Won, $"مبارك عليك الفوز بمزاد شعار «{a.Name}»", $"بسعر {price:0.##} ريال. فاتورتك الإلكترونية جاهزة، سدّدها لإصدار شهادة التسجيل.", "/dashboard/invoices", ct);
         await NotifyLosersAsync(a, winnerId, price, ct);
-        // every auction of the request settled and the requester won none → refund the guarantee
+        // every auction of the request settled → the guarantee returns to the requester's wallet, whoever won
         var others = await db.Auctions.Where(x => x.RequestId == r.Id && x.Id != a.Id).Select(x => x.Settled).ToListAsync(ct);
         var pendingNames = r.Candidates.Any(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.ExceptedAt == null);
-        if (!pendingNames && others.All(s => s) && r.DepositState == DepositStates.Held) await money.RefundDepositAsync(r, "لم يُرسَ عليك أي اسم", ct);
+        if (!pendingNames && others.All(s => s) && r.DepositState == DepositStates.Held)
+            await money.RefundDepositAsync(r, winnerId == r.UserId ? "انتهى المزاد ورسا عليك الاسم" : "لم يُرسَ عليك أي اسم", ct);
     }
 
     /// <summary>«استثمار الاسم»: sold → invoice to the winner and 30% (before VAT) earmarked for the proposer; no bids → the name goes to the proposer free.</summary>

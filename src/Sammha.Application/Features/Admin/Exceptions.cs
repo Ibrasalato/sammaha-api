@@ -8,7 +8,7 @@ namespace Sammha.Application.Features.Admin;
 
 /// <summary>
 /// «استثناء اسم من المزاد» (requests.exception): an accepted name of a standard request is registered to the requester at once,
-/// for a registration fee instead of an auction. The request's guarantee goes towards the fee; any surplus returns to the wallet.
+/// for a registration fee instead of an auction. The fee is paid in full; the request's guarantee returns to the wallet.
 /// </summary>
 public record GrantExceptionCommand(Guid CandidateId, decimal Fee, string Reason) : ICommand<RequestDto>;
 
@@ -33,16 +33,10 @@ public class ExceptionHandlers(IAppDbContext db, Access access, Mapper map, Mone
 
         var now = clock.GetUtcNow();
         var fee = Money.Round2(q.Fee);
-        decimal applied = 0;
-        if (r.DepositState == DepositStates.Held)
-        {
-            applied = Math.Min(r.DepositAmount, fee);
-            r.DepositState = DepositStates.Applied;
-            var surplus = Money.Round2(r.DepositAmount - applied);
-            if (surplus > 0) money.Add(r.UserId, surplus, TxKinds.Refund, $"باقي ضمان الطلب {r.Number} بعد رسوم تسجيل «{c.Name}»", r.Id);
-        }
+        // as after an auction: the fee is paid in full (wallet or card) and the guarantee returns to the wallet
+        await money.RefundDepositAsync(r, "سُجّل الاسم دون مزاد", ct);
         c.ExceptedAt = now; c.ExceptionFee = fee; c.ExceptionReason = reason.Length > 300 ? reason[..300] : reason; c.ExceptedBy = staff.FullName;
-        var inv = await money.IssueInvoiceAsync(r.UserId, null, null, c.Name, r.Type, fee, applied, ct);
+        var inv = await money.IssueInvoiceAsync(r.UserId, null, null, c.Name, r.Type, fee, 0, ct);
         var nid = Guid.NewGuid();
         db.ReservedNames.Add(new ReservedName
         {
@@ -50,7 +44,7 @@ public class ExceptionHandlers(IAppDbContext db, Access access, Mapper map, Mone
             AcquiredAt = now, Source = ReservedSources.Exception, CertCode = ReservedName.CertFor(nid),
         });
         await notifier.NotifyAsync(r.UserId, NotificationKinds.Reviewed, $"سُجّل «{c.Name}» باسمك دون مزاد",
-            inv.Status == InvoiceStatuses.Paid ? $"استثنته لجنة الاعتماد من المزاد برسوم {fee:0.##} ريال سُددت من ضمان الطلب." : $"استثنته لجنة الاعتماد من المزاد برسوم تسجيل {fee:0.##} ريال. سدّد الفاتورة {inv.Number} لإصدار الشهادة.",
+            inv.Status == InvoiceStatuses.Paid ? "استثنته لجنة الاعتماد من المزاد دون رسوم، وأُعيد ضمان الطلب إلى محفظتك." : $"استثنته لجنة الاعتماد من المزاد برسوم تسجيل {fee:0.##} ريال. سدّد الفاتورة {inv.Number} لإصدار الشهادة، وأُعيد ضمان الطلب إلى محفظتك.",
             inv.Status == InvoiceStatuses.Paid ? "/dashboard/names" : "/dashboard/invoices", ct);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);

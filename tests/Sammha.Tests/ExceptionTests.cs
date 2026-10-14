@@ -42,15 +42,16 @@ public class ExceptionTests(TestApp app) : IClassFixture<TestApp>
         var c = r.GetProperty("candidates").EnumerateArray().First(x => x.GetProperty("id").GetString() == cand);
         Assert.Equal(3000m, c.GetProperty("exceptionFee").GetDecimal());
         Assert.False(r.GetProperty("cancellable").GetBoolean());
-        Assert.Equal("applied", r.GetProperty("depositState").GetString());
-        Assert.Equal(before, await Balance(owner)); // the whole guarantee went towards the fee
+        Assert.Equal("refunded", r.GetProperty("depositState").GetString());
+        Assert.Equal(before + depositPaid, await Balance(owner)); // the guarantee returns to the wallet; the fee is invoiced in full
 
         // registered at once, with an invoice for the fee less the guarantee
         var name = (await owner.Get<JsonElement>("/api/me/names")).EnumerateArray().Single(n => n.GetProperty("name").GetString() == "الفارس الأول");
         Assert.Equal("exception", name.GetProperty("source").GetString());
         var inv = (await owner.Get<JsonElement>("/api/me/invoices")).EnumerateArray().First(i => i.GetProperty("name").GetString() == "الفارس الأول");
         Assert.Equal(3000m, inv.GetProperty("total").GetDecimal());
-        Assert.Equal(depositPaid, inv.GetProperty("depositApplied").GetDecimal());
+        Assert.Equal(0, inv.GetProperty("depositApplied").GetDecimal());
+        Assert.Equal(3000m, inv.GetProperty("amountDue").GetDecimal());
 
         // it never reaches the auction schedule, cannot be excepted twice, and the request cannot be cancelled
         Assert.DoesNotContain((await admin.Get<JsonElement>("/api/admin/schedule")).EnumerateArray(), x => x.GetProperty("id").GetString() == cand);
@@ -62,18 +63,41 @@ public class ExceptionTests(TestApp app) : IClassFixture<TestApp>
     }
 
     [Fact]
-    public async Task A_fee_below_the_guarantee_returns_the_rest_and_settles_the_invoice()
+    public async Task The_guarantee_amount_is_an_admin_setting()
+    {
+        var admin = await app.SignInAsync("ibrasalato@gmail.com", "Sammha@2026", "staff");
+        var committee = await app.CommitteeAsync();
+        Assert.Contains("1,000,000", await admin.Fails(() => admin.Patch<JsonElement>("/api/admin/settings", new { depositAmount = -5 })));
+        var s = await admin.Patch<JsonElement>("/api/admin/settings", new { depositAmount = 5000 });
+        Assert.Equal(5000m, s.GetProperty("rules").GetProperty("depositAmount").GetDecimal());
+        Assert.Equal(5000m, (await app.Anonymous().Get<JsonElement>("/api/settings")).GetProperty("depositAmount").GetDecimal());
+        var hist = (await admin.Get<JsonElement>("/api/admin/settings/history")).EnumerateArray();
+        Assert.Contains(hist, h => h.GetProperty("field").GetString() == "DepositAmount" && h.GetProperty("newValue").GetString()!.StartsWith("5000"));
+
+        // new requests take the new amount; the guarantee comes back whoever wins
+        var owner = await app.SignInAsync("0500000005");
+        await owner.TopUp(5000);
+        var r = await owner.Post<JsonElement>("/api/me/requests", new { type = "bakkar", names = new[] { "نور الضحى", "مها السراب", "زهرة البر" } });
+        Assert.Equal(5000m, r.GetProperty("depositAmount").GetDecimal());
+        var id = r.GetProperty("id").GetString()!;
+        var before = await Balance(owner);
+        await owner.Post<JsonElement>($"/api/me/requests/{id}/pay");
+        Assert.Equal(before - 5000, await Balance(owner));
+        await admin.Patch<JsonElement>("/api/admin/settings", new { depositAmount = 50 });
+    }
+
+    [Fact]
+    public async Task A_free_exception_returns_the_guarantee_and_settles_the_invoice()
     {
         var committee = await app.CommitteeAsync();
         var admin = await app.SignInAsync("ibrasalato@gmail.com", "Sammha@2026", "staff");
         var owner = await app.SignInAsync("0500000004");
         var (req, cand) = await AcceptedAsync(owner, committee, ["سيف البادية", "ريح الصبا", "غيث المطر"]);
         var deposit = (await owner.Get<JsonElement>($"/api/requests/{req}")).GetProperty("depositAmount").GetDecimal();
-        var fee = Math.Max(0, deposit - 10);
         var before = await Balance(owner);
-        await admin.Post<JsonElement>($"/api/admin/candidates/{cand}/exception", new { fee, reason = "قرار اللجنة رقم 12" });
-        Assert.Equal(before + (deposit - fee), await Balance(owner));
+        await admin.Post<JsonElement>($"/api/admin/candidates/{cand}/exception", new { fee = 0, reason = "قرار اللجنة رقم 12" });
+        Assert.Equal(before + deposit, await Balance(owner));
         var inv = (await owner.Get<JsonElement>("/api/me/invoices")).EnumerateArray().First(i => i.GetProperty("name").GetString() == "سيف البادية");
-        Assert.Equal("paid", inv.GetProperty("status").GetString());
+        Assert.Equal("paid", inv.GetProperty("status").GetString()); // a free exception
     }
 }

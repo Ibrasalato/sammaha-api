@@ -120,6 +120,7 @@ public class Api(HttpClient http)
     }
     public Task<T> Post<T>(string url, object? body = null) => Send<T>(HttpMethod.Post, url, body ?? new { });
     public Task<T> Put<T>(string url, object body) => Send<T>(HttpMethod.Put, url, body);
+    public Task<T> Patch<T>(string url, object body) => Send<T>(HttpMethod.Patch, url, body);
 
     public async Task<string> Fails(Func<Task> call)
     {
