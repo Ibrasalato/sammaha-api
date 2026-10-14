@@ -44,7 +44,7 @@ public static class ActivityLabels
         ["ReviewRequestCommand"] = ("اعتماد قرار طلب", ActivityCategories.Requests), ["RejectRequestCommand"] = ("رفض طلب", ActivityCategories.Requests),
         ["CancelRequestCommand"] = ("إلغاء طلب من الإدارة", ActivityCategories.Requests),
         ["AuctionIcoNameCommand"] = ("طرح اسم للمنظمة في مزاد", ActivityCategories.Auctions),
-        ["CreateTransferCommand"] = ("طلب نقل ملكية اسم", ActivityCategories.Requests), ["CancelTransferCommand"] = ("إلغاء طلب نقل ملكية", ActivityCategories.Requests),
+        ["CreateTransferCommand"] = ("طلب نقل ملكية اسم", ActivityCategories.Requests), ["CancelTransferCommand"] = ("إلغاء طلب نقل ملكية", ActivityCategories.Requests), ["PayTransferFeeCommand"] = ("سداد رسوم نقل ملكية", ActivityCategories.Payments),
         ["RespondTransferCommand"] = ("رد المستلم على نقل ملكية", ActivityCategories.Requests), ["ReviewTransferCommand"] = ("مراجعة نقل ملكية", ActivityCategories.Requests),
         ["ScheduleAuctionsCommand"] = ("فتح مزادات", ActivityCategories.Auctions), ["PauseAuctionsCommand"] = ("إيقاف مزادات مؤقتًا", ActivityCategories.Auctions),
         ["ResumeAuctionsCommand"] = ("استئناف مزادات", ActivityCategories.Auctions), ["ExtendAuctionsCommand"] = ("تمديد مزادات", ActivityCategories.Auctions),

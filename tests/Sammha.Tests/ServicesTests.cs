@@ -18,8 +18,9 @@ public class ServicesTests(TestApp app) : IClassFixture<TestApp>
         var id = r.GetProperty("id").GetString();
         Assert.Equal(100, r.GetProperty("depositAmount").GetDecimal());
         var before = await owner.Balance();
-        await owner.Post<JsonElement>($"/api/me/requests/{id}/pay");
-        Assert.Equal(before - 100, await owner.Balance());
+        Assert.Contains("قنوات الدفع", await owner.Fails(() => owner.Post<JsonElement>($"/api/me/requests/{id}/pay")));
+        await owner.PayByCard("deposit", id, $"/api/me/requests/{id}/pay");
+        Assert.Equal(before, await owner.Balance()); // the card paid the fee, the wallet is untouched
 
         var cands = (await committee.Get<JsonElement>($"/api/requests/{id}")).GetProperty("candidates").EnumerateArray().Select(c => c.GetProperty("id").GetString()).ToList();
         await committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new { decisions = new object[] { new { candidateId = cands[0], status = "accepted" }, new { candidateId = cands[1], status = "rejected", reason = "لا يحقق التفرد" } } });
@@ -39,7 +40,7 @@ public class ServicesTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal(300, inv.GetProperty("ownerShare").GetDecimal()); // (1150 − 150 VAT) × 30%
         var ownerBefore = await owner.Balance();
         await b1.TopUp(1150);
-        await b1.Post<JsonElement>($"/api/me/invoices/{inv.GetProperty("id").GetString()}/pay");
+        await b1.PayByCard("invoice", inv.GetProperty("id").GetString(), $"/api/me/invoices/{inv.GetProperty("id").GetString()}/pay");
         Assert.Equal(ownerBefore + 300, await owner.Balance());
     }
 
@@ -59,7 +60,7 @@ public class ServicesTests(TestApp app) : IClassFixture<TestApp>
         Assert.Contains(market.EnumerateArray(), x => x.GetProperty("name").GetString() == "الغيمة");
         var sellerBefore = await seller.Balance();
         await buyer.TopUp(2000);
-        var sold = await buyer.Post<JsonElement>($"/api/market/{l.GetProperty("id").GetString()}/buy");
+        var sold = await buyer.PayByCard("listing", l.GetProperty("id").GetString(), $"/api/market/{l.GetProperty("id").GetString()}/buy");
         Assert.Equal("sold", sold.GetProperty("status").GetString());
         Assert.Equal(sellerBefore + 1700, await seller.Balance());
         Assert.Contains((await buyer.Get<JsonElement>("/api/me/names")).EnumerateArray(), n => n.GetProperty("name").GetString() == "الغيمة");
@@ -96,7 +97,7 @@ public class ServicesTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal(950, inv.GetProperty("amountDue").GetDecimal());
         var sellerBefore = await seller.Balance();
         await b3.TopUp(950);
-        await b3.Post<JsonElement>($"/api/me/invoices/{inv.GetProperty("id").GetString()}/pay");
+        await b3.PayByCard("invoice", inv.GetProperty("id").GetString(), $"/api/me/invoices/{inv.GetProperty("id").GetString()}/pay");
         Assert.Equal(sellerBefore + 900, await seller.Balance());
         var mine = (await seller.Get<JsonElement>("/api/me/listings")).EnumerateArray().First(x => x.GetProperty("id").GetString() == l.GetProperty("id").GetString());
         Assert.True(mine.GetProperty("payoutPaid").GetBoolean());

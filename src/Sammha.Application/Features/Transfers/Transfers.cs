@@ -18,6 +18,8 @@ public record GetMyTransfersQuery : IQuery<MyTransfersDto>;
 public record FindRecipientQuery(string Phone) : IQuery<RecipientDto>;
 public record CreateTransferCommand(Guid ReservedId, string Phone, string Reason, string? Note) : ICommand<TransferDto>;
 public record CancelTransferCommand(Guid Id) : ICommand<TransferDto>;
+/// <summary>completes the fee after the card payment (purpose "transfer"); the wallet cannot pay fees</summary>
+public record PayTransferFeeCommand(Guid Id) : ICommand<TransferDto>;
 /// <summary>the recipient accepts or declines</summary>
 public record RespondTransferCommand(Guid Id, bool Accept) : ICommand<TransferDto>;
 public record ListTransfersQuery(string? Status) : IQuery<List<TransferDto>>;
@@ -26,7 +28,7 @@ public record ReviewTransferCommand(Guid Id, bool Approve, string? Note) : IComm
 
 public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser current, Notifier notifier, Money money, SettingsStore settings, TimeProvider clock)
     : IRequestHandler<GetMyTransfersQuery, MyTransfersDto>, IRequestHandler<FindRecipientQuery, RecipientDto>, IRequestHandler<CreateTransferCommand, TransferDto>,
-      IRequestHandler<CancelTransferCommand, TransferDto>, IRequestHandler<RespondTransferCommand, TransferDto>,
+      IRequestHandler<CancelTransferCommand, TransferDto>, IRequestHandler<RespondTransferCommand, TransferDto>, IRequestHandler<PayTransferFeeCommand, TransferDto>,
       IRequestHandler<ListTransfersQuery, List<TransferDto>>, IRequestHandler<ReviewTransferCommand, TransferDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -57,7 +59,7 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
     {
         var u = await access.MeAsync(ct);
         var list = await db.Transfers.AsNoTracking().Where(t => t.FromId == u.Id || t.ToId == u.Id).OrderByDescending(t => t.CreatedAt).ToListAsync(ct);
-        return new(list.Where(t => t.FromId == u.Id).Select(t => Dto(t)).ToList(), list.Where(t => t.ToId == u.Id).Select(t => Dto(t)).ToList(), await settings.TransferFeeAsync(ct));
+        return new(list.Where(t => t.FromId == u.Id).Select(t => Dto(t)).ToList(), list.Where(t => t.ToId == u.Id && t.Status != TransferStatuses.PendingPayment).Select(t => Dto(t)).ToList(), await settings.TransferFeeAsync(ct));
     }
 
     public async Task<RecipientDto> Handle(FindRecipientQuery q, CancellationToken ct)
@@ -84,9 +86,29 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
             Number = $"NT-{await db.NextNumberAsync("TransferNo", ct)}", ReservedId = r.Id, Name = r.Name, Type = r.Type, FromId = u.Id, FromName = u.FullName,
             ToId = to.Id, ToName = to.FullName, Reason = q.Reason, Note = string.IsNullOrWhiteSpace(note) ? null : note, Fee = fee, CreatedAt = Now,
         };
-        if (fee > 0) await money.DebitAsync(u.Id, fee, TxKinds.ServiceFee, $"رسوم نقل ملكية «{r.Name}» ({t.Number})", t.Id, ct, "رصيد المحفظة لا يكفي لرسوم نقل الملكية، اشحن المحفظة أولًا");
         db.Transfers.Add(t);
-        await notifier.NotifyAsync(to.Id, NotificationKinds.Transfer, $"طلب نقل ملكية «{r.Name}» إليك", $"يرغب {u.FullName} في نقل ملكية الاسم إلى حسابك. وافق على الطلب أو ارفضه من صفحة نقل الملكية.", Link, ct);
+        if (fee <= 0) await SendToRecipientAsync(t, ct);
+        await db.SaveChangesAsync(ct);
+        await uow.CommitAsync(ct);
+        return Dto(t);
+    }
+
+    private async Task SendToRecipientAsync(NameTransfer t, CancellationToken ct)
+    {
+        t.Status = TransferStatuses.AwaitingRecipient;
+        await notifier.NotifyAsync(t.ToId, NotificationKinds.Transfer, $"طلب نقل ملكية «{t.Name}» إليك", $"يرغب {t.FromName} في نقل ملكية الاسم إلى حسابك. وافق على الطلب أو ارفضه من صفحة نقل الملكية.", Link, ct);
+    }
+
+    public async Task<TransferDto> Handle(PayTransferFeeCommand q, CancellationToken ct)
+    {
+        var u = await OwnerAsync(ct);
+        await using var uow = await db.BeginAsync([$"t:{q.Id}", $"u:{u.Id}"], ct);
+        var t = await LoadAsync(q.Id, ct);
+        if (t.FromId != u.Id) throw DomainException.NotFound("طلب النقل غير موجود");
+        if (t.Status != TransferStatuses.PendingPayment) return Dto(t);
+        await money.DebitByCardAsync(u.Id, t.Fee, PaymentPurposes.Transfer, t.Id, TxKinds.ServiceFee, $"رسوم نقل ملكية «{t.Name}» ({t.Number})", ct);
+        t.FeePaidAt = Now;
+        await SendToRecipientAsync(t, ct);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);
         return Dto(t);
@@ -105,7 +127,7 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
 
     private void RefundFee(NameTransfer t, string why)
     {
-        if (t.Fee > 0) money.Add(t.FromId, t.Fee, TxKinds.Refund, $"استرداد رسوم نقل ملكية «{t.Name}» ({t.Number}) — {why}", t.Id);
+        if (t.Fee > 0 && t.FeePaidAt != null) money.Add(t.FromId, t.Fee, TxKinds.Refund, $"استرداد رسوم نقل ملكية «{t.Name}» ({t.Number}) — {why}", t.Id);
     }
 
     public async Task<TransferDto> Handle(CancelTransferCommand q, CancellationToken ct)
@@ -117,8 +139,9 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
         if (!TransferStatuses.Open.Contains(t.Status)) throw new DomainException("لا يمكن إلغاء هذا الطلب");
         t.Status = TransferStatuses.Cancelled;
         t.CancelledAt = Now;
+        var told = t.FeePaidAt != null || t.Fee <= 0;
         RefundFee(t, "ألغاه المالك");
-        await notifier.NotifyAsync(t.ToId, NotificationKinds.Transfer, $"أُلغي طلب نقل ملكية «{t.Name}»", $"ألغى {t.FromName} طلب نقل الاسم إليك.", Link, ct);
+        if (told) await notifier.NotifyAsync(t.ToId, NotificationKinds.Transfer, $"أُلغي طلب نقل ملكية «{t.Name}»", $"ألغى {t.FromName} طلب نقل الاسم إليك.", Link, ct);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);
         return Dto(t);
@@ -141,7 +164,7 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
         {
             t.Status = TransferStatuses.Declined;
             RefundFee(t, "رفضه المستلم");
-            await notifier.NotifyAsync(t.FromId, NotificationKinds.Transfer, $"رفض {t.ToName} نقل «{t.Name}»", t.Fee > 0 ? "أُعيدت رسوم النقل إلى محفظتك." : "بقي الاسم مسجلًا باسمك.", Link, ct);
+            await notifier.NotifyAsync(t.FromId, NotificationKinds.Transfer, $"رفض {t.ToName} نقل «{t.Name}»", t.Fee > 0 ? "أُعيدت رسوم النقل إلى محفظتك، ويمكنك استردادها إلى حسابك البنكي." : "بقي الاسم مسجلًا باسمك.", Link, ct);
         }
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);

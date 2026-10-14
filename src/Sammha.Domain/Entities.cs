@@ -481,4 +481,6 @@ public class Payment
     public string? ProviderId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? PaidAt { get; set; }
+    /// <summary>when the card money was spent on its purpose (invoices, purchases and fees can only be paid this way)</summary>
+    public DateTimeOffset? UsedAt { get; set; }
 }

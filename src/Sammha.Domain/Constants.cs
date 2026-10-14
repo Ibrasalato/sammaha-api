@@ -107,6 +107,6 @@ public static class OtpPurposes
 
 public static class PaymentPurposes
 {
-    public const string TopUp = "topup", Deposit = "deposit", Invoice = "invoice", BidDeposit = "bid_deposit", Listing = "listing";
-    public static readonly string[] All = [TopUp, Deposit, Invoice, BidDeposit, Listing];
+    public const string TopUp = "topup", Deposit = "deposit", Invoice = "invoice", BidDeposit = "bid_deposit", Listing = "listing", Transfer = "transfer";
+    public static readonly string[] All = [TopUp, Deposit, Invoice, BidDeposit, Listing, Transfer];
 }

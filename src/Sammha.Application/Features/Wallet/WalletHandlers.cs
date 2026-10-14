@@ -30,7 +30,8 @@ public class WalletHandlers(IAppDbContext db, Access access, Mapper map, Money m
         await using var uow = await db.BeginAsync([$"u:{u.Id}", $"i:{id}"], ct);
         var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id && i.UserId == u.Id, ct) ?? throw DomainException.NotFound("الفاتورة غير موجودة");
         if (inv.Status == InvoiceStatuses.Paid) return await map.InvoiceAsync(inv, ct);
-        await money.DebitAsync(u.Id, inv.AmountDue, TxKinds.InvoicePayment, $"سداد الفاتورة {inv.Number} — {inv.Name}", inv.Id, ct, "رصيد المحفظة لا يكفي");
+        if (inv.Status == InvoiceStatuses.Cancelled) throw new DomainException("أُلغيت هذه الفاتورة لانتهاء مهلة السداد");
+        await money.DebitByCardAsync(u.Id, inv.AmountDue, PaymentPurposes.Invoice, inv.Id, TxKinds.InvoicePayment, $"سداد الفاتورة {inv.Number} — {inv.Name}", ct);
         await money.MarkInvoicePaidAsync(inv, ct);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);

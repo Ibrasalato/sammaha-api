@@ -43,6 +43,8 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
                 ?? throw new DomainException("المزاد غير متاح"),
             PaymentPurposes.Listing => await db.Listings.Where(l => l.Id == reference && l.Mode == ListingModes.Instant && l.Status == ListingStatuses.Live && l.SellerId != u.Id).Select(l => (decimal?)l.Price).FirstOrDefaultAsync(ct)
                 ?? throw new DomainException("العرض غير متاح"),
+            PaymentPurposes.Transfer => await db.Transfers.Where(t => t.Id == reference && t.FromId == u.Id && t.Status == TransferStatuses.PendingPayment).Select(t => (decimal?)t.Fee).FirstOrDefaultAsync(ct)
+                ?? throw new DomainException("طلب النقل غير متاح للسداد"),
             _ => amount >= 10 && amount <= 100_000 ? decimal.Round(amount, 2) : throw new DomainException("أقل مبلغ للشحن 10 ريال"),
         };
         var p = new Payment { UserId = u.Id, Purpose = purpose, Ref = reference, Amount = amount, CreatedAt = Now };
@@ -103,6 +105,7 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
                 case PaymentPurposes.Invoice: await sender.Send(new PayInvoiceCommand(reference), ct); break;
                 case PaymentPurposes.BidDeposit: await sender.Send(new PayBidDepositCommand(reference), ct); break;
                 case PaymentPurposes.Listing: await sender.Send(new BuyListingCommand(reference), ct); break;
+                case PaymentPurposes.Transfer: await sender.Send(new Features.Transfers.PayTransferFeeCommand(reference), ct); break;
             }
         }
         catch (DomainException e)
@@ -118,6 +121,7 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
         PaymentPurposes.Invoice => "سداد فاتورة — منصة سمّها",
         PaymentPurposes.BidDeposit => "ضمان دخول مزاد — منصة سمّها",
         PaymentPurposes.Listing => "شراء اسم — منصة سمّها",
+        PaymentPurposes.Transfer => "رسوم نقل ملكية اسم — منصة سمّها",
         _ => "شحن محفظة — منصة سمّها",
     };
 }

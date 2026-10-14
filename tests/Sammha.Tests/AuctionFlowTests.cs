@@ -92,7 +92,7 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal(b1Before, await b1.Balance()); // the loser's entry guarantee came back
         var b2BeforePay = await b2.Balance();
         await b2.TopUp(400);
-        inv = await b2.Post<JsonElement>($"/api/me/invoices/{inv.GetProperty("id").GetString()}/pay");
+        inv = await b2.PayByCard("invoice", inv.GetProperty("id").GetString(), $"/api/me/invoices/{inv.GetProperty("id").GetString()}/pay");
         Assert.Equal("paid", inv.GetProperty("status").GetString());
         Assert.Equal(b2BeforePay + 400 - 400 + 50, await b2.Balance()); // paid in full; the winner's entry guarantee returned after paying
 
@@ -102,7 +102,7 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal("unpaid", ownerInv.GetProperty("status").GetString());
         // the requester won their own name: the request guarantee stays held until they pay, then returns
         Assert.Equal("held", (await owner.Get<JsonElement>($"/api/requests/{id2}")).GetProperty("depositState").GetString());
-        await owner.Post<JsonElement>($"/api/me/invoices/{ownerInv.GetProperty("id").GetString()}/pay");
+        await owner.PayByCard("invoice", ownerInv.GetProperty("id").GetString(), $"/api/me/invoices/{ownerInv.GetProperty("id").GetString()}/pay");
         Assert.Equal("refunded", (await owner.Get<JsonElement>($"/api/requests/{id2}")).GetProperty("depositState").GetString());
 
         var names = await b2.Get<JsonElement>("/api/me/names");

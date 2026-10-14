@@ -18,9 +18,10 @@ public class NameTransfer
     public string ToName { get; set; } = "";
     public string Reason { get; set; } = TransferReasons.Sale;
     public string? Note { get; set; }
-    /// <summary>the transfer fee taken from the sender's wallet (returned if it does not go through)</summary>
+    /// <summary>the transfer fee, paid by card (returned to the wallet if the transfer does not go through)</summary>
     public decimal Fee { get; set; }
-    public string Status { get; set; } = TransferStatuses.AwaitingRecipient;
+    public string Status { get; set; } = TransferStatuses.PendingPayment;
+    public DateTimeOffset? FeePaidAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? RespondedAt { get; set; }
     public DateTimeOffset? ReviewedAt { get; set; }
@@ -33,8 +34,8 @@ public class NameTransfer
 
 public static class TransferStatuses
 {
-    public const string AwaitingRecipient = "awaiting_recipient", UnderReview = "under_review", Completed = "completed", Rejected = "rejected", Declined = "declined", Cancelled = "cancelled";
-    public static readonly string[] Open = [AwaitingRecipient, UnderReview];
+    public const string PendingPayment = "pending_payment", AwaitingRecipient = "awaiting_recipient", UnderReview = "under_review", Completed = "completed", Rejected = "rejected", Declined = "declined", Cancelled = "cancelled";
+    public static readonly string[] Open = [PendingPayment, AwaitingRecipient, UnderReview];
 }
 
 public static class TransferReasons

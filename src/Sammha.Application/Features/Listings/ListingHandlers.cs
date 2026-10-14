@@ -116,7 +116,7 @@ public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access
         if (l == null || l.Mode != ListingModes.Instant) throw DomainException.NotFound("العرض غير موجود");
         if (l.Status != ListingStatuses.Live || Now >= l.EndsAt) throw new DomainException("انتهى عرض هذا الاسم");
         if (l.SellerId == u.Id) throw new DomainException("لا يمكنك شراء اسم تبيعه");
-        await money.DebitAsync(u.Id, l.Price, TxKinds.Purchase, $"شراء فوري للاسم «{l.Name}» ({l.Number})", l.Id, ct);
+        await money.DebitByCardAsync(u.Id, l.Price, PaymentPurposes.Listing, l.Id, TxKinds.Purchase, $"شراء فوري للاسم «{l.Name}» ({l.Number})", ct);
         var inv = await money.IssueInvoiceAsync(u.Id, null, l.Id, l.Name, l.Type, l.Price, 0, ct);
         inv.OwnerShare = Money.Round2(l.Price * (1 - l.CommissionRate));
         inv.OwnerShareTo = l.SellerId;

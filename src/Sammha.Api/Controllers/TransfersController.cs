@@ -28,6 +28,9 @@ public class TransfersController(ISender mediator) : ControllerBase
     [HttpPost("me/transfers/{id:guid}/cancel")]
     public Task<TransferDto> Cancel(Guid id, CancellationToken ct) => mediator.Send(new CancelTransferCommand(id), ct);
 
+    [HttpPost("me/transfers/{id:guid}/pay")]
+    public Task<TransferDto> Pay(Guid id, CancellationToken ct) => mediator.Send(new PayTransferFeeCommand(id), ct);
+
     [HttpPost("me/transfers/{id:guid}/respond")]
     public Task<TransferDto> Respond(Guid id, RespondBody b, CancellationToken ct) => mediator.Send(new RespondTransferCommand(id, b.Accept), ct);
 

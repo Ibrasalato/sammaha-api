@@ -130,5 +130,11 @@ public class Api(HttpClient http)
 
     /// <summary>simulated card payment, credits the wallet</summary>
     public Task TopUp(decimal amount) => Post<JsonElement>("/api/me/wallet/topup", new { amount });
+    /// <summary>invoices, purchases and fees go through the (simulated) card, then the action completes</summary>
+    public async Task<JsonElement> PayByCard(string purpose, string? id, string url)
+    {
+        await Post<JsonElement>("/api/payments/card", new { purpose, @ref = id, amount = 0, callback = "https://sammha.test/cb" });
+        return await Post<JsonElement>(url);
+    }
     public async Task<decimal> Balance() => (await Get<JsonElement>("/api/me/wallet")).GetProperty("balance").GetDecimal();
 }

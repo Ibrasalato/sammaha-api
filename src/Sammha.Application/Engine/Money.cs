@@ -19,6 +19,20 @@ public class Money(IAppDbContext db, TimeProvider clock, Notifier notifier, IOpt
         return t;
     }
 
+    public const string CardOnly = "تُسدَّد هذه العملية من قنوات الدفع (البطاقة) فقط، ورصيد المحفظة مخصص لسداد الضمانات";
+
+    /// <summary>
+    /// Invoices, purchases and fees are paid through the payment channels only: the wallet is for guarantees.
+    /// A card payment passes through the wallet (credit then debit), so this spends one paid card payment made for exactly this purpose.
+    /// </summary>
+    public async Task DebitByCardAsync(Guid userId, decimal amount, string purpose, Guid reference, string kind, string note, CancellationToken ct)
+    {
+        var p = await db.Payments.Where(x => x.UserId == userId && x.Purpose == purpose && x.Ref == reference && x.Status == "paid" && x.UsedAt == null && x.Amount >= amount)
+            .OrderBy(x => x.PaidAt).FirstOrDefaultAsync(ct) ?? throw new DomainException(CardOnly);
+        p.UsedAt = Now;
+        Add(userId, -amount, kind, note, reference);
+    }
+
     public async Task DebitAsync(Guid userId, decimal amount, string kind, string note, Guid? reference, CancellationToken ct, string? lowMessage = null)
     {
         if (await db.BalanceOfAsync(userId, ct) < amount) throw new DomainException(lowMessage ?? "رصيد المحفظة لا يكفي، اشحن المحفظة أو ادفع بالبطاقة");

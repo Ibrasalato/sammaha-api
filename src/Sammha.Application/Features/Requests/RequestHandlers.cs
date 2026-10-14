@@ -154,8 +154,9 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
         var taken = checks.FirstOrDefault(c => c.Verdict == "exact");
         if (taken != null) throw new DomainException($"أصبح الاسم «{taken.Name}» محجوزًا، ألغِ الطلب وأنشئ طلبًا جديدًا");
         var fee = r.Kind == RequestKinds.Investment;
-        await money.DebitAsync(u.Id, r.DepositAmount, fee ? TxKinds.ServiceFee : TxKinds.Deposit,
-            fee ? $"رسوم دراسة طلب استثمار الاسم {r.Number}" : $"ضمان مزاد الطلب {r.Number}", r.Id, ct);
+        // the guarantee may come from the wallet; the investment study fee only from the payment channels
+        if (fee) await money.DebitByCardAsync(u.Id, r.DepositAmount, PaymentPurposes.Deposit, r.Id, TxKinds.ServiceFee, $"رسوم دراسة طلب استثمار الاسم {r.Number}", ct);
+        else await money.DebitAsync(u.Id, r.DepositAmount, TxKinds.Deposit, $"ضمان مزاد الطلب {r.Number}", r.Id, ct);
         for (var i = 0; i < ordered.Count; i++) ordered[i].SimilarJson = Mapper.HitsJson(checks[i].Hits);
         r.Status = RequestStatuses.UnderReview;
         r.DepositPaid = true;
