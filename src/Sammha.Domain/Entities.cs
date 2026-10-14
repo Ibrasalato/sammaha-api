@@ -307,6 +307,8 @@ public class ReservedName
     public decimal? ForfeitedDeposit { get; set; }
     /// <summary>the registry's Latin spelling, when staff set one; otherwise it is transliterated</summary>
     public string? LatinName { get; set; }
+    /// <summary>when the current approved logo was approved (null = no logo); also busts image caches</summary>
+    public DateTimeOffset? LogoAt { get; set; }
     /// <summary>public certificate code (SMC-XXXXXXXX), derived from the id</summary>
     public string CertCode { get; set; } = "";
 

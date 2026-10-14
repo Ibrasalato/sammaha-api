@@ -45,6 +45,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<Certificate> Certificates => Set<Certificate>();
     public DbSet<LegacyLink> LegacyLinks => Set<LegacyLink>();
     public DbSet<NameTransfer> Transfers => Set<NameTransfer>();
+    public DbSet<NameLogo> Logos => Set<NameLogo>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
@@ -207,6 +208,18 @@ public class SammhaDbContext : DbContext, IAppDbContext
             });
         });
         b.Entity<User>().HasOne<StaffRole>().WithMany().HasForeignKey(u => u.StaffRoleId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<NameLogo>(e =>
+        {
+            e.HasIndex(x => x.ReservedId).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Name).HasMaxLength(150);
+            e.Property(x => x.FileName).HasMaxLength(120);
+            e.Property(x => x.ContentType).HasMaxLength(40);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.RejectReason).HasMaxLength(300);
+            e.Property(x => x.ReviewedBy).HasMaxLength(120);
+            e.Property(x => x.Bytes).HasColumnType("varbinary(max)");
+        });
         b.Entity<NameTransfer>(e =>
         {
             e.Property(x => x.Number).HasMaxLength(20);

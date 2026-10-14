@@ -35,7 +35,7 @@ public record AuctionMineDto(bool Watching, decimal? AutoMax, bool? DepositPaid)
 public record AuctionViewDto(AuctionDto Auction, List<BidDto> Bids, AuctionMineDto? Mine);
 
 public record ReservedNameDto(Guid Id, string Name, string Normalized, string Type, Guid? OwnerId, string OwnerName, decimal Price, DateTimeOffset AcquiredAt,
-    string Source, string? BaseName, string? OwnerAvatar, Guid? ListingId, string? Latin = null, bool? LatinOverride = null);
+    string Source, string? BaseName, string? OwnerAvatar, Guid? ListingId, string? Latin = null, bool? LatinOverride = null, string? Logo = null, string? LogoStatus = null);
 
 public record WalletTxDto(Guid Id, Guid UserId, decimal Amount, string Kind, string Note, DateTimeOffset CreatedAt);
 public record WalletDto(decimal Balance, List<WalletTxDto> Txs);

@@ -120,9 +120,12 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
     }
 
     // ───── registry ─────
-    public static ReservedNameDto Reserved(ReservedName r, string? avatar = null, Guid? listingId = null) =>
+    public static ReservedNameDto Reserved(ReservedName r, string? avatar = null, Guid? listingId = null, string? logoStatus = null) =>
         new(r.Id, r.Name, r.Normalized, r.Type, r.OwnerId, r.OwnerName, r.Price, r.AcquiredAt, r.Source, r.BaseName, avatar, listingId,
-            LatinOf(r), string.IsNullOrWhiteSpace(r.LatinName) ? null : true);
+            LatinOf(r), string.IsNullOrWhiteSpace(r.LatinName) ? null : true, LogoUrl(r), logoStatus);
+
+    /// <summary>the approved logo's address (relative to the API), versioned so a new logo is not served from cache</summary>
+    public static string? LogoUrl(ReservedName r) => r.LogoAt is { } at && r.OwnerId != null ? $"/api/names/{r.Id}/logo?v={at.ToUnixTimeSeconds()}" : null;
 
     /// <summary>the registry's Latin spelling: staff's override, or the transliteration</summary>
     public static string LatinOf(ReservedName r) => string.IsNullOrWhiteSpace(r.LatinName) ? Transliterator.ToLatin(r.Name) : r.LatinName!;

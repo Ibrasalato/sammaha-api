@@ -17,7 +17,7 @@ public static class LegacyCli
         var source = Opt("--source") ?? Environment.GetEnvironmentVariable("SAMMHA_LEGACY_DB");
         if (verb is not ("inspect" or "import") || string.IsNullOrWhiteSpace(source))
         {
-            Console.Error.WriteLine("usage: legacy inspect|import --source \"<old database connection string>\" [--map legacy-map.json] [--map-out legacy-map.json] [--commit]");
+            Console.Error.WriteLine("usage: legacy inspect|import --source \"<old database connection string>\" [--map legacy-map.json] [--map-out legacy-map.json] [--files <old site folder>] [--commit]");
             return 2;
         }
         await using var scope = services.CreateAsyncScope();
@@ -38,7 +38,9 @@ public static class LegacyCli
         var mapped = LegacyImporter.Merge(await LegacyImporter.AutoMapAsync(src, CancellationToken.None), Opt("--map"));
         Console.WriteLine(commit ? "IMPORT (will be saved)…" : "DRY RUN (nothing is saved; add --commit to save)…");
         var started = DateTime.UtcNow;
-        var report = await importer.ImportAsync(src, mapped, commit, CancellationToken.None);
+        var files = Opt("--files");
+        if (files != null && !Directory.Exists(files)) { Console.Error.WriteLine($"--files folder not found: {files}"); return 2; }
+        var report = await importer.ImportAsync(src, mapped, commit, CancellationToken.None, files);
         report.Print(Console.Out);
         Console.WriteLine($"{(commit ? "saved" : "rolled back")} in {(DateTime.UtcNow - started).TotalSeconds:N0}s");
         return 0;

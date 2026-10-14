@@ -147,7 +147,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
 
     // ───────────────────────── import ─────────────────────────
 
-    public async Task<LegacyReport> ImportAsync(LegacySource src, LegacyMap map, bool commit, CancellationToken ct)
+    public async Task<LegacyReport> ImportAsync(LegacySource src, LegacyMap map, bool commit, CancellationToken ct, string? filesRoot = null)
     {
         _ct = ct;
         _now = clock.GetUtcNow();
@@ -509,7 +509,38 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
         await FlushAsync(true);
 
         // waiting for their own features
-        foreach (var t in new[] { "Name_Logo", "MemberCamels" })
+        // ── mark logos (Name_Logo): the image files come from the old site's folder (--files) ──
+        if (filesRoot != null && Directory.Exists(filesRoot))
+        {
+            var root = Path.GetFullPath(filesRoot).TrimEnd('/', '\\') + Path.DirectorySeparatorChar;
+            var logos = (await src.ReadAsync("Name_Logo", ct)).OrderByDescending(l => l.Dt("Name_Date")).ToList();
+            var done = new HashSet<Guid>(await db.Logos.Select(l => l.ReservedId).ToListAsync(ct));
+            foreach (var l in logos)
+            {
+                if (links.ContainsKey((LegacyKinds.Logo, l.Id))) continue;
+                ReservedName? rn = null;
+                if (l.I("Name_Bid_FK") is { } bid && outcomes.TryGetValue(bid, out var oc)) rn = await db.ReservedNames.FirstOrDefaultAsync(n => n.AuctionId == oc.Id, ct);
+                if (rn == null && l.S("Name") is { } nm) { var norm = NameMatcher.Normalize(nm); rn = await db.ReservedNames.FirstOrDefaultAsync(n => n.Normalized == norm, ct); }
+                if (rn?.OwnerId == null) { _r.Warn("logos.nameNotFound"); continue; }
+                if (!done.Add(rn.Id)) { _r.Warn("logos.olderVersionSkipped"); continue; }
+                var rel = (l.S("Name_Image_Path") ?? "").Replace('\\', '/').TrimStart('~', '/');
+                var path = Path.GetFullPath(Path.Combine(root, rel));
+                if (rel.Length == 0 || !path.StartsWith(root, StringComparison.Ordinal) || !File.Exists(path)) { _r.Warn("logos.fileMissing"); continue; }
+                var bytes = await File.ReadAllBytesAsync(path, ct);
+                var type = Sammha.Application.Features.Logos.LogoHandlers.Sniff(bytes);
+                if (type == null || bytes.Length > Sammha.Application.Features.Logos.LogoHandlers.MaxBytes) { _r.Warn("logos.notAnImageOrTooLarge"); continue; }
+                var at = At(l.Dt("Name_Date")) ?? _now;
+                var logo = new NameLogo { ReservedId = rn.Id, OwnerId = rn.OwnerId.Value, Name = rn.Name, FileName = Cut(Path.GetFileName(path), 120)!, ContentType = type, Bytes = bytes,
+                    Status = LogoStatuses.Approved, UploadedAt = at, ReviewedAt = at, ReviewedBy = Sentinel };
+                Add(logo);
+                rn.LogoAt = at;
+                _pending++;
+                Link(LegacyKinds.Logo, l.Id, logo.Id);
+                _r.Count("logos");
+                await FlushAsync(true);
+            }
+        }
+        foreach (var t in new[] { "MemberCamels" })
             if (await src.CountAsync(t, ct) is > 0 and var c) _r.Warn($"later.{t}", c);
 
         // ── numbering continues after the old numbers ──

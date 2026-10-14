@@ -46,7 +46,8 @@ public class WalletHandlers(IAppDbContext db, Access access, Mapper map, Money m
         var active = await db.Listings.AsNoTracking()
             .Where(l => ids.Contains(l.ReservedId) && (l.Status == ListingStatuses.Scheduled || l.Status == ListingStatuses.Live))
             .ToDictionaryAsync(l => l.ReservedId, l => l.Id, ct);
-        return list.Select(r => Mapper.Reserved(r, null, active.TryGetValue(r.Id, out var lid) ? lid : null)).ToList();
+        var logos = await db.Logos.AsNoTracking().Where(l => ids.Contains(l.ReservedId)).ToDictionaryAsync(l => l.ReservedId, l => l.Status, ct);
+        return list.Select(r => Mapper.Reserved(r, null, active.TryGetValue(r.Id, out var lid) ? lid : null, logos.GetValueOrDefault(r.Id))).ToList();
     }
 
     private async Task<List<NotificationDto>> NotificationsAsync(CancellationToken ct)

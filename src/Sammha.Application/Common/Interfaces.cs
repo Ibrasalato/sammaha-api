@@ -35,6 +35,7 @@ public interface IAppDbContext
     DbSet<Certificate> Certificates { get; }
     DbSet<LegacyLink> LegacyLinks { get; }
     DbSet<NameTransfer> Transfers { get; }
+    DbSet<NameLogo> Logos { get; }
     DbSet<ActivityLog> ActivityLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);

@@ -207,6 +207,9 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
             r.OwnerName = to.FullName;
             r.Source = ReservedSources.Transfer;
             r.AcquiredAt = Now;
+            // the logo was the previous owner's; the new owner uploads their own
+            r.LogoAt = null;
+            db.Logos.RemoveRange(await db.Logos.Where(l => l.ReservedId == r.Id).ToListAsync(ct));
             t.Status = TransferStatuses.Completed;
             t.CompletedAt = Now;
             t.ToName = to.FullName;
