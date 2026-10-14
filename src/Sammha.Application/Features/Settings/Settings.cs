@@ -171,7 +171,10 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
             {
                 if (!ServiceKeys.All.Contains(k)) throw new DomainException("خدمة غير معروفة");
                 var ar = Note(t.Ar, 300); var en = Note(t.En, 300);
-                if (string.IsNullOrEmpty(ar) && string.IsNullOrEmpty(en)) texts.Remove(k); else texts[k] = new ServiceText(ar, en);
+                static string? Terms(string? v) => v == null ? null : v.Trim().Length == 0 ? null : v.Trim()[..Math.Min(v.Trim().Length, 4000)];
+                var ta = Terms(t.TermsAr); var te = Terms(t.TermsEn);
+                if (string.IsNullOrEmpty(ar) && string.IsNullOrEmpty(en) && ta == null && te == null) texts.Remove(k);
+                else texts[k] = new ServiceText(string.IsNullOrEmpty(ar) ? null : ar, string.IsNullOrEmpty(en) ? null : en, ta, te);
             }
             SetS("ServiceTexts", ServiceTexts.Write(texts), () => s.ServiceTextsJson, v => s.ServiceTextsJson = v);
         }

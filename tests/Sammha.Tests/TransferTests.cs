@@ -83,11 +83,12 @@ public class TransferTests(TestApp app) : IClassFixture<TestApp>
 
         // the admin prices each service and writes its description
         Assert.Contains("50%", await admin.Fails(() => admin.Patch<JsonElement>("/api/admin/settings", new { resaleCommission = 0.9 })));
-        await admin.Patch<JsonElement>("/api/admin/settings", new { compoundFee = 25, investFee = 0, serviceTexts = new Dictionary<string, object> { ["compound"] = new { ar = "أضف كلمة لاسمك", en = "Add a word" } } });
+        await admin.Patch<JsonElement>("/api/admin/settings", new { compoundFee = 25, investFee = 0, serviceTexts = new Dictionary<string, object> { ["compound"] = new { ar = "أضف كلمة لاسمك", en = "Add a word", termsAr = "• الرسوم غير مستردة" } } });
         pub = await app.Anonymous().Get<JsonElement>("/api/settings");
         Assert.Equal(25, pub.GetProperty("compoundFee").GetDecimal());
         Assert.Equal(0, pub.GetProperty("investFee").GetDecimal());
         Assert.Equal("أضف كلمة لاسمك", pub.GetProperty("serviceTexts").GetProperty("compound").GetProperty("ar").GetString());
+        Assert.Equal("• الرسوم غير مستردة", pub.GetProperty("serviceTexts").GetProperty("compound").GetProperty("termsAr").GetString());
         var baseName = (await owner.Get<JsonElement>("/api/me/names")).EnumerateArray().First(n => n.GetProperty("source").GetString() != "compound");
         var comp = await owner.Post<JsonElement>("/api/me/requests/compound", new { reservedId = baseName.GetProperty("id").GetGuid(), fullName = baseName.GetProperty("name").GetString() + " الأول" });
         Assert.Equal("pending_payment", comp.GetProperty("status").GetString());

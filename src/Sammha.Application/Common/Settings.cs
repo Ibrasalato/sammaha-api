@@ -104,7 +104,8 @@ public static class ServiceKeys
 }
 
 /// <summary>the admin's own wording for a service card (empty = the built-in text)</summary>
-public record ServiceText(string? Ar, string? En);
+/// <summary>the admin's own wording for a service card and its terms (empty = the built-in text)</summary>
+public record ServiceText(string? Ar, string? En, string? TermsAr = null, string? TermsEn = null);
 
 public static class ServiceTexts
 {
