@@ -1311,3 +1311,124 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    ALTER TABLE [RefreshTokens] ADD [DelegationId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    CREATE TABLE [ActivityLogs] (
+        [Id] bigint NOT NULL IDENTITY,
+        [At] datetimeoffset NOT NULL,
+        [ActorId] uniqueidentifier NULL,
+        [ActorName] nvarchar(120) NOT NULL,
+        [ActorRole] nvarchar(20) NOT NULL,
+        [OnBehalfOfId] uniqueidentifier NULL,
+        [OnBehalfOfName] nvarchar(120) NULL,
+        [Action] nvarchar(80) NOT NULL,
+        [Category] nvarchar(20) NOT NULL,
+        [Details] nvarchar(500) NULL,
+        [Success] bit NOT NULL,
+        [Error] nvarchar(300) NULL,
+        [Ip] nvarchar(64) NULL,
+        [UserAgent] nvarchar(200) NULL,
+        CONSTRAINT [PK_ActivityLogs] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    CREATE TABLE [Delegations] (
+        [Id] uniqueidentifier NOT NULL,
+        [OwnerId] uniqueidentifier NOT NULL,
+        [DelegateUserId] uniqueidentifier NULL,
+        [FullName] nvarchar(120) NOT NULL,
+        [NationalId] nvarchar(20) NOT NULL,
+        [Phone] nvarchar(16) NOT NULL,
+        [Email] nvarchar(160) NOT NULL,
+        [Capacity] nvarchar(20) NOT NULL,
+        [CapacityNote] nvarchar(100) NULL,
+        [Scopes] nvarchar(200) NOT NULL,
+        [Permanent] bit NOT NULL,
+        [StartsAt] datetimeoffset NOT NULL,
+        [EndsAt] datetimeoffset NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        [RevokedAt] datetimeoffset NULL,
+        [RevokedBy] nvarchar(120) NULL,
+        [LastUsedAt] datetimeoffset NULL,
+        CONSTRAINT [PK_Delegations] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_Delegations_Users_OwnerId] FOREIGN KEY ([OwnerId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    CREATE INDEX [IX_ActivityLogs_ActorId] ON [ActivityLogs] ([ActorId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    CREATE INDEX [IX_ActivityLogs_At] ON [ActivityLogs] ([At]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    CREATE INDEX [IX_ActivityLogs_Category_At] ON [ActivityLogs] ([Category], [At]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    CREATE INDEX [IX_Delegations_DelegateUserId] ON [Delegations] ([DelegateUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    CREATE INDEX [IX_Delegations_NationalId_Phone] ON [Delegations] ([NationalId], [Phone]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    CREATE INDEX [IX_Delegations_OwnerId] ON [Delegations] ([OwnerId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014084537_ActivityAndDelegation'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014084537_ActivityAndDelegation', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
