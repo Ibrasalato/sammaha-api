@@ -18,6 +18,10 @@ public class AdminController(ISender mediator) : ControllerBase
     [HttpGet("requests")]
     public Task<List<RequestDto>> Requests([FromQuery] string? status, CancellationToken ct) => mediator.Send(new ListRequestsQuery(status), ct);
 
+    /// <summary>audit of requested names: matches with or without «ال», singular or plural, and the highest price of a similar name</summary>
+    [HttpGet("requests/audit")]
+    public Task<List<AuditRowDto>> Audit([FromQuery] string? status, [FromQuery] string? type, CancellationToken ct) => mediator.Send(new RequestsAuditQuery(status, type), ct);
+
     [HttpPost("requests/{id:guid}/review")]
     public Task<RequestDto> Review(Guid id, ReviewBody b, CancellationToken ct) => mediator.Send(new ReviewRequestCommand(id, b.Decisions, b.Note), ct);
 

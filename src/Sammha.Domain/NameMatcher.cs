@@ -5,6 +5,10 @@ namespace Sammha.Domain;
 
 public record SimilarHit(string Name, string Type, string Source, double Score);
 public record MatchSource(string Name, string Normalized, string Type, string Source);
+public static class MatchRelations
+{
+    public const string Exact = "exact", Article = "article", Gender = "gender", Plural = "plural", Singular = "singular", Similar = "similar";
+}
 public record NameCheck(string Name, string Normalized, string Verdict, string Message, List<SimilarHit> Hits);
 
 /// <summary>Arabic name normalisation and similarity. Same rules as the front end's names.ts.</summary>
@@ -63,12 +67,45 @@ public static partial class NameMatcher
         return score;
     }
 
+    /// <summary>
+    /// the root-letter forms of a normalised name: long vowels (ا، و، ي) removed, with and without a sound-plural ending
+    /// (ات، ون، ين، ان) or a final ه, so singular and plural meet: صقر/صقور، نجم/نجوم، غزال/غزلان، شاهين/شواهين، غزاله/غزالات
+    /// </summary>
+    public static HashSet<string> Skeletons(string normalized)
+    {
+        static string Core(string x) => new(x.Where((c, i) => i == 0 || (c != 'ا' && c != 'و' && c != 'ي')).ToArray());
+        var forms = new List<string> { normalized };
+        foreach (var end in new[] { "ات", "ون", "ين", "ان" })
+            if (normalized.Length >= 5 && normalized.EndsWith(end)) forms.Add(normalized[..^2]);
+        if (normalized.Length >= 4 && normalized.EndsWith('ه')) forms.Add(normalized[..^1]);
+        return forms.Select(Core).Where(c => c.Length >= 3).ToHashSet();
+    }
+
+    /// <summary>a likely singular/plural pair: same root letters, different spelling</summary>
+    public static bool SameForms(string a, string b) => a != b && a.Length >= 3 && b.Length >= 3 && Skeletons(a).Overlaps(Skeletons(b));
+
+    /// <summary>how a candidate relates to an existing name: exact, with or without «ال», masculine/feminine, plural, singular, or similar</summary>
+    public static string Relation(string candidate, string other)
+    {
+        string na = Normalize(candidate), nb = Normalize(other);
+        if (na == nb)
+        {
+            static string Bare(string x) { var t = Marks().Replace((x ?? "").Trim(), "").Replace(" ", ""); return t.StartsWith("ال") ? "~" + t[2..] : t; }
+            return Bare(candidate).StartsWith('~') != Bare(other).StartsWith('~') ? MatchRelations.Article : MatchRelations.Exact;
+        }
+        if (na + "ه" == nb || nb + "ه" == na) return MatchRelations.Gender; // فاخر / فاخرة
+        if (SameForms(na, nb)) return na.Length > nb.Length ? MatchRelations.Plural : MatchRelations.Singular;
+        return MatchRelations.Similar;
+    }
+
     public static List<SimilarHit> FindMatches(string normalized, IEnumerable<MatchSource> pool, double threshold)
     {
         var hits = new List<SimilarHit>();
         foreach (var p in pool)
         {
             var score = Similarity(normalized, p.Normalized);
+            // a singular or plural of an existing name is always shown to the committee
+            if (score < threshold && SameForms(normalized, p.Normalized)) score = 0.9;
             if (score >= threshold) hits.Add(new SimilarHit(p.Name, p.Type, p.Source, Math.Round(score, 2)));
         }
         return hits.OrderByDescending(h => h.Score).Take(8).ToList();
