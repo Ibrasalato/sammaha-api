@@ -158,6 +158,10 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         if (name.Length < 6) throw new DomainException("اكتب الاسم الرباعي");
         var nid = nationalId?.Trim();
         if (!string.IsNullOrEmpty(nid) && !NationalIdRx().IsMatch(nid)) throw new DomainException("رقم الهوية أو الإقامة 10 أرقام يبدأ بـ 1 أو 2");
+        // the ID signs the owner in and the four-part name comes from sign-up: once set, corrections go through support
+        if (u.NationalId != null && nid != u.NationalId) throw new DomainException("رقم الهوية لا يُعدّل بعد التسجيل، تواصل مع الدعم لتصحيحه");
+        if (u.FirstName != null && name != u.FullName) throw new DomainException("الاسم مأخوذ من بيانات التسجيل، تواصل مع الدعم لتصحيحه");
+        if (nid != null && nid != u.NationalId && await db.Users.AnyAsync(x => x.NationalId == nid && x.Id != u.Id, ct)) throw new DomainException("رقم الهوية مسجل لحساب آخر");
         if (name != u.FullName)
             await db.ReservedNames.Where(r => r.OwnerId == u.Id).ExecuteUpdateAsync(s => s.SetProperty(r => r.OwnerName, name), ct);
         u.FullName = name;

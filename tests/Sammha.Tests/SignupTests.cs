@@ -81,6 +81,18 @@ public class SignupTests(TestApp app) : IClassFixture<TestApp>
     }
 
     [Fact]
+    public async Task Identity_and_name_are_fixed_after_sign_up()
+    {
+        await app.Anonymous().Post<JsonElement>("/api/auth/signup", Owner(id: "2111111122", phone: "512340004", email: "fixed@example.com"));
+        var api = await app.SignInAsync("2111111122", "Owner#2026");
+        var me = await api.Get<JsonElement>("/api/auth/me");
+        var name = me.GetProperty("fullName").GetString();
+        Assert.Contains("الدعم", await api.Fails(() => api.Put<JsonElement>("/api/me/account", new { fullName = name, nationalId = "" })));
+        Assert.Contains("الدعم", await api.Fails(() => api.Put<JsonElement>("/api/me/account", new { fullName = "اسم آخر مختلف تمامًا", nationalId = "2111111122" })));
+        await api.Put<JsonElement>("/api/me/account", new { fullName = name, nationalId = "2111111122" }); // unchanged is fine
+    }
+
+    [Fact]
     public async Task Older_accounts_fill_in_their_personal_details()
     {
         var owner = await app.SignInAsync("0500000005"); // seeded before the new fields
