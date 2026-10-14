@@ -265,9 +265,9 @@ public class FinanceHandlers(IAppDbContext db, Access access, Money money, Notif
         var me = await access.RequireAsync(Permissions.WalletsRefund, ct);
         var reference = Clip(c.TransferRef, 60);
         if (reference.Length < 3) throw new DomainException("اكتب رقم الحوالة البنكية");
-        var w = await db.Withdrawals.FirstOrDefaultAsync(x => x.Id == c.Id, ct) ?? throw DomainException.NotFound("طلب الاسترداد غير موجود");
-        await using var uow = await db.BeginAsync([$"u:{w.UserId}"], ct);
-        await db.Entry(w).ReloadAsync(ct);
+        var owner0 = await db.Withdrawals.AsNoTracking().Where(x => x.Id == c.Id).Select(x => (Guid?)x.UserId).FirstOrDefaultAsync(ct) ?? throw DomainException.NotFound("طلب الاسترداد غير موجود");
+        await using var uow = await db.BeginAsync([$"u:{owner0}"], ct);
+        var w = await db.Withdrawals.FirstAsync(x => x.Id == c.Id, ct);
         if (w.Status != WithdrawalStatuses.Pending) throw new DomainException("تمت معالجة هذا الطلب");
         w.Status = WithdrawalStatuses.Completed; w.TransferRef = reference; w.ProcessedAt = Now; w.ProcessedBy = me.FullName;
         var owner = await db.Users.FirstAsync(u => u.Id == w.UserId, ct);
@@ -283,9 +283,9 @@ public class FinanceHandlers(IAppDbContext db, Access access, Money money, Notif
         var me = await access.RequireAsync(Permissions.WalletsRefund, ct);
         var reason = Clip(c.Reason, 300);
         if (reason.Length < 3) throw new DomainException("اكتب سبب الرفض، يصل للمالك");
-        var w = await db.Withdrawals.FirstOrDefaultAsync(x => x.Id == c.Id, ct) ?? throw DomainException.NotFound("طلب الاسترداد غير موجود");
-        await using var uow = await db.BeginAsync([$"u:{w.UserId}"], ct);
-        await db.Entry(w).ReloadAsync(ct);
+        var owner0 = await db.Withdrawals.AsNoTracking().Where(x => x.Id == c.Id).Select(x => (Guid?)x.UserId).FirstOrDefaultAsync(ct) ?? throw DomainException.NotFound("طلب الاسترداد غير موجود");
+        await using var uow = await db.BeginAsync([$"u:{owner0}"], ct);
+        var w = await db.Withdrawals.FirstAsync(x => x.Id == c.Id, ct);
         if (w.Status != WithdrawalStatuses.Pending) throw new DomainException("تمت معالجة هذا الطلب");
         w.Status = WithdrawalStatuses.Rejected; w.Note = reason; w.ProcessedAt = Now; w.ProcessedBy = me.FullName;
         // the amount goes back to the wallet
