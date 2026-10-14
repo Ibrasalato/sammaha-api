@@ -30,14 +30,12 @@ public class HyperPayController(ISender mediator, HyperPayGateway hyperPay, ICon
         var result = $"{api}/api/payments/hyperpay/return?pid={id}";
         var (ar, _) = Purposes.GetValueOrDefault(f.Purpose, ("دفع", "Payment"));
         var integrity = string.IsNullOrEmpty(f.Integrity) ? "" : $" integrity=\"{WebUtility.HtmlEncode(f.Integrity)}\" crossorigin=\"anonymous\"";
-        var body = $"""
-            <p class="amount">{f.Amount:#,0.##} ريال سعودي</p>
-            <p class="what">{WebUtility.HtmlEncode(ar)} — منصة سمّها</p>
-            <script>var wpwlOptions = {{ locale: "ar", style: "card", brandDetection: true, paymentTarget: "_top", applePay: {{ displayName: "Sammha", total: {{ label: "SAMMHA" }} }} }};</script>
-            <script src="{WebUtility.HtmlEncode(hyperPay.WidgetScript(f.CheckoutId))}"{integrity}></script>
-            <form action="{WebUtility.HtmlEncode(result)}" class="paymentWidgets" data-brands="{HyperPayGateway.BrandsFor(f.Method)}"></form>
-            {(f.CallbackUrl is { } back && Allowed(back) ? $"<a class=\"back\" href=\"{WebUtility.HtmlEncode(back)}\">رجوع إلى المنصة دون دفع</a>" : "")}
-            """;
+        var back = f.CallbackUrl is { } cb && Allowed(cb) ? $"<a class=\"back\" href=\"{WebUtility.HtmlEncode(cb)}\">رجوع إلى المنصة دون دفع</a>" : "";
+        var body =
+            $"<p class=\"amount\">{f.Amount:#,0.##} ريال سعودي</p><p class=\"what\">{WebUtility.HtmlEncode(ar)} — منصة سمّها</p>" +
+            "<script>var wpwlOptions = { locale: \"ar\", style: \"card\", brandDetection: true, paymentTarget: \"_top\", applePay: { displayName: \"Sammha\", total: { label: \"SAMMHA\" } } };</script>" +
+            $"<script src=\"{WebUtility.HtmlEncode(hyperPay.WidgetScript(f.CheckoutId))}\"{integrity}></script>" +
+            $"<form action=\"{WebUtility.HtmlEncode(result)}\" class=\"paymentWidgets\" data-brands=\"{HyperPayGateway.BrandsFor(f.Method)}\"></form>" + back;
         return Content(Page("الدفع الإلكتروني", body), "text/html; charset=utf-8");
     }
 
