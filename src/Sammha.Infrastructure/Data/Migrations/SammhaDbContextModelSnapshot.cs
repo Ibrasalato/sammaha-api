@@ -435,6 +435,21 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<Guid?>("AuctionId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("ExceptedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ExceptedBy")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<decimal?>("ExceptionFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("ExceptionReason")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(400)

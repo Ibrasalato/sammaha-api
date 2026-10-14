@@ -1537,3 +1537,48 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014120048_NameExceptions'
+)
+BEGIN
+    ALTER TABLE [Candidates] ADD [ExceptedAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014120048_NameExceptions'
+)
+BEGIN
+    ALTER TABLE [Candidates] ADD [ExceptedBy] nvarchar(400) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014120048_NameExceptions'
+)
+BEGIN
+    ALTER TABLE [Candidates] ADD [ExceptionFee] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014120048_NameExceptions'
+)
+BEGIN
+    ALTER TABLE [Candidates] ADD [ExceptionReason] nvarchar(400) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014120048_NameExceptions'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014120048_NameExceptions', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
