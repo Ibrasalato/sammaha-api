@@ -9,7 +9,8 @@ namespace Sammha.Application.Engine;
 /// Periodic work (run every few seconds by a hosted service): settle ended auctions, run proxy bids,
 /// watchlist reminders, close expired fixed-price listings, open scheduled resale listings.
 /// </summary>
-public class Sweeper(IAppDbContext db, TimeProvider clock, AuctionEngine engine, Notifier notifier, IAuctionRealtime realtime, IPostCommit postCommit, ILogger<Sweeper> log)
+public class Sweeper(IAppDbContext db, TimeProvider clock, AuctionEngine engine, Notifier notifier, IAuctionRealtime realtime, IPostCommit postCommit, ILogger<Sweeper> log,
+    Features.Finance.PayoutEngine payouts)
 {
     private DateTimeOffset Now => clock.GetUtcNow();
 
@@ -20,6 +21,7 @@ public class Sweeper(IAppDbContext db, TimeProvider clock, AuctionEngine engine,
         await RemindersAsync(ct);
         await ListingsAsync(ct);
         await ForfeitOverdueAsync(ct);
+        await payouts.PollAsync(ct);
     }
 
     /// <summary>auction wins not paid by their deadline: cancelled, guarantee forfeited, the name passes to the organization</summary>

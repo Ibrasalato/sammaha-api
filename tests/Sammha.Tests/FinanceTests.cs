@@ -54,8 +54,16 @@ public class FinanceTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal("completed", done.GetProperty("status").GetString());
         Assert.Contains("تمت معالجة", await admin.Fails(() => admin.Post<JsonElement>($"/api/admin/withdrawals/{w.GetProperty("id").GetString()}/complete", new { transferRef = "TRX-1" })));
 
+        // direct payout: approving sends the money straight to the IBAN (simulated gateway in tests)
+        Assert.True((await admin.Get<JsonElement>("/api/admin/payouts")).GetProperty("enabled").GetBoolean());
+        w = await owner.Post<JsonElement>("/api/me/withdrawals", new { amount = 25 });
+        var paid = await admin.Post<JsonElement>($"/api/admin/withdrawals/{w.GetProperty("id").GetString()}/payout");
+        Assert.Equal("completed", paid.GetProperty("status").GetString());
+        Assert.StartsWith("SIM-", paid.GetProperty("transferRef").GetString());
+        Assert.Contains("تمت معالجة", await admin.Fails(() => admin.Post<JsonElement>($"/api/admin/withdrawals/{w.GetProperty("id").GetString()}/payout")));
+
         var wallets = (await admin.Get<JsonElement>("/api/admin/wallets")).EnumerateArray().ToList();
-        Assert.Contains(wallets, x => x.GetProperty("userId").GetString() == uid && x.GetProperty("balance").GetDecimal() == before - 150);
+        Assert.Contains(wallets, x => x.GetProperty("userId").GetString() == uid && x.GetProperty("balance").GetDecimal() == before - 175);
 
         // adjustment with a reason; a debit cannot go below zero
         await admin.Post<JsonElement>($"/api/admin/wallets/{uid}/adjust", new { amount = 25, reason = "تعويض عن خطأ في الفاتورة" });

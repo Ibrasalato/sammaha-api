@@ -98,6 +98,21 @@ public interface IPaymentGateway
     Task<(string ProviderId, string Url)> CreateCheckoutAsync(Payment payment, string description, string callbackUrl, CancellationToken ct);
 }
 
+/// <summary>completed (money sent), processing (the bank has it, check again later) or failed</summary>
+public record PayoutResult(string State, string? Reference, string? Error)
+{
+    public const string Completed = "completed", Processing = "processing", Failed = "failed";
+}
+
+/// <summary>sends a wallet refund straight to the owner's IBAN (HyperPay payouts); disabled = finance transfers by hand and enters the reference</summary>
+public interface IPayoutGateway
+{
+    string Name { get; }
+    bool Enabled { get; }
+    Task<PayoutResult> SendAsync(Withdrawal w, CancellationToken ct);
+    Task<PayoutResult> StatusAsync(Withdrawal w, CancellationToken ct);
+}
+
 public record AccessToken(string Token, DateTimeOffset ExpiresAt);
 
 /// <summary>Signs certificate content so a printed code and its QR can be checked against the registry.</summary>

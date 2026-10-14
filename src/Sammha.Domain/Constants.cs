@@ -52,7 +52,7 @@ public static class TxKinds
 
 public static class WithdrawalStatuses
 {
-    public const string Pending = "pending", Completed = "completed", Rejected = "rejected";
+    public const string Pending = "pending", Processing = "processing", Completed = "completed", Rejected = "rejected";
 }
 
 public static class InvoiceStatuses

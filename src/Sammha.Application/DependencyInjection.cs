@@ -26,6 +26,7 @@ public static class DependencyInjection
         s.AddScoped<Money>();
         s.AddScoped<AuctionEngine>();
         s.AddScoped<Sweeper>();
+        s.AddScoped<Features.Finance.PayoutEngine>();
 
         // CQRS: every command and query goes through MediatR
         s.AddMediatR(m =>

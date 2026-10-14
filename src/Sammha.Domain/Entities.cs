@@ -331,6 +331,11 @@ public class Withdrawal
     public string? ProcessedBy { get; set; }
     public string? TransferRef { get; set; }
     public string? Note { get; set; }
+    /// <summary>automatic transfer through the payout gateway: which gateway, its reference, when it was sent, the last error</summary>
+    public string? PayoutProvider { get; set; }
+    public string? PayoutRef { get; set; }
+    public DateTimeOffset? PayoutSentAt { get; set; }
+    public string? PayoutError { get; set; }
 }
 
 public class WalletTx

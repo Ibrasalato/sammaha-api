@@ -26,6 +26,10 @@ public static class DependencyInjection
         s.AddHttpClient<IPaymentGateway, MoyasarGateway>(c => c.Timeout = TimeSpan.FromSeconds(20));
         s.AddSingleton<ISmsSender, WebhookSmsSender>();
         s.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
+        // wallet refunds straight to the owner's IBAN; simulated with simulated card payments, otherwise manual until the HyperPay payout API is connected
+        s.Configure<PayoutOptions>(cfg.GetSection("Payouts"));
+        if (cfg.GetValue("Payments:Simulate", true)) s.AddSingleton<IPayoutGateway, SimulatedPayoutGateway>();
+        else s.AddSingleton<IPayoutGateway, ManualPayoutGateway>();
         s.AddScoped<DbSeeder>();
         s.AddScoped<Legacy.LegacyImporter>();
         s.AddSingleton<IActivityWriter, Services.ActivityWriter>();

@@ -72,6 +72,14 @@ public class FinanceController(ISender mediator) : ControllerBase
     [HttpPost("withdrawals/{id:guid}/complete")]
     public Task<WithdrawalDto> Complete(Guid id, TransferBody b, CancellationToken ct) => mediator.Send(new CompleteWithdrawalCommand(id, b.TransferRef), ct);
 
+    /// <summary>is the direct payout gateway (HyperPay) configured?</summary>
+    [HttpGet("payouts")]
+    public Task<PayoutStatusDto> Payouts(CancellationToken ct) => mediator.Send(new GetPayoutStatusQuery(), ct);
+
+    /// <summary>approve a refund request and send the money to the owner's IBAN through the payout gateway</summary>
+    [HttpPost("withdrawals/{id:guid}/payout")]
+    public Task<WithdrawalDto> Payout(Guid id, CancellationToken ct) => mediator.Send(new PayoutWithdrawalCommand(id), ct);
+
     [HttpPost("withdrawals/{id:guid}/reject")]
     public Task<WithdrawalDto> RejectWithdrawal(Guid id, WithdrawalReasonBody b, CancellationToken ct) => mediator.Send(new RejectWithdrawalCommand(id, b.Reason), ct);
 

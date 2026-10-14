@@ -16,7 +16,8 @@ public record DocumentDto(string Name, string ContentType, string Base64);
 public record StaffBankAccountDto(Guid UserId, string OwnerName, string? Phone, BankAccountDto Account);
 
 public record WithdrawalDto(Guid Id, string Number, Guid UserId, string OwnerName, decimal Amount, string Iban, string BankName, string AccountName,
-    string Status, bool ByStaff, DateTimeOffset CreatedAt, DateTimeOffset? ProcessedAt, string? ProcessedBy, string? TransferRef, string? Note);
+    string Status, bool ByStaff, DateTimeOffset CreatedAt, DateTimeOffset? ProcessedAt, string? ProcessedBy, string? TransferRef, string? Note,
+    string? PayoutProvider = null, DateTimeOffset? PayoutSentAt = null, string? PayoutError = null);
 
 public record WalletRowDto(Guid UserId, string OwnerName, string? Phone, decimal Balance, decimal TotalIn, decimal TotalOut, decimal PendingWithdrawals,
     int TxCount, DateTimeOffset? LastTxAt, string? BankStatus, string? BankName);
@@ -70,7 +71,8 @@ public class FinanceHandlers(IAppDbContext db, Access access, Money money, Notif
         new(full ? b.Iban : Iban.Mask(b.Iban), Iban.Mask(b.Iban), b.BankName, b.AccountName, b.DocName, b.DocType, b.Status, b.RejectReason, b.UpdatedAt, b.ReviewedAt, b.ReviewedBy);
 
     private static WithdrawalDto Dto(Withdrawal w, string owner, bool full) =>
-        new(w.Id, w.Number, w.UserId, owner, w.Amount, full ? w.Iban : Iban.Mask(w.Iban), w.BankName, w.AccountName, w.Status, w.ByStaff, w.CreatedAt, w.ProcessedAt, w.ProcessedBy, w.TransferRef, w.Note);
+        new(w.Id, w.Number, w.UserId, owner, w.Amount, full ? w.Iban : Iban.Mask(w.Iban), w.BankName, w.AccountName, w.Status, w.ByStaff, w.CreatedAt, w.ProcessedAt, w.ProcessedBy, w.TransferRef, w.Note,
+            w.PayoutProvider, w.PayoutSentAt, full ? w.PayoutError : null);
 
     private void Log(User by, string field, string oldValue, string newValue) =>
         db.SettingsChanges.Add(new SettingsChange { At = Now, UserId = by.Id, UserName = by.FullName, Field = field, OldValue = Clip(oldValue, 400), NewValue = Clip(newValue, 400) });
@@ -153,7 +155,7 @@ public class FinanceHandlers(IAppDbContext db, Access access, Money money, Notif
         var b = await db.BankAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == u.Id, ct);
         if (b == null) throw new DomainException("أضف حسابك البنكي وشهادة الآيبان أولًا");
         if (b.Status != BankAccountStatuses.Verified) throw new DomainException("حسابك البنكي بانتظار اعتماد الإدارة المالية");
-        if (await db.Withdrawals.CountAsync(w => w.UserId == u.Id && w.Status == WithdrawalStatuses.Pending, ct) >= 3) throw new DomainException("لديك 3 طلبات استرداد قيد التنفيذ");
+        if (await db.Withdrawals.CountAsync(w => w.UserId == u.Id && (w.Status == WithdrawalStatuses.Pending || w.Status == WithdrawalStatuses.Processing), ct) >= 3) throw new DomainException("لديك 3 طلبات استرداد قيد التنفيذ");
         var w = new Withdrawal
         {
             Number = $"WD-{await db.NextNumberAsync("WithdrawalNo", ct)}", UserId = u.Id, Amount = amount, Iban = b.Iban, BankName = b.BankName,
@@ -222,7 +224,7 @@ public class FinanceHandlers(IAppDbContext db, Access access, Money money, Notif
         }).ToListAsync(ct);
         var ids = sums.Select(s => s.UserId).ToList();
         var users = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id) && u.Role == Roles.Owner).ToDictionaryAsync(u => u.Id, ct);
-        var pending = await db.Withdrawals.AsNoTracking().Where(w => w.Status == WithdrawalStatuses.Pending && ids.Contains(w.UserId))
+        var pending = await db.Withdrawals.AsNoTracking().Where(w => (w.Status == WithdrawalStatuses.Pending || w.Status == WithdrawalStatuses.Processing) && ids.Contains(w.UserId))
             .GroupBy(w => w.UserId).Select(g => new { g.Key, Sum = g.Sum(w => w.Amount) }).ToDictionaryAsync(x => x.Key, x => x.Sum, ct);
         var banks = await db.BankAccounts.AsNoTracking().Where(b => ids.Contains(b.UserId)).Select(b => new { b.UserId, b.Status, b.BankName }).ToDictionaryAsync(b => b.UserId, ct);
         return sums.Where(s => users.ContainsKey(s.UserId)).Select(s =>
