@@ -82,6 +82,13 @@ public class PlatformSettings
     public string? TransferClosedNote { get; set; }
     /// <summary>services shown as «قريبًا» (coming soon, not yet accepting): comma-separated keys of ServiceKeys</summary>
     public string ComingSoon { get; set; } = "";
+    /// <summary>service prices set by the admin (null = the server default in PlatformOptions)</summary>
+    public decimal? InvestFee { get; set; }
+    public decimal? CompoundFee { get; set; }
+    public decimal? ResaleCommission { get; set; }
+    public decimal? InstantCommission { get; set; }
+    /// <summary>the admin's description of each e-service: JSON {key: {ar, en}}</summary>
+    public string ServiceTextsJson { get; set; } = "{}";
 
     // ───── general ─────
     public bool SignupOpen { get; set; } = true;

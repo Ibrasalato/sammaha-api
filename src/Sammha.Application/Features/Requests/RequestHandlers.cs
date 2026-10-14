@@ -86,12 +86,17 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
         var check = (await matching.CheckAsync([name], null, ct))[0];
         if (check.Verdict == "invalid") throw new DomainException(check.Message);
         if (check.Verdict == "exact") throw new DomainException($"«{name}» مسجل أو مطلوب مسبقًا");
-        if (await db.Requests.AnyAsync(r => r.Kind == RequestKinds.Compound && r.BaseReservedId == b.Id && r.Status == RequestStatuses.UnderReview, ct))
+        if (await db.Requests.AnyAsync(r => r.Kind == RequestKinds.Compound && r.BaseReservedId == b.Id && (r.Status == RequestStatuses.UnderReview || r.Status == RequestStatuses.PendingPayment), ct))
             throw new DomainException($"لديك طلب اسم مركب لـ«{b.Name}» تحت المراجعة");
         var hits = check.Hits.Where(h => NameMatcher.Normalize(h.Name) != b.Normalized).ToList();
-        var req = await NewRequestAsync(u, b.Type, RequestKinds.Compound, 0, [check with { Name = name, Hits = hits }], ct);
-        req.Status = RequestStatuses.UnderReview;
-        req.SubmittedAt = Now;
+        // a free compound request goes straight to the committee; with a fee it waits for the card payment
+        var fee = await settings.CompoundFeeAsync(ct);
+        var req = await NewRequestAsync(u, b.Type, RequestKinds.Compound, fee, [check with { Name = name, Hits = hits }], ct);
+        if (fee <= 0)
+        {
+            req.Status = RequestStatuses.UnderReview;
+            req.SubmittedAt = Now;
+        }
         req.BaseName = b.Name;
         req.BaseReservedId = b.Id;
         await db.SaveChangesAsync(ct);
@@ -113,7 +118,7 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
             if (c.Verdict == "duplicate") throw new DomainException($"«{c.Name.Trim()}» مكرر في الطلب");
             if (c.Verdict == "exact") throw new DomainException($"«{c.Name.Trim()}» مسجل أو مطلوب مسبقًا، اختر اسمًا جديدًا غير مكرر");
         }
-        var r = await NewRequestAsync(u, type, RequestKinds.Investment, R.InvestFee, checks, ct);
+        var r = await NewRequestAsync(u, type, RequestKinds.Investment, await settings.InvestFeeAsync(R.InvestFee, ct), checks, ct);
         await db.SaveChangesAsync(ct);
         return await map.RequestAsync(r, ct);
     }
@@ -153,11 +158,13 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
         var checks = await matching.CheckAsync(ordered.Select(c => c.Name).ToList(), r.Id, ct);
         var taken = checks.FirstOrDefault(c => c.Verdict == "exact");
         if (taken != null) throw new DomainException($"أصبح الاسم «{taken.Name}» محجوزًا، ألغِ الطلب وأنشئ طلبًا جديدًا");
-        var fee = r.Kind == RequestKinds.Investment;
-        // the guarantee may come from the wallet; the investment study fee only from the payment channels
-        if (fee) await money.DebitByCardAsync(u.Id, r.DepositAmount, PaymentPurposes.Deposit, r.Id, TxKinds.ServiceFee, $"رسوم دراسة طلب استثمار الاسم {r.Number}", ct);
+        var fee = r.Kind is RequestKinds.Investment or RequestKinds.Compound;
+        // the guarantee may come from the wallet; study and registration fees only from the payment channels
+        if (fee) await money.DebitByCardAsync(u.Id, r.DepositAmount, PaymentPurposes.Deposit, r.Id, TxKinds.ServiceFee,
+            r.Kind == RequestKinds.Compound ? $"رسوم تسجيل الاسم المركب {r.Number}" : $"رسوم دراسة طلب استثمار الاسم {r.Number}", ct);
         else await money.DebitAsync(u.Id, r.DepositAmount, TxKinds.Deposit, $"ضمان مزاد الطلب {r.Number}", r.Id, ct);
-        for (var i = 0; i < ordered.Count; i++) ordered[i].SimilarJson = Mapper.HitsJson(checks[i].Hits);
+        // a compound name keeps the matches it was filed with (its own base name is not a conflict)
+        if (r.Kind != RequestKinds.Compound) for (var i = 0; i < ordered.Count; i++) ordered[i].SimilarJson = Mapper.HitsJson(checks[i].Hits);
         r.Status = RequestStatuses.UnderReview;
         r.DepositPaid = true;
         r.DepositState = fee ? DepositStates.Fee : DepositStates.Held;

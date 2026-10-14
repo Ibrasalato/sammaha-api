@@ -188,6 +188,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.Property(x => x.TransferClosedNote).HasMaxLength(300);
             e.Property(x => x.TransferOpen).HasDefaultValue(true);
             e.Property(x => x.ComingSoon).HasMaxLength(120).HasDefaultValue("");
+            e.Property(x => x.ServiceTextsJson).HasColumnType("nvarchar(max)").HasDefaultValue("{}");
             e.Property(x => x.SupportEmail).HasMaxLength(160);
             e.Property(x => x.SupportPhone).HasMaxLength(30);
             e.Property(x => x.WhatsApp).HasMaxLength(30);

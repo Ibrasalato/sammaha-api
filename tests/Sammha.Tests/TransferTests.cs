@@ -80,5 +80,21 @@ public class TransferTests(TestApp app) : IClassFixture<TestApp>
         await admin.Patch<JsonElement>("/api/admin/settings", new { comingSoon = Array.Empty<string>(), transferOpen = false, transferClosedNote = "صيانة" });
         Assert.Contains("صيانة", await owner.Fails(() => owner.Post<JsonElement>("/api/me/transfers", body)));
         await admin.Patch<JsonElement>("/api/admin/settings", new { transferOpen = true });
+
+        // the admin prices each service and writes its description
+        Assert.Contains("50%", await admin.Fails(() => admin.Patch<JsonElement>("/api/admin/settings", new { resaleCommission = 0.9 })));
+        await admin.Patch<JsonElement>("/api/admin/settings", new { compoundFee = 25, investFee = 0, serviceTexts = new Dictionary<string, object> { ["compound"] = new { ar = "أضف كلمة لاسمك", en = "Add a word" } } });
+        pub = await app.Anonymous().Get<JsonElement>("/api/settings");
+        Assert.Equal(25, pub.GetProperty("compoundFee").GetDecimal());
+        Assert.Equal(0, pub.GetProperty("investFee").GetDecimal());
+        Assert.Equal("أضف كلمة لاسمك", pub.GetProperty("serviceTexts").GetProperty("compound").GetProperty("ar").GetString());
+        var baseName = (await owner.Get<JsonElement>("/api/me/names")).EnumerateArray().First(n => n.GetProperty("source").GetString() != "compound");
+        var comp = await owner.Post<JsonElement>("/api/me/requests/compound", new { reservedId = baseName.GetProperty("id").GetGuid(), fullName = baseName.GetProperty("name").GetString() + " الأول" });
+        Assert.Equal("pending_payment", comp.GetProperty("status").GetString());
+        Assert.Equal(25, comp.GetProperty("depositAmount").GetDecimal());
+        var cid = comp.GetProperty("id").GetString();
+        Assert.Contains("قنوات الدفع", await owner.Fails(() => owner.Post<JsonElement>($"/api/me/requests/{cid}/pay")));
+        Assert.Equal("under_review", (await owner.PayByCard("deposit", cid, $"/api/me/requests/{cid}/pay")).GetProperty("status").GetString());
+        await admin.Patch<JsonElement>("/api/admin/settings", new { compoundFee = 0 });
     }
 }

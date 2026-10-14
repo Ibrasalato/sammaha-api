@@ -39,7 +39,7 @@ public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access
         var l = new NameListing
         {
             Number = $"SL-{no}", ReservedId = r.Id, Name = r.Name, Type = r.Type, SellerId = u.Id, Mode = mode, Price = p,
-            CommissionRate = auction ? R.ResaleCommission : R.InstantCommission, Status = auction ? ListingStatuses.Scheduled : ListingStatuses.Live,
+            CommissionRate = auction ? await settings.ResaleCommissionAsync(R.ResaleCommission, ct) : await settings.InstantCommissionAsync(R.InstantCommission, ct), Status = auction ? ListingStatuses.Scheduled : ListingStatuses.Live,
             CreatedAt = Now, StartsAt = starts, EndsAt = ends,
         };
         db.Listings.Add(l);

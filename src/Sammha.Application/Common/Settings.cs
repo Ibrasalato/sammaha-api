@@ -23,6 +23,10 @@ public class SettingsStore(IAppDbContext db, TimeProvider clock, SettingsCache c
 
     /// <summary>hours an auction winner has to pay before the win is cancelled</summary>
     public async Task<decimal> TransferFeeAsync(CancellationToken ct = default) => (await GetAsync(ct)).TransferFee ?? 0;
+    public async Task<decimal> InvestFeeAsync(decimal fallback, CancellationToken ct = default) => (await GetAsync(ct)).InvestFee ?? fallback;
+    public async Task<decimal> CompoundFeeAsync(CancellationToken ct = default) => (await GetAsync(ct)).CompoundFee ?? 0;
+    public async Task<decimal> ResaleCommissionAsync(decimal fallback, CancellationToken ct = default) => (await GetAsync(ct)).ResaleCommission ?? fallback;
+    public async Task<decimal> InstantCommissionAsync(decimal fallback, CancellationToken ct = default) => (await GetAsync(ct)).InstantCommission ?? fallback;
 
     public async Task<int> PaymentDeadlineHoursAsync(CancellationToken ct = default) => (await GetAsync(ct)).PaymentDeadlineHours ?? 72;
 
@@ -97,4 +101,18 @@ public static class ServiceKeys
     public const string Requests = "requests", Compound = "compound", Resale = "resale", Instant = "instant", Investment = "investment", Transfer = "transfer";
     public static readonly string[] All = [Requests, Compound, Resale, Instant, Investment, Transfer];
     public static List<string> Parse(string? csv) => (csv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(All.Contains).Distinct().ToList();
+}
+
+/// <summary>the admin's own wording for a service card (empty = the built-in text)</summary>
+public record ServiceText(string? Ar, string? En);
+
+public static class ServiceTexts
+{
+    private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web)
+    { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All) };
+    public static Dictionary<string, ServiceText> Parse(string? json)
+    {
+        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, ServiceText>>(json ?? "{}", Json) ?? []; } catch { return []; }
+    }
+    public static string Write(Dictionary<string, ServiceText> d) => System.Text.Json.JsonSerializer.Serialize(d, Json);
 }

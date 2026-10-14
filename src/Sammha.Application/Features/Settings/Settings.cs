@@ -16,7 +16,8 @@ public record PublicSettingsDto(
     bool SignupOpen, string SupportEmail, string SupportPhone, string WhatsApp,
     string? Announcement, string AnnouncementTone, bool Maintenance, string? MaintenanceNote,
     int PasswordMinLength, int StaffIdleMinutes, decimal DepositAmount = 0, int PaymentDeadlineHours = 72, decimal TransferFee = 0,
-    bool TransferOpen = true, string? TransferClosedNote = null, List<string>? ComingSoon = null);
+    bool TransferOpen = true, string? TransferClosedNote = null, List<string>? ComingSoon = null,
+    decimal InvestFee = 0, decimal CompoundFee = 0, decimal ResaleCommission = 0, decimal InstantCommission = 0, Dictionary<string, ServiceText>? ServiceTexts = null);
 
 public record AdminSettingsDto(
     bool RequestsOpen, string? RequestsClosedNote, bool CompoundOpen, string? CompoundClosedNote,
@@ -25,7 +26,8 @@ public record AdminSettingsDto(
     bool AnnouncementOn, string? Announcement, string AnnouncementTone, bool Maintenance, string? MaintenanceNote,
     int PasswordMinLength, int MaxLoginAttempts, int LockoutMinutes, int StaffIdleMinutes,
     DateTimeOffset UpdatedAt, string? UpdatedBy, RulesDto Rules, int PaymentDeadlineHours = 72, decimal TransferFee = 0,
-    bool TransferOpen = true, string? TransferClosedNote = null, List<string>? ComingSoon = null);
+    bool TransferOpen = true, string? TransferClosedNote = null, List<string>? ComingSoon = null,
+    decimal InvestFee = 0, decimal CompoundFee = 0, decimal ResaleCommission = 0, decimal InstantCommission = 0, Dictionary<string, ServiceText>? ServiceTexts = null);
 
 /// <summary>fees and rules from the server configuration (read-only in the dashboard)</summary>
 public record RulesDto(decimal DepositAmount, int NamesPerRequest, decimal OpeningPrice, decimal MinIncrement, int ExtendMinutes, decimal VatRate,
@@ -39,7 +41,8 @@ public record SettingsPatch(
     bool? SignupOpen = null, string? SupportEmail = null, string? SupportPhone = null, string? WhatsApp = null,
     bool? AnnouncementOn = null, string? Announcement = null, string? AnnouncementTone = null, bool? Maintenance = null, string? MaintenanceNote = null,
     int? PasswordMinLength = null, int? MaxLoginAttempts = null, int? LockoutMinutes = null, int? StaffIdleMinutes = null, decimal? DepositAmount = null, int? PaymentDeadlineHours = null, decimal? TransferFee = null,
-    bool? TransferOpen = null, string? TransferClosedNote = null, List<string>? ComingSoon = null);
+    bool? TransferOpen = null, string? TransferClosedNote = null, List<string>? ComingSoon = null,
+    decimal? InvestFee = null, decimal? CompoundFee = null, decimal? ResaleCommission = null, decimal? InstantCommission = null, Dictionary<string, ServiceText>? ServiceTexts = null);
 
 public record SettingsChangeDto(long Id, DateTimeOffset At, string UserName, string Field, string? OldValue, string? NewValue);
 
@@ -81,7 +84,8 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
         return new PublicSettingsDto(s.RequestsOpen, s.RequestsClosedNote, s.CompoundOpen, s.CompoundClosedNote, s.ResaleAuctionOpen, s.InstantSaleOpen,
             s.SaleClosedNote, s.InvestmentOpen, s.InvestmentClosedNote, s.SignupOpen, s.SupportEmail, s.SupportPhone, s.WhatsApp,
             s.AnnouncementOn ? s.Announcement : null, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote, s.PasswordMinLength, s.StaffIdleMinutes,
-            s.DepositAmount ?? rules.Value.DepositAmount, s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon));
+            s.DepositAmount ?? rules.Value.DepositAmount, s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon),
+            s.InvestFee ?? rules.Value.InvestFee, s.CompoundFee ?? 0, s.ResaleCommission ?? rules.Value.ResaleCommission, s.InstantCommission ?? rules.Value.InstantCommission, ServiceTexts.Parse(s.ServiceTextsJson));
     }
 
     private AdminSettingsDto Admin(PlatformSettings s)
@@ -92,7 +96,8 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
             s.AnnouncementOn, s.Announcement, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote,
             s.PasswordMinLength, s.MaxLoginAttempts, s.LockoutMinutes, s.StaffIdleMinutes, s.UpdatedAt, s.UpdatedBy,
             new RulesDto(s.DepositAmount ?? r.DepositAmount, r.NamesPerRequest, r.OpeningPrice, r.MinIncrement, r.ExtendMinutes, r.VatRate, r.InvestFee, r.InvestOwnerShare,
-                r.InvestMaxNames, r.ResaleNoticeHours, r.ResaleAuctionDays, r.ResaleCommission, r.ResaleBidDeposit, r.InstantSaleHours, r.InstantCommission), s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon));
+                r.InvestMaxNames, r.ResaleNoticeHours, r.ResaleAuctionDays, r.ResaleCommission, r.ResaleBidDeposit, r.InstantSaleHours, r.InstantCommission), s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon),
+            s.InvestFee ?? r.InvestFee, s.CompoundFee ?? 0, s.ResaleCommission ?? r.ResaleCommission, s.InstantCommission ?? r.InstantCommission, ServiceTexts.Parse(s.ServiceTextsJson));
     }
 
     public async Task<AdminSettingsDto> Handle(GetAdminSettingsQuery q, CancellationToken ct)
@@ -141,6 +146,10 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
         if (p.PaymentDeadlineHours != null) Range(p.PaymentDeadlineHours, 1, 720, "مهلة سداد قيمة الشعار بالساعات");
         if (p.DepositAmount is { } dep && (dep < 0 || dep > 1_000_000)) throw new DomainException("مبلغ الضمان بين 0 و1,000,000 ريال");
         if (p.TransferFee is { } tf && (tf < 0 || tf > 100_000)) throw new DomainException("رسوم نقل الملكية بين 0 و100,000 ريال");
+        if (p.InvestFee is { } ivf && (ivf < 0 || ivf > 100_000)) throw new DomainException("رسوم دراسة الاستثمار بين 0 و100,000 ريال");
+        if (p.CompoundFee is { } cf && (cf < 0 || cf > 100_000)) throw new DomainException("رسوم الاسم المركب بين 0 و100,000 ريال");
+        if (p.ResaleCommission is { } rc && (rc < 0 || rc > 0.5m)) throw new DomainException("عمولة مزاد إعادة البيع بين 0% و50%");
+        if (p.InstantCommission is { } ic && (ic < 0 || ic > 0.5m)) throw new DomainException("عمولة البيع الفوري بين 0% و50%");
 
         SetV("RequestsOpen", p.RequestsOpen, () => s.RequestsOpen, v => s.RequestsOpen = v);
         SetS("RequestsClosedNote", Note(p.RequestsClosedNote), () => s.RequestsClosedNote ?? "", v => s.RequestsClosedNote = v);
@@ -151,6 +160,21 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
         SetS("SaleClosedNote", Note(p.SaleClosedNote), () => s.SaleClosedNote ?? "", v => s.SaleClosedNote = v);
         SetV("InvestmentOpen", p.InvestmentOpen, () => s.InvestmentOpen, v => s.InvestmentOpen = v);
         SetS("InvestmentClosedNote", Note(p.InvestmentClosedNote), () => s.InvestmentClosedNote ?? "", v => s.InvestmentClosedNote = v);
+        SetV("InvestFee", p.InvestFee is { } a0 ? Math.Round(a0, 2) : null, () => s.InvestFee ?? rules.Value.InvestFee, v => s.InvestFee = v);
+        SetV("CompoundFee", p.CompoundFee is { } a1 ? Math.Round(a1, 2) : null, () => s.CompoundFee ?? 0, v => s.CompoundFee = v);
+        SetV("ResaleCommission", p.ResaleCommission is { } a2 ? Math.Round(a2, 4) : null, () => s.ResaleCommission ?? rules.Value.ResaleCommission, v => s.ResaleCommission = v);
+        SetV("InstantCommission", p.InstantCommission is { } a3 ? Math.Round(a3, 4) : null, () => s.InstantCommission ?? rules.Value.InstantCommission, v => s.InstantCommission = v);
+        if (p.ServiceTexts != null)
+        {
+            var texts = ServiceTexts.Parse(s.ServiceTextsJson);
+            foreach (var (k, t) in p.ServiceTexts)
+            {
+                if (!ServiceKeys.All.Contains(k)) throw new DomainException("خدمة غير معروفة");
+                var ar = Note(t.Ar, 300); var en = Note(t.En, 300);
+                if (string.IsNullOrEmpty(ar) && string.IsNullOrEmpty(en)) texts.Remove(k); else texts[k] = new ServiceText(ar, en);
+            }
+            SetS("ServiceTexts", ServiceTexts.Write(texts), () => s.ServiceTextsJson, v => s.ServiceTextsJson = v);
+        }
         SetV("TransferOpen", p.TransferOpen, () => s.TransferOpen, v => s.TransferOpen = v);
         SetS("TransferClosedNote", Note(p.TransferClosedNote), () => s.TransferClosedNote ?? "", v => s.TransferClosedNote = v);
         if (p.ComingSoon != null)
