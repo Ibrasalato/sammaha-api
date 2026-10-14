@@ -30,6 +30,12 @@ jobs:
         run: dotnet test Sammha.slnx -c Release --no-build --blame-hang-timeout 4m --logger "console;verbosity=normal" --logger GitHubActions
         env:
           SAMMHA_TEST_DB: "Server=localhost,1433;User Id=sa;Password=Sammha_dev_2026!;TrustServerCertificate=True"
+      - name: Report hung tests
+        if: failure()
+        run: |
+          for f in $(find . -name 'Sequence_*.xml'); do
+            echo "::error title=Tests running at hang::$(grep -o 'Name="[^"]*"' "$f" | tail -5 | tr '\n' ' ')"
+          done
       - name: Publish for IIS
         if: github.ref == 'refs/heads/main'
         run: dotnet publish src/Sammha.Api/Sammha.Api.csproj -c Release -o publish
