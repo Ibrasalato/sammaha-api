@@ -1432,3 +1432,81 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014094245_CertificatesAndLatinNames'
+)
+BEGIN
+    CREATE SEQUENCE [CertificateNo] AS int START WITH 1 INCREMENT BY 1 NO CYCLE;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014094245_CertificatesAndLatinNames'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [FullNameEn] nvarchar(120) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014094245_CertificatesAndLatinNames'
+)
+BEGIN
+    ALTER TABLE [ReservedNames] ADD [LatinName] nvarchar(80) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014094245_CertificatesAndLatinNames'
+)
+BEGIN
+    CREATE TABLE [Certificates] (
+        [Id] uniqueidentifier NOT NULL,
+        [Number] nvarchar(24) NOT NULL,
+        [OwnerId] uniqueidentifier NOT NULL,
+        [Scope] nvarchar(12) NOT NULL,
+        [OwnerNameAr] nvarchar(160) NOT NULL,
+        [OwnerNameEn] nvarchar(160) NOT NULL,
+        [NationalId] nvarchar(20) NULL,
+        [Nationality] nvarchar(4) NULL,
+        [ItemsJson] nvarchar(400) NOT NULL,
+        [ItemCount] int NOT NULL,
+        [IssuedAt] datetimeoffset NOT NULL,
+        [Signature] nvarchar(40) NOT NULL,
+        [RevokedAt] datetimeoffset NULL,
+        [RevokedBy] nvarchar(120) NULL,
+        [RevokeReason] nvarchar(300) NULL,
+        CONSTRAINT [PK_Certificates] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014094245_CertificatesAndLatinNames'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_Certificates_Number] ON [Certificates] ([Number]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014094245_CertificatesAndLatinNames'
+)
+BEGIN
+    CREATE INDEX [IX_Certificates_OwnerId] ON [Certificates] ([OwnerId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014094245_CertificatesAndLatinNames'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014094245_CertificatesAndLatinNames', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
