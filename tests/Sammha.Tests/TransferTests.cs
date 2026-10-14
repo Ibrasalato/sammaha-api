@@ -75,7 +75,7 @@ public class TransferTests(TestApp app) : IClassFixture<TestApp>
         Assert.Contains("خدمة غير معروفة", await admin.Fails(() => admin.Patch<JsonElement>("/api/admin/settings", new { comingSoon = new[] { "teleport" } })));
         await admin.Patch<JsonElement>("/api/admin/settings", new { comingSoon = new[] { "transfer", "investment" } });
         var pub = await app.Anonymous().Get<JsonElement>("/api/settings");
-        Assert.Equal(["investment", "transfer"], pub.GetProperty("comingSoon").EnumerateArray().Select(x => x.GetString()).ToArray());
+        Assert.Equal("investment,transfer", string.Join(",", pub.GetProperty("comingSoon").EnumerateArray().Select(x => x.GetString())));
         Assert.Contains("قريبًا", await owner.Fails(() => owner.Post<JsonElement>("/api/me/transfers", body)));
         await admin.Patch<JsonElement>("/api/admin/settings", new { comingSoon = Array.Empty<string>(), transferOpen = false, transferClosedNote = "صيانة" });
         Assert.Contains("صيانة", await owner.Fails(() => owner.Post<JsonElement>("/api/me/transfers", body)));
