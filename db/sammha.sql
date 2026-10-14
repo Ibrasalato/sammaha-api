@@ -1603,3 +1603,144 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    DECLARE @var3 nvarchar(max);
+    SELECT @var3 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[Candidates]') AND [c].[name] = N'ExceptedAt');
+    IF @var3 IS NOT NULL EXEC(N'ALTER TABLE [Candidates] DROP CONSTRAINT ' + @var3 + ';');
+    ALTER TABLE [Candidates] DROP COLUMN [ExceptedAt];
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    DECLARE @var4 nvarchar(max);
+    SELECT @var4 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[Candidates]') AND [c].[name] = N'ExceptedBy');
+    IF @var4 IS NOT NULL EXEC(N'ALTER TABLE [Candidates] DROP CONSTRAINT ' + @var4 + ';');
+    ALTER TABLE [Candidates] DROP COLUMN [ExceptedBy];
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    DECLARE @var5 nvarchar(max);
+    SELECT @var5 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[Candidates]') AND [c].[name] = N'ExceptionFee');
+    IF @var5 IS NOT NULL EXEC(N'ALTER TABLE [Candidates] DROP CONSTRAINT ' + @var5 + ';');
+    ALTER TABLE [Candidates] DROP COLUMN [ExceptionFee];
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    DECLARE @var6 nvarchar(max);
+    SELECT @var6 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[Candidates]') AND [c].[name] = N'ExceptionReason');
+    IF @var6 IS NOT NULL EXEC(N'ALTER TABLE [Candidates] DROP CONSTRAINT ' + @var6 + ';');
+    ALTER TABLE [Candidates] DROP COLUMN [ExceptionReason];
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    ALTER TABLE [ReservedNames] ADD [ForfeitedAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    ALTER TABLE [ReservedNames] ADD [ForfeitedDeposit] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    ALTER TABLE [ReservedNames] ADD [ForfeitedFromId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    ALTER TABLE [ReservedNames] ADD [ForfeitedFromName] nvarchar(400) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    ALTER TABLE [ReservedNames] ADD [ForfeitedPrice] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [PaymentDeadlineHours] int NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    ALTER TABLE [Invoices] ADD [CancelledAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    ALTER TABLE [Invoices] ADD [DueAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    ALTER TABLE [Auctions] ADD [IcoReservedId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014124513_AuctionGuaranteesIcoNames'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014124513_AuctionGuaranteesIcoNames', N'10.0.13');
+END;
+
+COMMIT;
+GO
+

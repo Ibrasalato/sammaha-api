@@ -148,6 +148,9 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
 
+                    b.Property<Guid?>("IcoReservedId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsInvestment")
                         .HasColumnType("bit");
 
@@ -435,21 +438,6 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<Guid?>("AuctionId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTimeOffset?>("ExceptedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("ExceptedBy")
-                        .HasMaxLength(400)
-                        .HasColumnType("nvarchar(400)");
-
-                    b.Property<decimal?>("ExceptionFee")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("decimal(12,2)");
-
-                    b.Property<string>("ExceptionReason")
-                        .HasMaxLength(400)
-                        .HasColumnType("nvarchar(400)");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(400)
@@ -658,9 +646,15 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<Guid?>("AuctionId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<decimal>("DepositApplied")
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
+
+                    b.Property<DateTimeOffset?>("DueAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<DateTimeOffset>("IssuedAt")
                         .HasColumnType("datetimeoffset");
@@ -1088,6 +1082,9 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<int>("PasswordMinLength")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PaymentDeadlineHours")
+                        .HasColumnType("int");
+
                     b.Property<string>("ReportEmails")
                         .IsRequired()
                         .HasMaxLength(400)
@@ -1227,6 +1224,24 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
+
+                    b.Property<DateTimeOffset?>("ForfeitedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal?>("ForfeitedDeposit")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<Guid?>("ForfeitedFromId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ForfeitedFromName")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<decimal?>("ForfeitedPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
 
                     b.Property<string>("LatinName")
                         .HasMaxLength(80)
