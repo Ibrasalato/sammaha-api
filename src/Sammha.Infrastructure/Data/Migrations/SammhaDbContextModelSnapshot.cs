@@ -151,6 +151,12 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<Guid?>("IcoReservedId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("InvestorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("InvestorSharePercent")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsInvestment")
                         .HasColumnType("bit");
 
@@ -720,6 +726,28 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Invoices");
+                });
+
+            modelBuilder.Entity("Sammha.Domain.LegacyLink", b =>
+                {
+                    b.Property<string>("Kind")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("LegacyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("ImportedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("NewId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Kind", "LegacyId");
+
+                    b.HasIndex("NewId");
+
+                    b.ToTable("LegacyLinks");
                 });
 
             modelBuilder.Entity("Sammha.Domain.LogoRequest", b =>

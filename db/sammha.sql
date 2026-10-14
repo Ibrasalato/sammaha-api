@@ -1744,3 +1744,54 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014131311_LegacyImport'
+)
+BEGIN
+    ALTER TABLE [Auctions] ADD [InvestorId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014131311_LegacyImport'
+)
+BEGIN
+    ALTER TABLE [Auctions] ADD [InvestorSharePercent] int NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014131311_LegacyImport'
+)
+BEGIN
+    CREATE TABLE [LegacyLinks] (
+        [Kind] nvarchar(20) NOT NULL,
+        [LegacyId] int NOT NULL,
+        [NewId] uniqueidentifier NOT NULL,
+        [ImportedAt] datetimeoffset NOT NULL,
+        CONSTRAINT [PK_LegacyLinks] PRIMARY KEY ([Kind], [LegacyId])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014131311_LegacyImport'
+)
+BEGIN
+    CREATE INDEX [IX_LegacyLinks_NewId] ON [LegacyLinks] ([NewId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014131311_LegacyImport'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014131311_LegacyImport', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
