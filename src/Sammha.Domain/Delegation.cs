@@ -79,7 +79,7 @@ public static class DelegationScopes
     /// <summary>always allowed in a delegated session</summary>
     public static readonly HashSet<string> Always = ["MarkNotificationsReadCommand", "SignOutCommand", "RefreshSessionCommand", "StopActingCommand"];
     /// <summary>reads a delegate cannot see</summary>
-    public static readonly HashSet<string> HiddenQueries = ["GetMyBankAccountQuery", "GetMyBankDocumentQuery", "GetMySessionsQuery", "GetMySecurityQuery", "ListMyDelegationsQuery", "GetMyWithdrawalsQuery"];
+    public static readonly HashSet<string> HiddenQueries = ["GetMyBankAccountQuery", "GetMyBankDocumentQuery", "GetMySessionsQuery", "GetMySecurityQuery", "ListMyDelegationsQuery", "GetMyWithdrawalsQuery", "ListMyActivityQuery"];
 }
 
 /// <summary>One entry of the activity log: who did what, when, from where, and whether it worked.</summary>

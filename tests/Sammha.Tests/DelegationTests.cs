@@ -58,6 +58,14 @@ public class DelegationTests(TestApp app) : IClassFixture<TestApp>
         Assert.DoesNotContain(failed.Concat(log), a => (a.GetProperty("details").GetString() ?? "").Contains("Hacked"));
         Assert.Equal(HttpStatusCode.Forbidden, await StatusOf(() => owner.Get<JsonElement>("/api/admin/activity")));
 
+        // the owner's own log shows the delegate's actions on the account; the delegate sees his side; neither sees the other's private log
+        var ownerLog = (await owner.Get<JsonElement>("/api/me/activity?who=delegates")).GetProperty("items").EnumerateArray().ToList();
+        Assert.Contains(ownerLog, a => a.GetProperty("action").GetString() == "متابعة مزاد" && a.GetProperty("actorName").GetString() == "فهد عبدالله الدوسري");
+        Assert.All(ownerLog, a => Assert.Equal("سعد بن ناصر العتيبي", a.GetProperty("onBehalfOfName").GetString()));
+        var fahadLog = (await fahad.Get<JsonElement>("/api/me/activity?who=as_delegate")).GetProperty("items").EnumerateArray().ToList();
+        Assert.Contains(fahadLog, a => a.GetProperty("action").GetString() == "شحن المحفظة" && !a.GetProperty("success").GetBoolean());
+        Assert.Equal(HttpStatusCode.Forbidden, await StatusOf(() => acting.Get<JsonElement>("/api/me/activity")));
+
         // back to his own account
         var back = await acting.Post<JsonElement>("/api/auth/act-as/stop");
         Assert.Equal("فهد عبدالله الدوسري", back.GetProperty("user").GetProperty("fullName").GetString());

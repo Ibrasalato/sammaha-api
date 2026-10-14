@@ -116,6 +116,12 @@ public class DelegationController(ISender mediator) : ControllerBase
     [HttpGet("me/delegated")]
     public Task<List<Sammha.Application.Features.Delegations.DelegationDto>> ToMe(CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Delegations.ListDelegatedToMeQuery(), ct);
 
+    /// <summary>the owner's own activity: their actions, their delegates' actions on their account, and their actions as a delegate</summary>
+    [HttpGet("me/activity")]
+    public Task<Sammha.Application.Features.Admin.ActivityPage> Activity([FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] string? category,
+        [FromQuery] string? who, [FromQuery] string? q, [FromQuery] bool? failed, [FromQuery] int page = 1, [FromQuery] int size = 50, CancellationToken ct = default) =>
+        mediator.Send(new Sammha.Application.Features.Admin.ListMyActivityQuery(from, to, category, who, q, failed, page, size), ct);
+
     [HttpPost("auth/act-as")]
     public Task<Sammha.Application.Common.AuthResult> ActAs(ActAsBody b, CancellationToken ct) => mediator.Send(new Sammha.Application.Features.Delegations.ActAsCommand(b.DelegationId), ct);
 
