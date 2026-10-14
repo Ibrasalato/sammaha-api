@@ -22,7 +22,7 @@ public class ErrorHandler(ILogger<ErrorHandler> log, IHostEnvironment env) : IEx
         };
         if (status >= 500) log.LogError(e, "Unhandled error on {Path}", ctx.Request.Path);
         // development and tests only: name the exception so a failing test says what broke
-        if (status >= 500 && env.IsDevelopment()) message += $" [{e.GetType().Name}: {e.Message}]";
+        if (status >= 500 && env.IsDevelopment()) message += $" [{e.GetType().Name}: {e.GetBaseException().Message}]";
         ctx.Response.StatusCode = status;
         await ctx.Response.WriteAsJsonAsync(new { message }, ct);
         return true;
