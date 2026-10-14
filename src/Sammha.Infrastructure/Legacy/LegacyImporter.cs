@@ -692,7 +692,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
     private Invoice Invoice(Row bill, Guid user, Auction a, string name, string type, string status, HashSet<string> numbers)
     {
         var at = At(bill.Dt("Bill_Datetime")) ?? a.EndsAt;
-        var no = $"INV-{at.Year}-L{bill.Id}";
+        var no = status == InvoiceStatuses.Paid ? $"INV-{at.Year}-L{bill.Id}" : $"PR-{at.Year}-L{bill.Id}";
         if (!numbers.Add(no)) no = $"INV-L{bill.Id}-{Guid.NewGuid().ToString("N")[..4]}";
         var total = bill.D("Bill_Total") ?? 0;
         var vat = bill.D("Bill_VAT") ?? 0;
@@ -711,7 +711,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
     private Invoice NewInvoice(Guid user, Auction a, string name, string type, decimal price, HashSet<string> numbers)
     {
         var vat = Math.Round(price * rules.Value.VatRate / (1 + rules.Value.VatRate), 2);
-        var no = $"INV-{a.EndsAt.Year}-A{a.Number[3..]}";
+        var no = $"PR-{a.EndsAt.Year}-A{a.Number[3..]}";
         numbers.Add(no);
         var inv = new Invoice { Number = no, UserId = user, AuctionId = a.Id, Name = Cut(name, 150)!, Type = type, Total = price, Vat = vat, Subtotal = price - vat, AmountDue = price, Status = InvoiceStatuses.Unpaid, IssuedAt = a.EndsAt };
         Add(inv);

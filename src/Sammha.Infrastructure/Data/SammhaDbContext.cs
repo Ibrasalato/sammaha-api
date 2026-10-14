@@ -64,6 +64,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
         b.HasSequence<int>("WithdrawalNo").StartsAt(1001);
         b.HasSequence<int>("CertificateNo").StartsAt(1);
         b.HasSequence<int>("TransferNo").StartsAt(1001);
+        b.HasSequence<int>("PayRequestNo").StartsAt(1);
 
         b.Entity<User>(e =>
         {
@@ -359,7 +360,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
 
     public async Task<int> NextNumberAsync(string sequence, CancellationToken ct = default)
     {
-        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo" or "CertificateNo" or "TransferNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
+        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo" or "CertificateNo" or "TransferNo" or "PayRequestNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
         var conn = Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await Database.OpenConnectionAsync(ct);
         await using var cmd = conn.CreateCommand();

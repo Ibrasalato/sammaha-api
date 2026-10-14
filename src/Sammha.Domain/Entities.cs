@@ -384,6 +384,8 @@ public class Invoice
     /// <summary>an auction win must be paid by this time; after it the win is cancelled and the guarantee forfeited</summary>
     public DateTimeOffset? DueAt { get; set; }
     public DateTimeOffset? CancelledAt { get; set; }
+    /// <summary>the payment request number (PR-…) given before payment; the tax invoice number (INV-…) is issued only once it is paid</summary>
+    public string? RequestNumber { get; set; }
     /// <summary>investment: the proposer's 30%; sale: the seller's price after commission</summary>
     public decimal? OwnerShare { get; set; }
     public Guid? OwnerShareTo { get; set; }

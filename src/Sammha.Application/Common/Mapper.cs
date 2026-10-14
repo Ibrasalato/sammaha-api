@@ -135,7 +135,7 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
 
     public static InvoiceDto Invoice(Invoice i, User buyer) =>
         new(i.Id, i.Number, i.UserId, buyer.FullName, buyer.Phone, i.AuctionId ?? i.ListingId, i.Name, i.Type, i.Total, i.Vat, i.Subtotal, i.DepositApplied,
-            i.AmountDue, i.Status, i.IssuedAt, i.PaidAt, i.OwnerShare, i.OwnerShareTo, i.OwnerShare != null ? i.OwnerSharePaid : null, i.ListingId, i.DueAt, i.CancelledAt);
+            i.AmountDue, i.Status, i.IssuedAt, i.PaidAt, i.OwnerShare, i.OwnerShareTo, i.OwnerShare != null ? i.OwnerSharePaid : null, i.ListingId, i.DueAt, i.CancelledAt, i.RequestNumber);
 
     public async Task<List<InvoiceDto>> InvoicesAsync(List<Invoice> list, CancellationToken ct)
     {

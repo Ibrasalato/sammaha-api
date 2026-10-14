@@ -140,7 +140,7 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
             rn.AcquiredAt = Now;
         }
         await notifier.NotifyAsync(inv.UserId, NotificationKinds.AuctionUpdate, $"أُلغي فوزك بشعار «{inv.Name}»",
-            $"لم تُسدَّد الفاتورة {inv.Number} خلال المهلة، فخُصم الضمان ({forfeited:0.##} ريال) وأصبح الاسم ملكًا للمنظمة الدولية للإبل.", "/dashboard/invoices", ct);
+            $"لم يُسدَّد طلب السداد {inv.Number} خلال المهلة، فخُصم الضمان ({forfeited:0.##} ريال) وأصبح الاسم ملكًا للمنظمة الدولية للإبل.", "/dashboard/invoices", ct);
     }
 
     /// <summary>«استثمار الاسم»: sold → invoice to the winner and 30% (before VAT) earmarked for the proposer; no bids → the name goes to the proposer free.</summary>

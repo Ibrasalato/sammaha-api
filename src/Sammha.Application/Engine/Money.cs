@@ -42,23 +42,31 @@ public class Money(IAppDbContext db, TimeProvider clock, Notifier notifier, IOpt
     public async Task<Invoice> IssueInvoiceAsync(Guid buyerId, Guid? auctionId, Guid? listingId, string name, string type, decimal price, decimal depositApplied, CancellationToken ct)
     {
         var vat = Round2(price * rules.Value.VatRate / (1 + rules.Value.VatRate));
-        var no = await db.NextNumberAsync("InvoiceNo", ct);
+        var paidNow = price - depositApplied <= 0;
+        // ZATCA: a tax invoice is issued when it is paid; until then it is a payment request
+        var pr = paidNow ? null : $"PR-{Now.Year}-{await db.NextNumberAsync("PayRequestNo", ct):D5}";
         var inv = new Invoice
         {
-            Number = $"INV-{Now.Year}-{no:D5}", UserId = buyerId, AuctionId = auctionId, ListingId = listingId, Name = name, Type = type,
+            Number = pr ?? await TaxNumberAsync(ct), RequestNumber = pr, UserId = buyerId, AuctionId = auctionId, ListingId = listingId, Name = name, Type = type,
             Total = price, Vat = vat, Subtotal = Round2(price - vat), DepositApplied = depositApplied, AmountDue = Round2(price - depositApplied),
             Status = price - depositApplied <= 0 ? InvoiceStatuses.Paid : InvoiceStatuses.Unpaid, IssuedAt = Now,
         };
         if (inv.Status == InvoiceStatuses.Paid) inv.PaidAt = Now;
         db.Invoices.Add(inv);
-        var url = integrations.Value.InvoiceWebhookUrl;
-        if (!string.IsNullOrWhiteSpace(url))
-        {
-            var buyer = await db.Users.FindAsync([buyerId], ct);
-            var payload = new { inv.Number, inv.Name, inv.Type, inv.Total, inv.Vat, inv.AmountDue, inv.IssuedAt, buyer = buyer?.FullName, email = buyer?.Email, phone = buyer?.Phone };
-            postCommit.Enqueue(() => webhooks.PublishAsync(url, payload));
-        }
+        if (paidNow) await PublishTaxInvoiceAsync(inv, ct);
         return inv;
+    }
+
+    private async Task<string> TaxNumberAsync(CancellationToken ct) => $"INV-{Now.Year}-{await db.NextNumberAsync("InvoiceNo", ct):D5}";
+
+    /// <summary>the tax invoice exists from here: its number, its date, and the accounting webhook</summary>
+    private async Task PublishTaxInvoiceAsync(Invoice inv, CancellationToken ct)
+    {
+        var url = integrations.Value.InvoiceWebhookUrl;
+        if (string.IsNullOrWhiteSpace(url)) return;
+        var buyer = await db.Users.FindAsync([inv.UserId], ct);
+        var payload = new { inv.Number, inv.Name, inv.Type, inv.Total, inv.Vat, inv.AmountDue, inv.IssuedAt, buyer = buyer?.FullName, email = buyer?.Email, phone = buyer?.Phone };
+        postCommit.Enqueue(() => webhooks.PublishAsync(url, payload));
     }
 
     /// <summary>The name owner's share (investment 30%, or a seller's price after commission) reaches their wallet once the invoice is paid.</summary>
@@ -83,6 +91,13 @@ public class Money(IAppDbContext db, TimeProvider clock, Notifier notifier, IOpt
         if (inv.Status == InvoiceStatuses.Cancelled) throw new DomainException("أُلغيت هذه الفاتورة لانتهاء مهلة السداد");
         inv.Status = InvoiceStatuses.Paid;
         inv.PaidAt = Now;
+        if (!inv.Number.StartsWith("INV-"))
+        {
+            inv.RequestNumber ??= inv.Number;
+            inv.Number = await TaxNumberAsync(ct);
+            inv.IssuedAt = Now;
+            await PublishTaxInvoiceAsync(inv, ct);
+        }
         await PayOwnerShareAsync(inv, ct);
         await ReleaseWinnerGuaranteeAsync(inv, ct);
     }

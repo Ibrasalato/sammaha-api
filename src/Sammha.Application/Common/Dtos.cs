@@ -42,7 +42,7 @@ public record WalletDto(decimal Balance, List<WalletTxDto> Txs);
 
 public record InvoiceDto(Guid Id, string Number, Guid UserId, string BuyerName, string BuyerPhone, Guid? AuctionId, string Name, string Type,
     decimal Total, decimal Vat, decimal Subtotal, decimal DepositApplied, decimal AmountDue, string Status, DateTimeOffset IssuedAt, DateTimeOffset? PaidAt,
-    decimal? OwnerShare, Guid? OwnerShareTo, bool? OwnerSharePaid, Guid? ListingId, DateTimeOffset? DueAt = null, DateTimeOffset? CancelledAt = null);
+    decimal? OwnerShare, Guid? OwnerShareTo, bool? OwnerSharePaid, Guid? ListingId, DateTimeOffset? DueAt = null, DateTimeOffset? CancelledAt = null, string? RequestNumber = null);
 
 public record ListingDto(Guid Id, string Number, Guid ReservedId, string Name, string Type, Guid? SellerId, string Mode, decimal Price, decimal CommissionRate,
     string Status, DateTimeOffset CreatedAt, DateTimeOffset StartsAt, DateTimeOffset EndsAt, Guid? AuctionId, decimal? SoldPrice, DateTimeOffset? SoldAt,
