@@ -946,6 +946,9 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
 
+                    b.Property<DateTimeOffset?>("FeePaidAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<Guid>("FromId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1138,6 +1141,9 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
