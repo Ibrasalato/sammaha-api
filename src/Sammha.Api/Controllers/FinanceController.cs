@@ -6,7 +6,6 @@ using Sammha.Domain;
 
 namespace Sammha.Api.Controllers;
 
-public record AmountBody(decimal Amount);
 public record TransferBody(string TransferRef);
 public record ReviewBankBody(string? Reason);
 public record DirectRefundBody(decimal Amount, string TransferRef, string? Note);
