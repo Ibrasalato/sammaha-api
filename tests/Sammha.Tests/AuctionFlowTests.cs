@@ -63,6 +63,14 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
         var a1 = IdOf("نسيم الصبا");
         var a2 = IdOf("برق الشمال");
 
+        // every bidder but the requester pays the entry guarantee first
+        Assert.Contains("ضمان دخول المزاد", await b1.Fails(() => b1.Post<JsonElement>($"/api/auctions/{a1}/bids", new { amount = 100 })));
+        Assert.Contains("ضمان طلبك", await owner.Fails(() => owner.Post<JsonElement>($"/api/auctions/{a1}/deposit")));
+        var b1Before = await b1.Balance();
+        await b1.Post<JsonElement>($"/api/auctions/{a1}/deposit");
+        Assert.Equal(b1Before - 50, await b1.Balance());
+        await b2.Post<JsonElement>($"/api/auctions/{a1}/deposit");
+
         // proxy bidding: b1 sets a ceiling, b2 bids, the platform answers for b1
         await b1.Put<JsonElement>($"/api/auctions/{a1}/autobid", new { max = 300 });
         var view = await b2.Post<JsonElement>($"/api/auctions/{a1}/bids", new { amount = 150 });
@@ -80,16 +88,22 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
         var inv = (await b2.Get<JsonElement>("/api/me/invoices")).EnumerateArray().First(i => i.GetProperty("auctionId").GetString() == a1);
         Assert.Equal(400, inv.GetProperty("total").GetDecimal());
         Assert.Equal(52.17m, inv.GetProperty("vat").GetDecimal());
+        Assert.True(inv.GetProperty("dueAt").GetDateTimeOffset() > app.Clock.GetUtcNow());
+        Assert.Equal(b1Before, await b1.Balance()); // the loser's entry guarantee came back
+        var b2BeforePay = await b2.Balance();
         await b2.TopUp(400);
         inv = await b2.Post<JsonElement>($"/api/me/invoices/{inv.GetProperty("id").GetString()}/pay");
         Assert.Equal("paid", inv.GetProperty("status").GetString());
+        Assert.Equal(b2BeforePay + 400 - 400 + 50, await b2.Balance()); // paid in full; the winner's entry guarantee returned after paying
 
         var ownerInv = (await owner.Get<JsonElement>("/api/me/invoices")).EnumerateArray().First(i => i.GetProperty("auctionId").GetString() == a2);
         Assert.Equal(0, ownerInv.GetProperty("depositApplied").GetDecimal());
         Assert.Equal(50, ownerInv.GetProperty("amountDue").GetDecimal());
         Assert.Equal("unpaid", ownerInv.GetProperty("status").GetString());
-        var ownerTxs = (await owner.Get<JsonElement>("/api/me/wallet")).GetProperty("txs").EnumerateArray();
-        Assert.Contains(ownerTxs, t => t.GetProperty("kind").GetString() == "refund" && t.GetProperty("note").GetString()!.Contains(r2.GetProperty("number").GetString()!) && t.GetProperty("note").GetString()!.Contains("رسا عليك"));
+        // the requester won their own name: the request guarantee stays held until they pay, then returns
+        Assert.Equal("held", (await owner.Get<JsonElement>($"/api/requests/{id2}")).GetProperty("depositState").GetString());
+        await owner.Post<JsonElement>($"/api/me/invoices/{ownerInv.GetProperty("id").GetString()}/pay");
+        Assert.Equal("refunded", (await owner.Get<JsonElement>($"/api/requests/{id2}")).GetProperty("depositState").GetString());
 
         var names = await b2.Get<JsonElement>("/api/me/names");
         Assert.Contains(names.EnumerateArray(), n => n.GetProperty("name").GetString() == "نسيم الصبا");

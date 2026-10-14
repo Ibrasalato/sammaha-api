@@ -24,7 +24,7 @@ public record ListingBody(Guid ReservedId, string Mode, decimal Price);
 public record TrackBody(string Number, string Phone);
 public record FollowUpBody(string Number, string Phone, string Body);
 public record ReviewBody(List<ReviewDecision> Decisions, string? Note);
-public record ExceptionBody(decimal Fee, string Reason);
+public record IcoAuctionBody(DateTimeOffset StartsAt, DateTimeOffset EndsAt, decimal? OpeningPrice);
 public record ScheduleBody(List<Guid> CandidateIds, DateTimeOffset StartsAt, DateTimeOffset EndsAt, int StaggerMinutes = 0);
 public record RoleBody(string Role);
 public record ActiveBody(bool Active);

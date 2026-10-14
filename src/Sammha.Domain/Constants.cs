@@ -28,7 +28,7 @@ public static class RequestKinds
 
 public static class DepositStates
 {
-    public const string None = "none", Held = "held", Applied = "applied", Refunded = "refunded", Fee = "fee";
+    public const string None = "none", Held = "held", Applied = "applied", Refunded = "refunded", Fee = "fee", Forfeited = "forfeited";
 }
 
 public static class CandidateStatuses
@@ -39,6 +39,8 @@ public static class CandidateStatuses
 public static class ReservedSources
 {
     public const string Auction = "auction", Legacy = "legacy", Compound = "compound", Investment = "investment", Resale = "resale", Exception = "exception";
+    /// <summary>the owner of names that passed to the organization</summary>
+    public const string IcoOwnerName = "المنظمة الدولية للإبل";
 }
 
 public static class TxKinds
@@ -55,7 +57,7 @@ public static class WithdrawalStatuses
 
 public static class InvoiceStatuses
 {
-    public const string Paid = "paid", Unpaid = "unpaid";
+    public const string Paid = "paid", Unpaid = "unpaid", Cancelled = "cancelled";
 }
 
 public static class ListingModes
@@ -70,7 +72,7 @@ public static class ListingStatuses
 
 public static class BidDepositStates
 {
-    public const string Held = "held", Refunded = "refunded", Applied = "applied";
+    public const string Held = "held", Refunded = "refunded", Applied = "applied", Forfeited = "forfeited";
 }
 
 public static class NotificationKinds

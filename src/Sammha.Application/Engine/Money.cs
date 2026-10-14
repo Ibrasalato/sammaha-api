@@ -66,9 +66,31 @@ public class Money(IAppDbContext db, TimeProvider clock, Notifier notifier, IOpt
 
     public async Task MarkInvoicePaidAsync(Invoice inv, CancellationToken ct)
     {
+        if (inv.Status == InvoiceStatuses.Cancelled) throw new DomainException("أُلغيت هذه الفاتورة لانتهاء مهلة السداد");
         inv.Status = InvoiceStatuses.Paid;
         inv.PaidAt = Now;
         await PayOwnerShareAsync(inv, ct);
+        await ReleaseWinnerGuaranteeAsync(inv, ct);
+    }
+
+    /// <summary>a paid auction win returns the winner's guarantee: the request guarantee (the requester won) or the entry guarantee</summary>
+    private async Task ReleaseWinnerGuaranteeAsync(Invoice inv, CancellationToken ct)
+    {
+        if (inv.AuctionId is not { } aid || inv.ListingId != null) return;
+        var a = await db.Auctions.FindAsync([aid], ct);
+        if (a == null) return;
+        if (a.RequestId is { } rid && a.IcoReservedId == null)
+        {
+            var r = await db.Requests.FindAsync([rid], ct);
+            if (r != null && r.UserId == inv.UserId && r.DepositState == DepositStates.Held) await RefundDepositAsync(r, "سُدّدت فاتورة الفوز", ct);
+        }
+        var dep = await db.BidDeposits.FirstOrDefaultAsync(d => d.AuctionId == aid && d.UserId == inv.UserId && d.State == BidDepositStates.Held, ct);
+        if (dep != null)
+        {
+            dep.State = BidDepositStates.Refunded;
+            Add(dep.UserId, dep.Amount, TxKinds.Refund, $"استرداد ضمان دخول مزاد «{a.Name}» بعد سداد الفاتورة {inv.Number}", a.Id);
+            await notifier.NotifyAsync(dep.UserId, NotificationKinds.Refund, "أُعيد ضمان دخول المزاد إلى محفظتك", $"{dep.Amount:0.##} ريال بعد سداد فاتورة «{a.Name}».", "/dashboard/wallet", ct);
+        }
     }
 
     /// <summary>Returns the guarantee of a request to the owner's wallet (only while it is held).</summary>

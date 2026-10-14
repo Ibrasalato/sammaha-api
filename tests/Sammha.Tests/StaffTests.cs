@@ -131,6 +131,7 @@ public class StaffTests(TestApp app) : IClassFixture<TestApp>
         var admin = await Admin();
         var aid = await LiveAuctionAsync("غيم الشمال", "برق الجنوب", "نسمة الصبح");
         var bidder = await app.BidderAsync(1);
+        await bidder.Post<JsonElement>($"/api/auctions/{aid}/deposit");
         await bidder.Post<JsonElement>($"/api/auctions/{aid}/bids", new { amount = 100 });
         var endsAt = (await admin.Get<JsonElement>($"/api/auctions/{aid}")).GetProperty("auction").GetProperty("endsAt").GetDateTimeOffset();
 
@@ -151,6 +152,7 @@ public class StaffTests(TestApp app) : IClassFixture<TestApp>
         var resumed = (await admin.Get<JsonElement>($"/api/auctions/{aid}")).GetProperty("auction");
         Assert.InRange((resumed.GetProperty("endsAt").GetDateTimeOffset() - endsAt).TotalMinutes, 179, 181);
         var bidder2 = await app.BidderAsync(2);
+        await bidder2.Post<JsonElement>($"/api/auctions/{aid}/deposit");
         await bidder2.Post<JsonElement>($"/api/auctions/{aid}/bids", new { amount = 200 });
 
         res = await admin.Post<JsonElement>("/api/admin/auctions/extend", new { scope = new { ids = new[] { aid } }, minutes = 60 });

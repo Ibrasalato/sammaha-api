@@ -19,6 +19,28 @@ public class Sweeper(IAppDbContext db, TimeProvider clock, AuctionEngine engine,
         await AutoBidsAsync(ct);
         await RemindersAsync(ct);
         await ListingsAsync(ct);
+        await ForfeitOverdueAsync(ct);
+    }
+
+    /// <summary>auction wins not paid by their deadline: cancelled, guarantee forfeited, the name passes to the organization</summary>
+    public async Task ForfeitOverdueAsync(CancellationToken ct)
+    {
+        var now = Now;
+        var due = await db.Invoices.Where(i => i.Status == InvoiceStatuses.Unpaid && i.DueAt != null && i.DueAt <= now && i.AuctionId != null && i.ListingId == null)
+            .OrderBy(i => i.DueAt).Select(i => new { i.Id, i.UserId, i.AuctionId }).Take(100).ToListAsync(ct);
+        foreach (var x in due)
+        {
+            try
+            {
+                await using var uow = await db.BeginAsync([$"a:{x.AuctionId}", $"u:{x.UserId}"], ct);
+                var inv = await db.Invoices.FirstAsync(i => i.Id == x.Id, ct);
+                if (inv.Status != InvoiceStatuses.Unpaid) continue;
+                await engine.ForfeitAsync(inv, ct);
+                await db.SaveChangesAsync(ct);
+                await uow.CommitAsync(ct);
+            }
+            catch (Exception e) when (e is not OperationCanceledException) { log.LogError(e, "Forfeiting invoice {Id} failed", x.Id); }
+        }
     }
 
     public async Task SettleDueAsync(CancellationToken ct)

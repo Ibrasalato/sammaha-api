@@ -57,6 +57,7 @@ public class RealtimeTests(TestApp app) : IClassFixture<TestApp>
         await list.InvokeAsync("JoinLobby");
 
         var bidder = await app.BidderAsync(1);
+        await bidder.Post<JsonElement>($"/api/auctions/{aid}/deposit");
         await bidder.Post<JsonElement>($"/api/auctions/{aid}/bids", new { amount = min });
 
         var dto = await onPage;
@@ -80,6 +81,8 @@ public class RealtimeTests(TestApp app) : IClassFixture<TestApp>
         await c1.StartAsync();
         await c2.StartAsync();
 
+        await b1.Post<JsonElement>($"/api/auctions/{aid}/deposit");
+        await b2.Post<JsonElement>($"/api/auctions/{aid}/deposit");
         await b1.Post<JsonElement>($"/api/auctions/{aid}/bids", new { amount = min });
         await b2.Post<JsonElement>($"/api/auctions/{aid}/bids", new { amount = min + 50 });
 

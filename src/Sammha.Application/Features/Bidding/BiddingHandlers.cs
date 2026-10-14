@@ -17,12 +17,14 @@ public class BiddingHandlers(IAppDbContext db, TimeProvider clock, Access access
     private async Task<Auction> LoadAsync(Guid id, CancellationToken ct) =>
         await db.Auctions.FirstOrDefaultAsync(a => a.Id == id, ct) ?? throw DomainException.NotFound("المزاد غير موجود");
 
-    /// <summary>the proposer of an investment name and the seller of a resale cannot bid; resale bidders pay the guarantee first</summary>
+    /// <summary>the proposer of an investment name and the seller of a resale cannot bid; every other bidder pays the entry guarantee first
+    /// (on a request's auction the requester's request guarantee covers them)</summary>
     private async Task GuardAsync(Auction a, Guid userId, CancellationToken ct)
     {
         if (a.IsInvestment && a.RequesterId == userId) throw new DomainException("لا يمكنك المزايدة على اسم قدّمته في «استثمار الاسم»");
-        if (a.ListingId == null) return;
-        if (a.RequesterId == userId) throw new DomainException("لا يمكنك المزايدة على اسم تبيعه");
+        if (a.ListingId != null && a.RequesterId == userId) throw new DomainException("لا يمكنك المزايدة على اسم تبيعه");
+        var needs = a.ListingId != null || (a.BidDeposit is > 0 && a.RequesterId != userId);
+        if (!needs) return;
         if (!await db.BidDeposits.AnyAsync(d => d.AuctionId == a.Id && d.UserId == userId && d.State == BidDepositStates.Held, ct))
             throw new DomainException($"ادفع ضمان دخول المزاد {a.BidDeposit ?? rules.Value.ResaleBidDeposit:0.##} ريال أولًا");
     }
@@ -112,15 +114,16 @@ public class BiddingHandlers(IAppDbContext db, TimeProvider clock, Access access
             .Select(b => new MyBidDto(b.Id, b.AuctionId, b.UserId, "", b.Amount, b.CreatedAt, b.Auto ? true : null, dtos[b.AuctionId])).ToList();
     }
 
-    /// <summary>resale auctions: the participation guarantee, refunded unless the bidder wins</summary>
+    /// <summary>the entry guarantee: refunded to the losers when the auction ends, and to the winner once they pay; forfeited if the winner does not pay in time</summary>
     private async Task<AuctionViewDto> PayBidDepositAsync(Guid auctionId, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
         await using var uow = await db.BeginAsync([$"a:{auctionId}", $"u:{u.Id}"], ct);
         var a = await LoadAsync(auctionId, ct);
-        if (a.ListingId == null) throw DomainException.NotFound("المزاد غير موجود");
+        if (a.ListingId == null && a.BidDeposit is not > 0) throw new DomainException("هذا المزاد لا يحتاج ضمان دخول");
         if (a.Settled || a.PhaseAt(Now) == "ended") throw new DomainException("انتهى المزاد");
-        if (a.RequesterId == u.Id) throw new DomainException("لا يمكنك المزايدة على اسم تبيعه");
+        if (a.ListingId != null && a.RequesterId == u.Id) throw new DomainException("لا يمكنك المزايدة على اسم تبيعه");
+        if (a.ListingId == null && a.RequesterId == u.Id) throw new DomainException("ضمان طلبك يغطي دخولك هذا المزاد");
         var dep = await db.BidDeposits.FirstOrDefaultAsync(d => d.AuctionId == a.Id && d.UserId == u.Id, ct);
         if (dep is { State: BidDepositStates.Held }) return await map.ViewAsync(a, ct);
         var amount = a.BidDeposit ?? rules.Value.ResaleBidDeposit;

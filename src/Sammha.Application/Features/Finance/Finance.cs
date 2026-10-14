@@ -448,11 +448,11 @@ public class FinanceHandlers(IAppDbContext db, Access access, Money money, Notif
 
         return list.Select(a =>
         {
-            var kind = a.ListingId != null ? "resale" : a.IsInvestment ? "investment" : "request";
+            var kind = a.ListingId != null ? "resale" : a.IcoReservedId != null ? "ico" : a.IsInvestment ? "investment" : "request";
             var status = a.CancelledAt != null ? "cancelled" : a.Settled ? "sold" : a.PausedAt != null ? "paused" : a.PhaseAt(now) == "scheduled" ? "scheduled" : a.PhaseAt(now) == "live" ? "live" : "settling";
             invoices.TryGetValue(a.Id, out var inv);
             return new MarkRowDto(a.Id, a.Number, a.Name, a.Type, kind, a.RequestId != null && reqNos.TryGetValue(a.RequestId.Value, out var rn) ? rn.Number : null,
-                a.ListingId != null ? lstNos.GetValueOrDefault(a.ListingId.Value) : null, users.GetValueOrDefault(a.RequesterId, ""), status, a.StartsAt, a.EndsAt,
+                a.ListingId != null ? lstNos.GetValueOrDefault(a.ListingId.Value) : null, a.IcoReservedId != null ? ReservedSources.IcoOwnerName : users.GetValueOrDefault(a.RequesterId, ""), status, a.StartsAt, a.EndsAt,
                 a.OpeningPrice, a.FinalPrice ?? a.CurrentPrice, a.BidCount, bidders.GetValueOrDefault(a.Id), a.WinnerId != null ? users.GetValueOrDefault(a.WinnerId.Value) : null,
                 a.WonByRequester, inv?.Number, inv?.Status, inv?.Vat, certs.GetValueOrDefault(a.Id), a.Extensions, a.RequesterId, a.WinnerId);
         }).ToList();

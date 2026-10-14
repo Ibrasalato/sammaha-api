@@ -11,7 +11,6 @@ public static class Permissions
     public const string RequestsReview = "requests.review";
     public const string RequestsCancel = "requests.cancel";
     public const string RequestsAudit = "requests.audit";
-    public const string RequestsException = "requests.exception";
     public const string OwnersView = "owners.view";
     public const string OwnersFull = "owners.full";
     public const string ReportsMarks = "reports.marks";
@@ -41,6 +40,7 @@ public static class Permissions
     public const string LogsView = "logs.view";
     public const string CertificatesManage = "certificates.manage";
     public const string NamesLatin = "names.latin";
+    public const string NamesIco = "names.ico";
 
     public record Info(string Key, string Group, string Label, string Description);
 
@@ -52,7 +52,6 @@ public static class Permissions
         new(RequestsReview, "طلبات الملاك", "مراجعة طلبات الشعارات", "قبول الأسماء أو رفضها، ورفض الطلب كاملًا"),
         new(RequestsCancel, "طلبات الملاك", "إلغاء الطلبات", "إلغاء طلب مع رد الضمان للمالك"),
         new(RequestsAudit, "طلبات الملاك", "تقرير تدقيق الشعارات", "المطابق والمشابه (بـ«ال» أو بدونها، جمع أو مفرد) وأعلى سعر لشعار مشابه، مع الطباعة"),
-        new(RequestsException, "طلبات الملاك", "استثناء اسم من المزاد", "تسجيل اسم مقبول لصاحب الطلب مباشرة برسوم تسجيل دون طرحه في مزاد، مع ذكر السبب"),
         new(AuctionsSchedule, "المزادات", "فتح المزادات", "جدولة الأسماء المقبولة في مزادات"),
         new(AuctionsManage, "المزادات", "التحكم في المزادات", "إيقاف مؤقت واستئناف وتمديد، لمزاد محدد أو لكل المزادات"),
         new(AuctionsCancel, "المزادات", "إلغاء المزادات", "إلغاء مزاد دون بيع وإعادة الاسم لقائمة الجدولة أو لمالكه"),
@@ -65,6 +64,7 @@ public static class Permissions
         new(DepositsView, "المالية", "تقرير الضمانات", "ضمانات طلبات الشعارات وضمانات دخول مزادات إعادة البيع"),
         new(DepositsRefund, "المالية", "استرداد الضمان", "إعادة ضمان محجوز إلى محفظة صاحبه مع ذكر السبب"),
         new(CertificatesManage, "سجل الأسماء", "الشهادات الصادرة", "كل الشهادات التي أصدرها الملاك، والتحقق منها، وإلغاء شهادة مع ذكر السبب"),
+        new(NamesIco, "سجل الأسماء", "أسماء المنظمة الدولية", "الأسماء التي آلت إلى المنظمة لعدم سداد الفائز في المهلة، وطرحها في مزاد جديد"),
         new(NamesLatin, "سجل الأسماء", "الكتابة اللاتينية للأسماء", "تصحيح كتابة الأسماء بالحروف اللاتينية كما تظهر في الموقع الإنجليزي والشهادات"),
         new(ReportsMarks, "التقارير", "تقرير الشعارات", "كل المزادات برقمها: الطلب والمالك والفائز وقيمة الفوز والفاتورة، مع الطباعة والتصدير"),
         new(TicketsView, "الدعم", "عرض الشكاوى والبلاغات", "قائمة التذاكر وتفاصيلها"),

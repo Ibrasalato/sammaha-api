@@ -15,7 +15,7 @@ public record PublicSettingsDto(
     bool ResaleAuctionOpen, bool InstantSaleOpen, string? SaleClosedNote, bool InvestmentOpen, string? InvestmentClosedNote,
     bool SignupOpen, string SupportEmail, string SupportPhone, string WhatsApp,
     string? Announcement, string AnnouncementTone, bool Maintenance, string? MaintenanceNote,
-    int PasswordMinLength, int StaffIdleMinutes, decimal DepositAmount = 0);
+    int PasswordMinLength, int StaffIdleMinutes, decimal DepositAmount = 0, int PaymentDeadlineHours = 72);
 
 public record AdminSettingsDto(
     bool RequestsOpen, string? RequestsClosedNote, bool CompoundOpen, string? CompoundClosedNote,
@@ -23,7 +23,7 @@ public record AdminSettingsDto(
     bool SignupOpen, string SupportEmail, string SupportPhone, string WhatsApp,
     bool AnnouncementOn, string? Announcement, string AnnouncementTone, bool Maintenance, string? MaintenanceNote,
     int PasswordMinLength, int MaxLoginAttempts, int LockoutMinutes, int StaffIdleMinutes,
-    DateTimeOffset UpdatedAt, string? UpdatedBy, RulesDto Rules);
+    DateTimeOffset UpdatedAt, string? UpdatedBy, RulesDto Rules, int PaymentDeadlineHours = 72);
 
 /// <summary>fees and rules from the server configuration (read-only in the dashboard)</summary>
 public record RulesDto(decimal DepositAmount, int NamesPerRequest, decimal OpeningPrice, decimal MinIncrement, int ExtendMinutes, decimal VatRate,
@@ -36,7 +36,7 @@ public record SettingsPatch(
     bool? ResaleAuctionOpen = null, bool? InstantSaleOpen = null, string? SaleClosedNote = null, bool? InvestmentOpen = null, string? InvestmentClosedNote = null,
     bool? SignupOpen = null, string? SupportEmail = null, string? SupportPhone = null, string? WhatsApp = null,
     bool? AnnouncementOn = null, string? Announcement = null, string? AnnouncementTone = null, bool? Maintenance = null, string? MaintenanceNote = null,
-    int? PasswordMinLength = null, int? MaxLoginAttempts = null, int? LockoutMinutes = null, int? StaffIdleMinutes = null, decimal? DepositAmount = null);
+    int? PasswordMinLength = null, int? MaxLoginAttempts = null, int? LockoutMinutes = null, int? StaffIdleMinutes = null, decimal? DepositAmount = null, int? PaymentDeadlineHours = null);
 
 public record SettingsChangeDto(long Id, DateTimeOffset At, string UserName, string Field, string? OldValue, string? NewValue);
 
@@ -78,7 +78,7 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
         return new PublicSettingsDto(s.RequestsOpen, s.RequestsClosedNote, s.CompoundOpen, s.CompoundClosedNote, s.ResaleAuctionOpen, s.InstantSaleOpen,
             s.SaleClosedNote, s.InvestmentOpen, s.InvestmentClosedNote, s.SignupOpen, s.SupportEmail, s.SupportPhone, s.WhatsApp,
             s.AnnouncementOn ? s.Announcement : null, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote, s.PasswordMinLength, s.StaffIdleMinutes,
-            s.DepositAmount ?? rules.Value.DepositAmount);
+            s.DepositAmount ?? rules.Value.DepositAmount, s.PaymentDeadlineHours ?? 72);
     }
 
     private AdminSettingsDto Admin(PlatformSettings s)
@@ -89,7 +89,7 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
             s.AnnouncementOn, s.Announcement, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote,
             s.PasswordMinLength, s.MaxLoginAttempts, s.LockoutMinutes, s.StaffIdleMinutes, s.UpdatedAt, s.UpdatedBy,
             new RulesDto(s.DepositAmount ?? r.DepositAmount, r.NamesPerRequest, r.OpeningPrice, r.MinIncrement, r.ExtendMinutes, r.VatRate, r.InvestFee, r.InvestOwnerShare,
-                r.InvestMaxNames, r.ResaleNoticeHours, r.ResaleAuctionDays, r.ResaleCommission, r.ResaleBidDeposit, r.InstantSaleHours, r.InstantCommission));
+                r.InvestMaxNames, r.ResaleNoticeHours, r.ResaleAuctionDays, r.ResaleCommission, r.ResaleBidDeposit, r.InstantSaleHours, r.InstantCommission), s.PaymentDeadlineHours ?? 72);
     }
 
     public async Task<AdminSettingsDto> Handle(GetAdminSettingsQuery q, CancellationToken ct)
@@ -135,6 +135,7 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
         if (p.MaxLoginAttempts != null) Range(p.MaxLoginAttempts, 3, 20, "محاولات الدخول");
         if (p.LockoutMinutes != null) Range(p.LockoutMinutes, 1, 1440, "مدة القفل بالدقائق");
         if (p.StaffIdleMinutes != null) Range(p.StaffIdleMinutes, 0, 480, "مهلة الخمول بالدقائق");
+        if (p.PaymentDeadlineHours != null) Range(p.PaymentDeadlineHours, 1, 720, "مهلة سداد قيمة الشعار بالساعات");
         if (p.DepositAmount is { } dep && (dep < 0 || dep > 1_000_000)) throw new DomainException("مبلغ الضمان بين 0 و1,000,000 ريال");
 
         SetV("RequestsOpen", p.RequestsOpen, () => s.RequestsOpen, v => s.RequestsOpen = v);
@@ -159,6 +160,7 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
         SetV("MaxLoginAttempts", p.MaxLoginAttempts, () => s.MaxLoginAttempts, v => s.MaxLoginAttempts = v);
         SetV("LockoutMinutes", p.LockoutMinutes, () => s.LockoutMinutes, v => s.LockoutMinutes = v);
         SetV("StaffIdleMinutes", p.StaffIdleMinutes, () => s.StaffIdleMinutes, v => s.StaffIdleMinutes = v);
+        SetV("PaymentDeadlineHours", p.PaymentDeadlineHours, () => s.PaymentDeadlineHours ?? 72, v => s.PaymentDeadlineHours = v);
         SetV("DepositAmount", p.DepositAmount is { } d0 ? Math.Round(d0, 2) : null, () => s.DepositAmount ?? rules.Value.DepositAmount, v => s.DepositAmount = v);
 
         if (changes.Count > 0)

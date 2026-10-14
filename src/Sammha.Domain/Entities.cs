@@ -97,7 +97,9 @@ public class PlatformSettings
     public int LockoutMinutes { get; set; } = 15;
     /// <summary>staff dashboards sign out after this many idle minutes (0 = never)</summary>
     public int StaffIdleMinutes { get; set; } = 30;
-    /// <summary>the guarantee paid with a mark request; null = the server default (Platform:DepositAmount)</summary>
+    /// <summary>hours an auction winner has to pay; null = 72</summary>
+    public int? PaymentDeadlineHours { get; set; }
+    /// <summary>the guarantee paid with a mark request and to enter an auction; null = the server default (Platform:DepositAmount)</summary>
     public decimal? DepositAmount { get; set; }
 
     // ───── complaints, reports and enquiries ─────
@@ -203,11 +205,6 @@ public class Candidate
     public string? RejectReason { get; set; }
     public Guid? AuctionId { get; set; }
     public DateTimeOffset? WithdrawnAt { get; set; }
-    /// <summary>«استثناء من المزاد»: the committee registered the name to the requester for a fee, without an auction</summary>
-    public DateTimeOffset? ExceptedAt { get; set; }
-    public decimal? ExceptionFee { get; set; }
-    public string? ExceptionReason { get; set; }
-    public string? ExceptedBy { get; set; }
 }
 
 public class Auction
@@ -236,6 +233,8 @@ public class Auction
     public int Extensions { get; set; }
     public bool IsInvestment { get; set; }
     public decimal? BidDeposit { get; set; }
+    /// <summary>a re-auction of a name the International Camel Organization owns</summary>
+    public Guid? IcoReservedId { get; set; }
     /// <summary>paused by the administration: no bids, no settlement; resuming adds the paused time back</summary>
     public DateTimeOffset? PausedAt { get; set; }
     public string? PauseReason { get; set; }
@@ -295,6 +294,12 @@ public class ReservedName
     public string Source { get; set; } = ReservedSources.Legacy;
     public string? BaseName { get; set; }
     public Guid? AuctionId { get; set; }
+    /// <summary>«اسم مستثنى»: the winner did not pay in time, so the name passed to the International Camel Organization</summary>
+    public Guid? ForfeitedFromId { get; set; }
+    public string? ForfeitedFromName { get; set; }
+    public DateTimeOffset? ForfeitedAt { get; set; }
+    public decimal? ForfeitedPrice { get; set; }
+    public decimal? ForfeitedDeposit { get; set; }
     /// <summary>the registry's Latin spelling, when staff set one; otherwise it is transliterated</summary>
     public string? LatinName { get; set; }
     /// <summary>public certificate code (SMC-XXXXXXXX), derived from the id</summary>
@@ -352,6 +357,9 @@ public class Invoice
     public string Status { get; set; } = InvoiceStatuses.Unpaid;
     public DateTimeOffset IssuedAt { get; set; }
     public DateTimeOffset? PaidAt { get; set; }
+    /// <summary>an auction win must be paid by this time; after it the win is cancelled and the guarantee forfeited</summary>
+    public DateTimeOffset? DueAt { get; set; }
+    public DateTimeOffset? CancelledAt { get; set; }
     /// <summary>investment: the proposer's 30%; sale: the seller's price after commission</summary>
     public decimal? OwnerShare { get; set; }
     public Guid? OwnerShareTo { get; set; }

@@ -39,7 +39,7 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
                 ?? throw new DomainException("الطلب غير متاح للسداد"),
             PaymentPurposes.Invoice => await db.Invoices.Where(i => i.Id == reference && i.UserId == u.Id && i.Status == InvoiceStatuses.Unpaid).Select(i => (decimal?)i.AmountDue).FirstOrDefaultAsync(ct)
                 ?? throw new DomainException("الفاتورة غير متاحة للسداد"),
-            PaymentPurposes.BidDeposit => await db.Auctions.Where(a => a.Id == reference && a.ListingId != null && !a.Settled && a.RequesterId != u.Id).Select(a => a.BidDeposit).FirstOrDefaultAsync(ct)
+            PaymentPurposes.BidDeposit => await db.Auctions.Where(a => a.Id == reference && (a.ListingId != null || a.BidDeposit > 0) && !a.Settled && a.RequesterId != u.Id).Select(a => a.BidDeposit).FirstOrDefaultAsync(ct)
                 ?? throw new DomainException("المزاد غير متاح"),
             PaymentPurposes.Listing => await db.Listings.Where(l => l.Id == reference && l.Mode == ListingModes.Instant && l.Status == ListingStatuses.Live && l.SellerId != u.Id).Select(l => (decimal?)l.Price).FirstOrDefaultAsync(ct)
                 ?? throw new DomainException("العرض غير متاح"),
