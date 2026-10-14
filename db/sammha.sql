@@ -630,7 +630,7 @@ IF NOT EXISTS (
 )
 BEGIN
     INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-    VALUES (N'20261013161522_Initial', N'10.0.12');
+    VALUES (N'20261013161522_Initial', N'10.0.13');
 END;
 
 COMMIT;
@@ -696,7 +696,137 @@ IF NOT EXISTS (
 )
 BEGIN
     INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-    VALUES (N'20261013163037_RefreshTokens', N'10.0.12');
+    VALUES (N'20261013163037_RefreshTokens', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [FailedLogins] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [LastLoginAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [LockedUntil] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [NotifyOutbid] bit NOT NULL DEFAULT CAST(1 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [NotifyReminders] bit NOT NULL DEFAULT CAST(1 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [NotifyRequests] bit NOT NULL DEFAULT CAST(1 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [NotifyResults] bit NOT NULL DEFAULT CAST(1 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    CREATE TABLE [PlatformSettings] (
+        [Id] int NOT NULL,
+        [RequestsOpen] bit NOT NULL,
+        [RequestsClosedNote] nvarchar(300) NULL,
+        [CompoundOpen] bit NOT NULL,
+        [CompoundClosedNote] nvarchar(300) NULL,
+        [ResaleAuctionOpen] bit NOT NULL,
+        [InstantSaleOpen] bit NOT NULL,
+        [SaleClosedNote] nvarchar(300) NULL,
+        [InvestmentOpen] bit NOT NULL,
+        [InvestmentClosedNote] nvarchar(300) NULL,
+        [SignupOpen] bit NOT NULL,
+        [SupportEmail] nvarchar(160) NOT NULL,
+        [SupportPhone] nvarchar(30) NOT NULL,
+        [WhatsApp] nvarchar(30) NOT NULL,
+        [AnnouncementOn] bit NOT NULL,
+        [Announcement] nvarchar(400) NULL,
+        [AnnouncementTone] nvarchar(10) NOT NULL,
+        [Maintenance] bit NOT NULL,
+        [MaintenanceNote] nvarchar(300) NULL,
+        [PasswordMinLength] int NOT NULL,
+        [MaxLoginAttempts] int NOT NULL,
+        [LockoutMinutes] int NOT NULL,
+        [StaffIdleMinutes] int NOT NULL,
+        [UpdatedAt] datetimeoffset NOT NULL,
+        [UpdatedBy] nvarchar(120) NULL,
+        CONSTRAINT [PK_PlatformSettings] PRIMARY KEY ([Id]),
+        CONSTRAINT [CK_PlatformSettings_Single] CHECK ([Id] = 1)
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    CREATE TABLE [SettingsChanges] (
+        [Id] bigint NOT NULL IDENTITY,
+        [At] datetimeoffset NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [UserName] nvarchar(120) NOT NULL,
+        [Field] nvarchar(60) NOT NULL,
+        [OldValue] nvarchar(400) NULL,
+        [NewValue] nvarchar(400) NULL,
+        CONSTRAINT [PK_SettingsChanges] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    CREATE INDEX [IX_SettingsChanges_At] ON [SettingsChanges] ([At]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014043820_PlatformSettings'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014043820_PlatformSettings', N'10.0.13');
 END;
 
 COMMIT;
