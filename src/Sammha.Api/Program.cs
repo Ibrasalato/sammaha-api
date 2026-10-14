@@ -11,7 +11,9 @@ using Sammha.Domain;
 using Sammha.Infrastructure;
 using Sammha.Infrastructure.Data;
 
-var builder = WebApplication.CreateBuilder(args);
+// `legacy …` runs the one-off importer from the previous platform instead of the web server
+var legacyArgs = args.Length > 0 && args[0] == "legacy" ? args : null;
+var builder = WebApplication.CreateBuilder(legacyArgs is null ? args : []);
 var cfg = builder.Configuration;
 
 // ───── layers ─────
@@ -126,6 +128,12 @@ if (cfg.GetValue("Database:MigrateOnStartup", true))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<DbSeeder>().RunAsync();
+}
+
+if (legacyArgs != null)
+{
+    Environment.ExitCode = await LegacyCli.RunAsync(app.Services, legacyArgs);
+    return;
 }
 
 app.Run();

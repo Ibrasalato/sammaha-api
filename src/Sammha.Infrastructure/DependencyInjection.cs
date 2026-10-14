@@ -27,6 +27,7 @@ public static class DependencyInjection
         s.AddSingleton<ISmsSender, WebhookSmsSender>();
         s.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         s.AddScoped<DbSeeder>();
+        s.AddScoped<Legacy.LegacyImporter>();
         s.AddSingleton<IActivityWriter, Services.ActivityWriter>();
         return s;
     }

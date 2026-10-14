@@ -43,6 +43,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
     public DbSet<Delegation> Delegations => Set<Delegation>();
     public DbSet<Certificate> Certificates => Set<Certificate>();
+    public DbSet<LegacyLink> LegacyLinks => Set<LegacyLink>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
@@ -204,6 +205,12 @@ public class SammhaDbContext : DbContext, IAppDbContext
             });
         });
         b.Entity<User>().HasOne<StaffRole>().WithMany().HasForeignKey(u => u.StaffRoleId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<LegacyLink>(e =>
+        {
+            e.HasKey(x => new { x.Kind, x.LegacyId });
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.HasIndex(x => x.NewId);
+        });
         b.Entity<Certificate>(e =>
         {
             e.Property(x => x.Number).HasMaxLength(24);

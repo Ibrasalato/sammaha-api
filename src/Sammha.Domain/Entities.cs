@@ -235,6 +235,9 @@ public class Auction
     public decimal? BidDeposit { get; set; }
     /// <summary>a re-auction of a name the International Camel Organization owns</summary>
     public Guid? IcoReservedId { get; set; }
+    /// <summary>imported auctions: the member who invested in the name and their share of the winning price (percent)</summary>
+    public Guid? InvestorId { get; set; }
+    public int? InvestorSharePercent { get; set; }
     /// <summary>paused by the administration: no bids, no settlement; resuming adds the paused time back</summary>
     public DateTimeOffset? PausedAt { get; set; }
     public string? PauseReason { get; set; }

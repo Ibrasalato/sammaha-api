@@ -33,6 +33,7 @@ public interface IAppDbContext
     DbSet<BankAccount> BankAccounts { get; }
     DbSet<Delegation> Delegations { get; }
     DbSet<Certificate> Certificates { get; }
+    DbSet<LegacyLink> LegacyLinks { get; }
     DbSet<ActivityLog> ActivityLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
