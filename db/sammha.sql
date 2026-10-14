@@ -2163,3 +2163,32 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014174831_PaymentRequests'
+)
+BEGIN
+    CREATE SEQUENCE [PayRequestNo] AS int START WITH 1 INCREMENT BY 1 NO CYCLE;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014174831_PaymentRequests'
+)
+BEGIN
+    ALTER TABLE [Invoices] ADD [RequestNumber] nvarchar(400) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014174831_PaymentRequests'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014174831_PaymentRequests', N'10.0.13');
+END;
+
+COMMIT;
+GO
+

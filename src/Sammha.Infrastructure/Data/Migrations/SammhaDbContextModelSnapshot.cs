@@ -32,6 +32,8 @@ namespace Sammha.Infrastructure.Data.Migrations
             modelBuilder.HasSequence<int>("ListingNo")
                 .StartsAt(1001L);
 
+            modelBuilder.HasSequence<int>("PayRequestNo");
+
             modelBuilder.HasSequence<int>("RequestNo")
                 .StartsAt(1001L);
 
@@ -693,6 +695,10 @@ namespace Sammha.Infrastructure.Data.Migrations
 
                     b.Property<DateTimeOffset?>("PaidAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("RequestNumber")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
 
                     b.Property<string>("Status")
                         .IsRequired()
