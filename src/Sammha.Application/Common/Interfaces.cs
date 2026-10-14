@@ -95,9 +95,18 @@ public interface IWebhookPublisher
 
 public interface IPaymentGateway
 {
-    /// <summary>creates a hosted card checkout (Moyasar) and returns its URL</summary>
+    /// <summary>moyasar | hyperpay</summary>
+    string Name { get; }
+    /// <summary>the channels it can take now (mada, card, applepay); empty = card payments are not set up</summary>
+    IReadOnlyList<string> Channels { get; }
+    /// <summary>creates a hosted checkout and returns the page to send the owner to</summary>
     Task<(string ProviderId, string Url)> CreateCheckoutAsync(Payment payment, string description, string callbackUrl, CancellationToken ct);
+    /// <summary>asks the provider how the payment went (HyperPay, after the owner comes back)</summary>
+    Task<GatewayStatus> StatusAsync(Payment payment, CancellationToken ct);
 }
+
+/// <summary>Paid: the money was taken; Pending: not final yet; otherwise failed (Code/Message say why)</summary>
+public record GatewayStatus(bool Paid, bool Pending, decimal Amount, string? Code, string? Message);
 
 /// <summary>completed (money sent), processing (the bank has it, check again later) or failed</summary>
 public record PayoutResult(string State, string? Reference, string? Error)

@@ -17,7 +17,8 @@ public record PublicSettingsDto(
     string? Announcement, string AnnouncementTone, bool Maintenance, string? MaintenanceNote,
     int PasswordMinLength, int StaffIdleMinutes, decimal DepositAmount = 0, int PaymentDeadlineHours = 72, decimal TransferFee = 0,
     bool TransferOpen = true, string? TransferClosedNote = null, List<string>? ComingSoon = null,
-    decimal InvestFee = 0, decimal CompoundFee = 0, decimal ResaleCommission = 0, decimal InstantCommission = 0, Dictionary<string, ServiceText>? ServiceTexts = null);
+    decimal InvestFee = 0, decimal CompoundFee = 0, decimal ResaleCommission = 0, decimal InstantCommission = 0, Dictionary<string, ServiceText>? ServiceTexts = null,
+    List<string>? PaymentChannels = null, string? PaymentProvider = null);
 
 public record AdminSettingsDto(
     bool RequestsOpen, string? RequestsClosedNote, bool CompoundOpen, string? CompoundClosedNote,
@@ -68,7 +69,7 @@ public record RevokeMySessionCommand(Guid SessionId) : ICommand<List<SessionDto>
 public record GetMySecurityQuery : IQuery<SecuritySummaryDto>;
 
 // ───── handlers ─────
-public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access access, SettingsStore store, ICurrentUser current,
+public class SettingsHandlers(IPaymentGateway gateway, IOptions<PaymentOptions> payments, IAppDbContext db, TimeProvider clock, Access access, SettingsStore store, ICurrentUser current,
     IOptions<PlatformOptions> rules)
     : IRequestHandler<GetPublicSettingsQuery, PublicSettingsDto>, IRequestHandler<GetAdminSettingsQuery, AdminSettingsDto>,
       IRequestHandler<UpdateSettingsCommand, AdminSettingsDto>, IRequestHandler<GetSettingsHistoryQuery, List<SettingsChangeDto>>,
@@ -85,7 +86,8 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
             s.SaleClosedNote, s.InvestmentOpen, s.InvestmentClosedNote, s.SignupOpen, s.SupportEmail, s.SupportPhone, s.WhatsApp,
             s.AnnouncementOn ? s.Announcement : null, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote, s.PasswordMinLength, s.StaffIdleMinutes,
             s.DepositAmount ?? rules.Value.DepositAmount, s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon),
-            s.InvestFee ?? rules.Value.InvestFee, s.CompoundFee ?? 0, s.ResaleCommission ?? rules.Value.ResaleCommission, s.InstantCommission ?? rules.Value.InstantCommission, ServiceTexts.Parse(s.ServiceTextsJson));
+            s.InvestFee ?? rules.Value.InvestFee, s.CompoundFee ?? 0, s.ResaleCommission ?? rules.Value.ResaleCommission, s.InstantCommission ?? rules.Value.InstantCommission, ServiceTexts.Parse(s.ServiceTextsJson),
+            payments.Value.Simulate ? [.. PayChannels.All] : [.. gateway.Channels], payments.Value.Simulate ? "simulated" : gateway.Name);
     }
 
     private AdminSettingsDto Admin(PlatformSettings s)

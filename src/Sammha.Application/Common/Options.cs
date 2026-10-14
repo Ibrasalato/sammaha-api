@@ -31,4 +31,31 @@ public class PaymentOptions
     public string? MoyasarSecretKey { get; set; }
     /// <summary>the secret_token configured on the Moyasar webhook</summary>
     public string? WebhookSecret { get; set; }
+    /// <summary>"hyperpay" or "moyasar" (default: hyperpay once its access token is set, otherwise moyasar)</summary>
+    public string? Provider { get; set; }
+    /// <summary>this API's public address, for the HyperPay payment page and its return (e.g. https://api.sammha.ico.org.sa)</summary>
+    public string? PublicApiUrl { get; set; }
+    public HyperPayOptions HyperPay { get; set; } = new();
+}
+
+/// <summary>HyperPay COPYandPAY (OPPWA). Each channel has its own entity id from HyperPay; a channel without one is hidden.</summary>
+public class HyperPayOptions
+{
+    /// <summary>https://eu-test.oppwa.com/ (test) or https://eu-prod.oppwa.com/ (live)</summary>
+    public string BaseUrl { get; set; } = "https://eu-test.oppwa.com/";
+    public string? AccessToken { get; set; }
+    /// <summary>Visa / Mastercard</summary>
+    public string? EntityId { get; set; }
+    public string? MadaEntityId { get; set; }
+    public string? ApplePayEntityId { get; set; }
+    /// <summary>test only: "EXTERNAL" (simulated 3-D Secure); leave empty in production</summary>
+    public string? TestMode { get; set; }
+    public bool Configured => !string.IsNullOrWhiteSpace(AccessToken) && (!string.IsNullOrWhiteSpace(EntityId) || !string.IsNullOrWhiteSpace(MadaEntityId) || !string.IsNullOrWhiteSpace(ApplePayEntityId));
+}
+
+/// <summary>the payment channels an owner can pick</summary>
+public static class PayChannels
+{
+    public const string Mada = "mada", Card = "card", ApplePay = "applepay";
+    public static readonly string[] All = [Mada, Card, ApplePay];
 }

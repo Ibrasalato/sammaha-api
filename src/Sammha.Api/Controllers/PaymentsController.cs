@@ -11,7 +11,7 @@ public class PaymentsController(ISender mediator) : ControllerBase
 {
     /// <summary>starts a card payment; returns the Moyasar page to redirect to (url is null when simulated)</summary>
     [HttpPost("card"), Authorize]
-    public Task<CardCheckout> Card(CardBody b, CancellationToken ct) => mediator.Send(new StartCardPaymentCommand(b.Purpose, b.Ref, b.Amount, b.Callback), ct);
+    public Task<CardCheckout> Card(CardBody b, CancellationToken ct) => mediator.Send(new StartCardPaymentCommand(b.Purpose, b.Ref, b.Amount, b.Callback, b.Method), ct);
 
     /// <summary>Moyasar webhook (configure secret_token = Payments:WebhookSecret)</summary>
     [HttpPost("moyasar/webhook"), AllowAnonymous]

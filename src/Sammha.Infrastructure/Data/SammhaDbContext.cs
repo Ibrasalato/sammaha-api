@@ -161,7 +161,14 @@ public class SammhaDbContext : DbContext, IAppDbContext
         });
         b.Entity<TicketMessage>(e => e.Property(x => x.Body).HasMaxLength(3000));
 
-        b.Entity<Payment>(e => e.HasIndex(x => x.ProviderId));
+        b.Entity<Payment>(e =>
+        {
+            e.HasIndex(x => x.ProviderId);
+            e.Property(x => x.Method).HasMaxLength(16);
+            e.Property(x => x.CallbackUrl).HasMaxLength(1000);
+            e.Property(x => x.Integrity).HasMaxLength(200);
+            e.Property(x => x.ResultCode).HasMaxLength(40);
+        });
         b.Entity<RefreshToken>(e =>
         {
             e.HasIndex(x => x.TokenHash).IsUnique();

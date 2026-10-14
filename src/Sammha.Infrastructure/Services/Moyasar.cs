@@ -12,6 +12,10 @@ namespace Sammha.Infrastructure.Services;
 public class MoyasarGateway(HttpClient http, IOptions<PaymentOptions> opt) : IPaymentGateway
 {
     private record Invoice([property: JsonPropertyName("id")] string Id, [property: JsonPropertyName("url")] string Url);
+    public string Name => "moyasar";
+    public IReadOnlyList<string> Channels => string.IsNullOrEmpty(opt.Value.MoyasarSecretKey) ? [] : [PayChannels.Mada, PayChannels.Card, PayChannels.ApplePay];
+    /// <summary>Moyasar confirms through its webhook</summary>
+    public Task<GatewayStatus> StatusAsync(Payment payment, CancellationToken ct) => Task.FromResult(new GatewayStatus(false, true, 0, null, null));
 
     public async Task<(string ProviderId, string Url)> CreateCheckoutAsync(Payment payment, string description, string callbackUrl, CancellationToken ct)
     {

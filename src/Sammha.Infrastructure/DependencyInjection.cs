@@ -23,7 +23,17 @@ public static class DependencyInjection
         s.AddSingleton<IWebhookPublisher>(sp => sp.GetRequiredService<WebhookQueue>());
         s.AddHostedService<WebhookSender>();
         s.AddHttpClient("webhooks", c => c.Timeout = TimeSpan.FromSeconds(10));
-        s.AddHttpClient<IPaymentGateway, MoyasarGateway>(c => c.Timeout = TimeSpan.FromSeconds(20));
+        // card payments: HyperPay once its token is configured (or Payments:Provider = hyperpay), otherwise Moyasar if it has a key
+        s.AddHttpClient<MoyasarGateway>(c => c.Timeout = TimeSpan.FromSeconds(20));
+        s.AddHttpClient<HyperPayGateway>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        s.AddTransient<IPaymentGateway>(sp =>
+        {
+            var p = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PaymentOptions>>().Value;
+            var provider = (p.Provider ?? "").Trim().ToLowerInvariant();
+            if (provider == "hyperpay" || (provider == "" && p.HyperPay.Configured)) return sp.GetRequiredService<HyperPayGateway>();
+            if (provider == "moyasar" || !string.IsNullOrEmpty(p.MoyasarSecretKey)) return sp.GetRequiredService<MoyasarGateway>();
+            return new NoPaymentGateway();
+        });
         s.AddSingleton<ISmsSender, WebhookSmsSender>();
         s.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         // wallet refunds straight to the owner's IBAN; simulated with simulated card payments, otherwise manual until the HyperPay payout API is connected

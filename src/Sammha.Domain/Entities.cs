@@ -502,4 +502,9 @@ public class Payment
     public DateTimeOffset? PaidAt { get; set; }
     /// <summary>when the card money was spent on its purpose (invoices, purchases and fees can only be paid this way)</summary>
     public DateTimeOffset? UsedAt { get; set; }
+    /// <summary>the channel the owner chose (mada, card, applepay), where to send them back, and HyperPay's checkout integrity hash</summary>
+    public string? Method { get; set; }
+    public string? CallbackUrl { get; set; }
+    public string? Integrity { get; set; }
+    public string? ResultCode { get; set; }
 }
