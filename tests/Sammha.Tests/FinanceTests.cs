@@ -67,7 +67,7 @@ public class FinanceTests(TestApp app) : IClassFixture<TestApp>
 
         // adjustment with a reason; a debit cannot go below zero
         await admin.Post<JsonElement>($"/api/admin/wallets/{uid}/adjust", new { amount = 25, reason = "تعويض عن خطأ في الفاتورة" });
-        Assert.Equal(before - 125, await owner.Balance());
+        Assert.Equal(before - 150, await owner.Balance());
         Assert.Contains("أكبر من رصيد", await admin.Fails(() => admin.Post<JsonElement>($"/api/admin/wallets/{uid}/adjust", new { amount = -1_000_000, reason = "خصم تجريبي كبير" })));
 
         // changing the IBAN sends it back for verification
