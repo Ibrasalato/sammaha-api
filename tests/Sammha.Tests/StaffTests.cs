@@ -150,7 +150,8 @@ public class StaffTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal(1, res.GetProperty("affected").GetInt32());
         var resumed = (await admin.Get<JsonElement>($"/api/auctions/{aid}")).GetProperty("auction");
         Assert.InRange((resumed.GetProperty("endsAt").GetDateTimeOffset() - endsAt).TotalMinutes, 179, 181);
-        await bidder.Post<JsonElement>($"/api/auctions/{aid}/bids", new { amount = 200 });
+        var bidder2 = await app.BidderAsync(2);
+        await bidder2.Post<JsonElement>($"/api/auctions/{aid}/bids", new { amount = 200 });
 
         res = await admin.Post<JsonElement>("/api/admin/auctions/extend", new { scope = new { ids = new[] { aid } }, minutes = 60 });
         Assert.Equal(1, res.GetProperty("affected").GetInt32());
