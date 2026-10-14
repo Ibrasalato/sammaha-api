@@ -832,3 +832,186 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [StaffRoleId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [Tickets] ADD [AssigneeId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [ComplaintEmails] nvarchar(400) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [InquiryEmails] nvarchar(400) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [ReportEmails] nvarchar(400) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [SuggestionEmails] nvarchar(400) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [TicketsRestrictToHandlers] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [Auctions] ADD [CancelReason] nvarchar(300) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [Auctions] ADD [CancelledAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [Auctions] ADD [PauseReason] nvarchar(300) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [Auctions] ADD [PausedAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    CREATE TABLE [StaffRoles] (
+        [Id] uniqueidentifier NOT NULL,
+        [Name] nvarchar(60) NOT NULL,
+        [Description] nvarchar(200) NULL,
+        [Permissions] nvarchar(1000) NOT NULL,
+        [IsSystem] bit NOT NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        CONSTRAINT [PK_StaffRoles] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    CREATE TABLE [TicketRoutes] (
+        [Kind] nvarchar(20) NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_TicketRoutes] PRIMARY KEY ([Kind], [UserId]),
+        CONSTRAINT [FK_TicketRoutes_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'Id', N'CreatedAt', N'Description', N'IsSystem', N'Name', N'Permissions') AND [object_id] = OBJECT_ID(N'[StaffRoles]'))
+        SET IDENTITY_INSERT [StaffRoles] ON;
+    EXEC(N'INSERT INTO [StaffRoles] ([Id], [CreatedAt], [Description], [IsSystem], [Name], [Permissions])
+    VALUES (''5a3f0000-0000-4000-8000-0000000000c1'', ''2026-10-14T00:00:00.0000000+00:00'', N''مراجعة الطلبات وفتح المزادات والرد على الشكاوى'', CAST(1 AS bit), N''لجنة الاعتماد'', N''overview.view,requests.view,requests.review,requests.cancel,auctions.schedule,invoices.view,tickets.view,tickets.reply,tickets.manage,events.manage,users.view'')');
+    IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'Id', N'CreatedAt', N'Description', N'IsSystem', N'Name', N'Permissions') AND [object_id] = OBJECT_ID(N'[StaffRoles]'))
+        SET IDENTITY_INSERT [StaffRoles] OFF;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    CREATE INDEX [IX_Users_StaffRoleId] ON [Users] ([StaffRoleId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    CREATE INDEX [IX_Tickets_AssigneeId_Status] ON [Tickets] ([AssigneeId], [Status]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_StaffRoles_Name] ON [StaffRoles] ([Name]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    CREATE INDEX [IX_TicketRoutes_UserId] ON [TicketRoutes] ([UserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    ALTER TABLE [Users] ADD CONSTRAINT [FK_Users_StaffRoles_StaffRoleId] FOREIGN KEY ([StaffRoleId]) REFERENCES [StaffRoles] ([Id]) ON DELETE NO ACTION;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014051334_StaffRolesAuctionControl'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014051334_StaffRolesAuctionControl', N'10.0.13');
+END;
+
+COMMIT;
+GO
+

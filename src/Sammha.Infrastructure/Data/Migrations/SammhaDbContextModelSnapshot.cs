@@ -45,6 +45,13 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
 
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<Guid?>("CandidateId")
                         .HasColumnType("uniqueidentifier");
 
@@ -83,6 +90,13 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<decimal>("OpeningPrice")
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("PauseReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTimeOffset?>("PausedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("RequestId")
                         .HasColumnType("uniqueidentifier");
@@ -713,12 +727,22 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<string>("ComplaintEmails")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
                     b.Property<string>("CompoundClosedNote")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
                     b.Property<bool>("CompoundOpen")
                         .HasColumnType("bit");
+
+                    b.Property<string>("InquiryEmails")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
 
                     b.Property<bool>("InstantSaleOpen")
                         .HasColumnType("bit");
@@ -746,6 +770,11 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<int>("PasswordMinLength")
                         .HasColumnType("int");
 
+                    b.Property<string>("ReportEmails")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
                     b.Property<string>("RequestsClosedNote")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
@@ -766,6 +795,11 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<int>("StaffIdleMinutes")
                         .HasColumnType("int");
 
+                    b.Property<string>("SuggestionEmails")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
                     b.Property<string>("SupportEmail")
                         .IsRequired()
                         .HasMaxLength(160)
@@ -775,6 +809,9 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<bool>("TicketsRestrictToHandlers")
+                        .HasColumnType("bit");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
@@ -953,6 +990,51 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.ToTable("SettingsChanges");
                 });
 
+            modelBuilder.Entity("Sammha.Domain.StaffRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Permissions")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("StaffRoles");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("5a3f0000-0000-4000-8000-0000000000c1"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "مراجعة الطلبات وفتح المزادات والرد على الشكاوى",
+                            IsSystem = true,
+                            Name = "لجنة الاعتماد",
+                            Permissions = "overview.view,requests.view,requests.review,requests.cancel,auctions.schedule,invoices.view,tickets.view,tickets.reply,tickets.manage,events.manage,users.view"
+                        });
+                });
+
             modelBuilder.Entity("Sammha.Domain.Ticket", b =>
                 {
                     b.Property<Guid>("Id")
@@ -962,6 +1044,9 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<string>("Assignee")
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
+
+                    b.Property<Guid?>("AssigneeId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
@@ -1032,6 +1117,8 @@ namespace Sammha.Infrastructure.Data.Migrations
 
                     b.HasIndex("Phone");
 
+                    b.HasIndex("AssigneeId", "Status");
+
                     b.ToTable("Tickets");
                 });
 
@@ -1070,6 +1157,22 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.HasIndex("TicketId");
 
                     b.ToTable("TicketMessages");
+                });
+
+            modelBuilder.Entity("Sammha.Domain.TicketRoute", b =>
+                {
+                    b.Property<string>("Kind")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Kind", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("TicketRoutes");
                 });
 
             modelBuilder.Entity("Sammha.Domain.User", b =>
@@ -1154,6 +1257,9 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<bool>("ShowAvatar")
                         .HasColumnType("bit");
 
+                    b.Property<Guid?>("StaffRoleId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
@@ -1161,6 +1267,8 @@ namespace Sammha.Infrastructure.Data.Migrations
 
                     b.HasIndex("Phone")
                         .IsUnique();
+
+                    b.HasIndex("StaffRoleId");
 
                     b.ToTable("Users");
                 });
@@ -1260,6 +1368,23 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasForeignKey("TicketId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Sammha.Domain.TicketRoute", b =>
+                {
+                    b.HasOne("Sammha.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sammha.Domain.User", b =>
+                {
+                    b.HasOne("Sammha.Domain.StaffRole", null)
+                        .WithMany()
+                        .HasForeignKey("StaffRoleId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Sammha.Domain.LogoRequest", b =>
