@@ -23,6 +23,21 @@ public class MeController(ISender mediator) : ControllerBase
     [HttpPut("account")]
     public Task<UserDto> Account(AccountBody b, CancellationToken ct) => mediator.Send(new UpdateAccountCommand(b.FullName, b.NationalId), ct);
 
+    /// <summary>address and a second number, completed after sign-up</summary>
+    [HttpPut("address")]
+    public Task<UserDto> Address(AddressInput b, CancellationToken ct) => mediator.Send(new UpdateAddressCommand(b), ct);
+
+    /// <summary>personal details (accounts made before they were required)</summary>
+    [HttpPut("personal")]
+    public Task<UserDto> Personal(PersonalInput b, CancellationToken ct) => mediator.Send(new UpdatePersonalCommand(b), ct);
+
+    /// <summary>sends a code to the account's email; confirming it marks the email verified</summary>
+    [HttpPost("email/verify")]
+    public Task<OtpChallengeDto> VerifyEmail(CancellationToken ct) => mediator.Send(new RequestEmailVerificationCommand(), ct);
+
+    [HttpPost("email/verify/confirm")]
+    public Task<UserDto> ConfirmVerifyEmail(CodeBody b, CancellationToken ct) => mediator.Send(new ConfirmEmailVerificationCommand(b.Challenge, b.Code), ct);
+
     [HttpPost("email")]
     public Task<OtpChallengeDto> Email(EmailBody b, CancellationToken ct) => mediator.Send(new RequestEmailChangeCommand(b.Email), ct);
 

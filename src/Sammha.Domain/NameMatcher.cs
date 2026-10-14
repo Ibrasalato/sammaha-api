@@ -103,3 +103,65 @@ public static partial class NameMatcher
 
     public static bool IsSaudiMobile(string phone) => phone.Length == 10 && phone.StartsWith("05") && phone.All(char.IsAsciiDigit);
 }
+
+/// <summary>
+/// Mobile numbers. Saudi numbers keep the local form 05xxxxxxxx (as every existing account has);
+/// other countries are stored as +{country code}{number}, e.g. +971501234567.
+/// </summary>
+public static class Phones
+{
+    /// <returns>the stored form, or null when the number is not valid for that country</returns>
+    public static string? Normalize(string? countryCode, string? number)
+    {
+        var dial = NameMatcher.NormalizePhone(countryCode);
+        var n = NameMatcher.NormalizePhone(number);
+        if (n.Length == 0) return null;
+        if (dial.Length == 0) return FromInput(number);
+        if (dial == "966")
+        {
+            if (n.StartsWith("966")) n = n[3..];
+            if (n.Length == 9 && n.StartsWith('5')) n = "0" + n;
+            return NameMatcher.IsSaudiMobile(n) ? n : null;
+        }
+        if (dial.Length > 4) return null;
+        if (n.StartsWith(dial) && n.Length > dial.Length + 6) n = n[dial.Length..];
+        n = n.TrimStart('0');
+        return n.Length is >= 6 and <= 12 ? $"+{dial}{n}" : null;
+    }
+
+    /// <summary>one field: 05… (Saudi), or +971… / 00971… (international)</summary>
+    public static string? FromInput(string? raw)
+    {
+        var t = (raw ?? "").Trim();
+        var n = NameMatcher.NormalizePhone(t);
+        if (t.StartsWith('+') || n.StartsWith("00"))
+        {
+            n = n.TrimStart('0');
+            if (n.StartsWith("966")) return Normalize("966", n[3..]);
+            return n.Length is >= 8 and <= 15 ? "+" + n : null;
+        }
+        if (n.Length == 9 && n.StartsWith('5')) n = "0" + n;
+        return NameMatcher.IsSaudiMobile(n) ? n : null;
+    }
+
+    /// <summary>where a code can be sent by SMS: 9665… for Saudi numbers, the digits for others</summary>
+    public static string ForSms(string stored) => stored.StartsWith('+') ? stored[1..] : stored.StartsWith("05") ? "966" + stored[1..] : stored;
+}
+
+/// <summary>Identity numbers: Saudi national ID (1…), resident iqama (2…), or a passport for those living abroad.</summary>
+public static class Identity
+{
+    public static string? Validate(string? id, string? nationality, string? residence)
+    {
+        var v = (id ?? "").Trim().ToUpperInvariant();
+        if (v.Length == 0) return "أدخل رقم الهوية";
+        if (residence == "SA" || nationality == "SA")
+        {
+            if (v.Length != 10 || !v.All(char.IsAsciiDigit)) return "رقم الهوية أو الإقامة 10 أرقام";
+            if (nationality == "SA" && v[0] != '1') return "رقم الهوية الوطنية يبدأ بـ 1";
+            if (nationality != "SA" && v[0] != '2') return "رقم الإقامة يبدأ بـ 2";
+            return null;
+        }
+        return v.Length is >= 5 and <= 20 && v.All(char.IsAsciiLetterOrDigit) ? null : "رقم الهوية أو الجواز من 5 إلى 20 حرفًا ورقمًا";
+    }
+}

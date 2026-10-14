@@ -28,6 +28,29 @@ public class User
     public DateTimeOffset? LastLoginAt { get; set; }
     /// <summary>committee members: the staff role that sets their permissions (null = the default committee role)</summary>
     public Guid? StaffRoleId { get; set; }
+
+    // ───── owner profile (sign-up) ─────
+    public string? FirstName { get; set; }
+    public string? FatherName { get; set; }
+    public string? GrandfatherName { get; set; }
+    public string? FamilyName { get; set; }
+    public DateOnly? BirthDate { get; set; }
+    /// <summary>male | female</summary>
+    public string? Gender { get; set; }
+    /// <summary>ISO 3166 alpha-2</summary>
+    public string? Nationality { get; set; }
+    public string? ResidenceCountry { get; set; }
+    public string? ResidenceCity { get; set; }
+    /// <summary>set once the owner confirms a code sent to the email</summary>
+    public DateTimeOffset? EmailVerifiedAt { get; set; }
+
+    // ───── completed later in the dashboard ─────
+    public string? AltPhone { get; set; }
+    public string? AddressCountry { get; set; }
+    public string? AddressCity { get; set; }
+    public string? District { get; set; }
+    public string? PostalCode { get; set; }
+    public string? Street { get; set; }
 }
 
 /// <summary>

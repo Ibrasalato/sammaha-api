@@ -91,12 +91,12 @@ public class SettingsTests(TestApp app) : IClassFixture<TestApp>
         var admin = await Admin();
         await admin.Send<JsonElement>(HttpMethod.Patch, "/api/admin/settings", new { signupOpen = false });
         var anon = app.Anonymous();
-        var msg = await anon.Fails(() => anon.Post<JsonElement>("/api/auth/signup", new { fullName = "سعد محمد عبدالله الدوسري", phone = "0557778899", email = "s.d@example.com", password = "longpassword1" }));
+        var msg = await anon.Fails(() => anon.Post<JsonElement>("/api/auth/signup", new { nationalId = "1098765432", firstName = "سعد", fatherName = "محمد", grandfatherName = "عبدالله", familyName = "الدوسري", birthDate = "1985-01-20", gender = "male", nationality = "SA", residenceCountry = "SA", residenceCity = "جدة", phoneCountry = "966", phone = "0557778899", email = "s.d@example.com", password = "longpassword1" }));
         Assert.Contains("متوقف", msg);
         await admin.Send<JsonElement>(HttpMethod.Patch, "/api/admin/settings", new { signupOpen = true, passwordMinLength = 10 });
-        msg = await anon.Fails(() => anon.Post<JsonElement>("/api/auth/signup", new { fullName = "سعد محمد عبدالله الدوسري", phone = "0557778899", email = "s.d@example.com", password = "short123" }));
+        msg = await anon.Fails(() => anon.Post<JsonElement>("/api/auth/signup", new { nationalId = "1098765432", firstName = "سعد", fatherName = "محمد", grandfatherName = "عبدالله", familyName = "الدوسري", birthDate = "1985-01-20", gender = "male", nationality = "SA", residenceCountry = "SA", residenceCity = "جدة", phoneCountry = "966", phone = "0557778899", email = "s.d@example.com", password = "short123" }));
         Assert.Contains("10 أحرف", msg);
-        await anon.Post<JsonElement>("/api/auth/signup", new { fullName = "سعد محمد عبدالله الدوسري", phone = "0557778899", email = "s.d@example.com", password = "longpassword1" });
+        await anon.Post<JsonElement>("/api/auth/signup", new { nationalId = "1098765432", firstName = "سعد", fatherName = "محمد", grandfatherName = "عبدالله", familyName = "الدوسري", birthDate = "1985-01-20", gender = "male", nationality = "SA", residenceCountry = "SA", residenceCity = "جدة", phoneCountry = "966", phone = "0557778899", email = "s.d@example.com", password = "longpassword1" });
         await admin.Send<JsonElement>(HttpMethod.Patch, "/api/admin/settings", new { passwordMinLength = 8 });
     }
 

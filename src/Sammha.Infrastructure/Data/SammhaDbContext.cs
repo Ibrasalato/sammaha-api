@@ -58,7 +58,20 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.HasIndex(x => x.Phone).IsUnique();
             e.HasIndex(x => x.Email).IsUnique();
             e.Property(x => x.FullName).HasMaxLength(120);
-            e.Property(x => x.Phone).HasMaxLength(10);
+            e.Property(x => x.Phone).HasMaxLength(16);
+            e.HasIndex(x => x.NationalId).IsUnique().HasFilter("[NationalId] IS NOT NULL");
+            e.Property(x => x.NationalId).HasMaxLength(20);
+            foreach (var n in new[] { nameof(User.FirstName), nameof(User.FatherName), nameof(User.GrandfatherName), nameof(User.FamilyName) }) e.Property(n).HasMaxLength(30);
+            e.Property(x => x.Gender).HasMaxLength(6);
+            e.Property(x => x.Nationality).HasMaxLength(2);
+            e.Property(x => x.ResidenceCountry).HasMaxLength(2);
+            e.Property(x => x.ResidenceCity).HasMaxLength(60);
+            e.Property(x => x.AltPhone).HasMaxLength(16);
+            e.Property(x => x.AddressCountry).HasMaxLength(2);
+            e.Property(x => x.AddressCity).HasMaxLength(60);
+            e.Property(x => x.District).HasMaxLength(80);
+            e.Property(x => x.PostalCode).HasMaxLength(10);
+            e.Property(x => x.Street).HasMaxLength(120);
             e.Property(x => x.Email).HasMaxLength(160);
             e.Property(x => x.Role).HasMaxLength(20);
             e.Property(x => x.AvatarUrl).HasMaxLength(-1); // data URL from the profile page

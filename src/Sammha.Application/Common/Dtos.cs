@@ -5,7 +5,7 @@ namespace Sammha.Application.Common;
 public record UserDto(Guid Id, string FullName, string Phone, string Email, string? NationalId, string Role, DateTimeOffset CreatedAt,
     string? AvatarUrl, bool? ShowAvatar, bool? Active,
     /// <summary>staff only: the permission keys this account has, and its staff role</summary>
-    List<string>? Permissions = null, Guid? StaffRoleId = null, string? StaffRoleName = null);
+    List<string>? Permissions = null, Guid? StaffRoleId = null, string? StaffRoleName = null, ProfileDto? Profile = null);
 
 public record SimilarHitDto(string Name, string Type, string Source, double Score);
 
@@ -72,7 +72,23 @@ public record OtpChallengeDto(string Challenge, string PhoneMasked, DateTimeOffs
 public record AuthResult(UserDto User, string Token, DateTimeOffset ExpiresAt, string RefreshToken, DateTimeOffset RefreshExpiresAt);
 
 // ───── inputs ─────
-public record SignUpInput(string FullName, string Phone, string Email, string? NationalId, string Password);
+/// <summary>owner sign-up: identity, four-part name, birth date, gender, nationality, residence, mobile with its country code, email</summary>
+public record SignUpInput(string? FullName, string Phone, string Email, string? NationalId, string Password,
+    string? FirstName = null, string? FatherName = null, string? GrandfatherName = null, string? FamilyName = null,
+    string? BirthDate = null, string? Gender = null, string? Nationality = null, string? ResidenceCountry = null, string? ResidenceCity = null,
+    string? PhoneCountry = null);
+
+/// <summary>completed later in the dashboard</summary>
+public record AddressInput(string? AddressCountry, string? AddressCity, string? District, string? PostalCode, string? Street, string? AltPhone, string? AltPhoneCountry);
+
+/// <summary>personal details an existing account can fill in (the identity number only while it is empty)</summary>
+public record PersonalInput(string? FirstName, string? FatherName, string? GrandfatherName, string? FamilyName, string? BirthDate, string? Gender,
+    string? Nationality, string? ResidenceCountry, string? ResidenceCity, string? NationalId);
+
+/// <summary>owner profile and how complete it is (missing: personal, email, address)</summary>
+public record ProfileDto(string? FirstName, string? FatherName, string? GrandfatherName, string? FamilyName, string? BirthDate, string? Gender,
+    string? Nationality, string? ResidenceCountry, string? ResidenceCity, string? AltPhone, string? AddressCountry, string? AddressCity,
+    string? District, string? PostalCode, string? Street, bool EmailVerified, int Completion, List<string> Missing);
 public record TicketInput(string Kind, string Topic, string Subject, string Name, string Phone, string? Email, string? RefNumber, string Message);
 public record ReviewDecision(Guid CandidateId, string Status, string? Reason);
 public record StaffInput(string FullName, string Phone, string Email, string Password, string Role, Guid? StaffRoleId = null);

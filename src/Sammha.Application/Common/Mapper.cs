@@ -18,7 +18,19 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
         StaffRoleName = u.Role == Roles.Admin ? "مدير النظام" : u.Role == Roles.Committee ? role?.Name : null,
     };
 
-    public static UserDto User(User u) => new(u.Id, u.FullName, u.Phone, u.Email, u.NationalId, u.Role, u.CreatedAt, u.AvatarUrl, u.ShowAvatar ? true : null, u.Active);
+    public static UserDto User(User u) => new(u.Id, u.FullName, u.Phone, u.Email, u.NationalId, u.Role, u.CreatedAt, u.AvatarUrl, u.ShowAvatar ? true : null, u.Active,
+        Profile: u.Role == Roles.Owner ? Profile(u) : null);
+
+    public static ProfileDto Profile(User u)
+    {
+        var missing = new List<string>();
+        if (u.FirstName == null || u.FamilyName == null || u.NationalId == null || u.BirthDate == null || u.Gender == null || u.Nationality == null || u.ResidenceCountry == null) missing.Add("personal");
+        if (u.EmailVerifiedAt == null) missing.Add("email");
+        if (u.AddressCountry == null || u.AddressCity == null || u.District == null || u.PostalCode == null) missing.Add("address");
+        return new ProfileDto(u.FirstName, u.FatherName, u.GrandfatherName, u.FamilyName, u.BirthDate?.ToString("yyyy-MM-dd"), u.Gender, u.Nationality,
+            u.ResidenceCountry, u.ResidenceCity, u.AltPhone, u.AddressCountry, u.AddressCity, u.District, u.PostalCode, u.Street,
+            u.EmailVerifiedAt != null, (3 - missing.Count) * 100 / 3, missing);
+    }
 
     public static List<SimilarHitDto> Hits(string json) =>
         string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<List<SimilarHitDto>>(json, Json) ?? [];

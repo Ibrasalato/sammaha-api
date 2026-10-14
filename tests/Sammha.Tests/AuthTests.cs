@@ -9,7 +9,11 @@ public class AuthTests(TestApp app) : IClassFixture<TestApp>
     public async Task Sign_up_then_two_step_sign_in()
     {
         var api = app.Anonymous();
-        var res = await api.Post<JsonElement>("/api/auth/signup", new { fullName = "عبدالله محمد سالم القحطاني", phone = "0551112233", email = "a.q@example.com", password = "secret12" });
+        var res = await api.Post<JsonElement>("/api/auth/signup", new
+        {
+            nationalId = "1012345678", firstName = "عبدالله", fatherName = "محمد", grandfatherName = "سالم", familyName = "القحطاني", birthDate = "1990-05-01",
+            gender = "male", nationality = "SA", residenceCountry = "SA", residenceCity = "الرياض", phoneCountry = "966", phone = "551112233", email = "a.q@example.com", password = "secret12",
+        });
         Assert.Equal("owner", res.GetProperty("user").GetProperty("role").GetString());
 
         var ch = await api.Post<JsonElement>("/api/auth/signin", new { login = "0551112233", password = "secret12", portal = "owner" });

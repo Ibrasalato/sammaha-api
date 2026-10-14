@@ -11,7 +11,8 @@ namespace Sammha.Application.Features.Auth;
 /// <summary>Sign-up, two-step sign-in (password then one-time code) and account changes.</summary>
 public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, IPasswordHasher hasher, Sessions sessions, ISmsSender sms,
     SettingsStore settings, IOptions<OtpOptions> otpOpt)
-    : IRequestHandler<GetCurrentUserQuery, UserDto?>, IRequestHandler<SignUpCommand, AuthResult>, IRequestHandler<StartSignInCommand, OtpChallengeDto>, IRequestHandler<CompleteSignInCommand, AuthResult>, IRequestHandler<ResendOtpCommand, OtpChallengeDto>, IRequestHandler<ChangePasswordCommand, AuthResult>, IRequestHandler<RefreshSessionCommand, AuthResult>, IRequestHandler<SignOutCommand, MediatR.Unit>, IRequestHandler<UpdateProfileCommand, UserDto>, IRequestHandler<UpdateAccountCommand, UserDto>, IRequestHandler<RequestEmailChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailChangeCommand, UserDto>, IRequestHandler<RequestPhoneChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmPhoneChangeCommand, UserDto>
+    : IRequestHandler<GetCurrentUserQuery, UserDto?>, IRequestHandler<SignUpCommand, AuthResult>, IRequestHandler<StartSignInCommand, OtpChallengeDto>, IRequestHandler<CompleteSignInCommand, AuthResult>, IRequestHandler<ResendOtpCommand, OtpChallengeDto>, IRequestHandler<ChangePasswordCommand, AuthResult>, IRequestHandler<RefreshSessionCommand, AuthResult>, IRequestHandler<SignOutCommand, MediatR.Unit>, IRequestHandler<UpdateProfileCommand, UserDto>, IRequestHandler<UpdateAccountCommand, UserDto>, IRequestHandler<RequestEmailChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailChangeCommand, UserDto>, IRequestHandler<RequestPhoneChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmPhoneChangeCommand, UserDto>,
+      IRequestHandler<UpdateAddressCommand, UserDto>, IRequestHandler<UpdatePersonalCommand, UserDto>, IRequestHandler<RequestEmailVerificationCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailVerificationCommand, UserDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     private OtpOptions Otp => otpOpt.Value;
@@ -20,20 +21,61 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
 
     private async Task<UserDto?> CurrentAsync(CancellationToken ct) => (await access.MaybeAsync(ct)) is { } u ? await access.DtoAsync(u, ct) : null;
 
+    [GeneratedRegex(@"^[\p{L}][\p{L}\p{M}' -]{0,29}$")] private static partial Regex NamePartRx();
+    [GeneratedRegex(@"^[A-Z]{2}$")] private static partial Regex CountryRx();
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    private static string Part(string? v, string label)
+    {
+        var t = Regex.Replace((v ?? "").Trim(), @"\s+", " ");
+        if (t.Length < 2 || !NamePartRx().IsMatch(t)) throw new DomainException($"اكتب {label} بالحروف (2 إلى 30 حرفًا)");
+        return t;
+    }
+
+    private DateOnly Birth(string? v)
+    {
+        if (!DateOnly.TryParseExact(v, "yyyy-MM-dd", Inv, System.Globalization.DateTimeStyles.None, out var d)) throw new DomainException("أدخل تاريخ الميلاد");
+        var today = DateOnly.FromDateTime(Now.ToOffset(TimeSpan.FromHours(3)).DateTime);
+        var age = today.Year - d.Year - (today < d.AddYears(today.Year - d.Year) ? 1 : 0);
+        if (age < 18) throw new DomainException("التسجيل لمن أتم 18 سنة");
+        if (age > 110) throw new DomainException("تاريخ الميلاد غير صحيح");
+        return d;
+    }
+
+    private static string Country(string? v, string label)
+    {
+        var c = (v ?? "").Trim().ToUpperInvariant();
+        return CountryRx().IsMatch(c) ? c : throw new DomainException($"اختر {label}");
+    }
+
     private async Task<AuthResult> SignUpAsync(SignUpInput i, CancellationToken ct)
     {
         if (!(await settings.GetAsync(ct)).SignupOpen) throw new DomainException("التسجيل في المنصة متوقف مؤقتًا", 403);
-        var phone = NameMatcher.NormalizePhone(i.Phone);
+        var first = Part(i.FirstName, "الاسم الأول");
+        var father = Part(i.FatherName, "اسم الأب");
+        var grand = Part(i.GrandfatherName, "اسم الجد");
+        var family = Part(i.FamilyName, "اسم العائلة");
+        var birth = Birth(i.BirthDate);
+        if (i.Gender is not ("male" or "female")) throw new DomainException("اختر الجنس");
+        var nationality = Country(i.Nationality, "الجنسية");
+        var residence = Country(i.ResidenceCountry, "بلد الإقامة");
+        var city = (i.ResidenceCity ?? "").Trim();
+        if (city.Length is < 2 or > 60) throw new DomainException("اختر مدينة الإقامة");
+        var nid = (i.NationalId ?? "").Trim().ToUpperInvariant();
+        if (Identity.Validate(nid, nationality, residence) is { } idError) throw new DomainException(idError);
+        var phone = Phones.Normalize(i.PhoneCountry, i.Phone) ?? throw new DomainException(NameMatcher.NormalizePhone(i.PhoneCountry) is "" or "966" ? "رقم الجوال يبدأ بـ 5 ويتكون من 9 أرقام" : "رقم الجوال غير صحيح لهذا البلد");
         var email = (i.Email ?? "").Trim();
-        if (!NameMatcher.IsSaudiMobile(phone)) throw new DomainException("رقم الجوال يبدأ بـ 05 ويتكون من 10 أرقام");
-        if ((i.FullName ?? "").Trim().Length < 3) throw new DomainException("اكتب الاسم الرباعي");
-        if (!EmailRx().IsMatch(email)) throw new DomainException("البريد الإلكتروني غير صحيح");
+        if (!EmailRx().IsMatch(email) || email.Length > 160) throw new DomainException("البريد الإلكتروني غير صحيح");
         await settings.EnsurePasswordAsync(i.Password, ct);
-        var nid = i.NationalId?.Trim();
-        if (!string.IsNullOrEmpty(nid) && !NationalIdRx().IsMatch(nid)) throw new DomainException("رقم الهوية أو الإقامة 10 أرقام يبدأ بـ 1 أو 2");
+        if (await db.Users.AnyAsync(u => u.NationalId == nid, ct)) throw new DomainException("رقم الهوية مسجل مسبقًا، سجّل الدخول");
         if (await db.Users.AnyAsync(u => u.Phone == phone, ct)) throw new DomainException("رقم الجوال مسجل مسبقًا، سجّل الدخول");
         if (await db.Users.AnyAsync(u => u.Email == email, ct)) throw new DomainException("البريد الإلكتروني مسجل مسبقًا");
-        var u = new User { FullName = i.FullName!.Trim(), Phone = phone, Email = email, NationalId = string.IsNullOrEmpty(nid) ? null : nid, Role = Roles.Owner, CreatedAt = Now };
+        var u = new User
+        {
+            FullName = $"{first} {father} {grand} {family}", FirstName = first, FatherName = father, GrandfatherName = grand, FamilyName = family,
+            BirthDate = birth, Gender = i.Gender, Nationality = nationality, ResidenceCountry = residence, ResidenceCity = city,
+            Phone = phone, Email = email, NationalId = nid, Role = Roles.Owner, CreatedAt = Now,
+        };
         u.PasswordHash = hasher.Hash(i.Password!);
         db.Users.Add(u);
         await db.SaveChangesAsync(ct);
@@ -43,9 +85,11 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     /// <summary>Step 1. The same generic error whichever portal is wrong, so the staff portal is never revealed.</summary>
     private async Task<OtpChallengeDto> StartSignInAsync(string login, string password, string portal, CancellationToken ct)
     {
+        // the identity number, the mobile (05… or +country…) or the email
         var l = (login ?? "").Trim().ToLowerInvariant();
-        var phone = NameMatcher.NormalizePhone(l);
-        var u = await db.Users.FirstOrDefaultAsync(x => x.Phone == phone || x.Email == l, ct);
+        var phone = Phones.FromInput(l) ?? NameMatcher.NormalizePhone(l);
+        var id = l.ToUpperInvariant();
+        var u = l.Length == 0 ? null : await db.Users.FirstOrDefaultAsync(x => x.Phone == phone || x.Email == l || x.NationalId == id, ct);
         var wrong = new DomainException(portal == "staff" ? "البيانات غير صحيحة" : "رقم الجوال أو كلمة المرور غير صحيحة");
         if (u == null || (portal == "staff") != Roles.IsStaff(u.Role)) throw wrong;
         var policy = await settings.GetAsync(ct);
@@ -140,6 +184,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         if (c.UserId != u.Id) throw new DomainException("تعذّر التحقق");
         if (await db.Users.AnyAsync(x => x.Id != u.Id && x.Email == c.Target, ct)) throw new DomainException("البريد الإلكتروني مسجل لحساب آخر");
         u.Email = c.Target;
+        u.EmailVerifiedAt = Now; // the code reached the new address
         await db.SaveChangesAsync(ct);
         return Mapper.User(u);
     }
@@ -147,8 +192,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     private async Task<OtpChallengeDto> RequestPhoneChangeAsync(string newPhone, CancellationToken ct)
     {
         var u = await access.MeAsync(ct);
-        var phone = NameMatcher.NormalizePhone(newPhone);
-        if (!NameMatcher.IsSaudiMobile(phone)) throw new DomainException("رقم الجوال يبدأ بـ 05 ويتكون من 10 أرقام");
+        var phone = Phones.FromInput(newPhone) ?? throw new DomainException("رقم الجوال غير صحيح: 05xxxxxxxx أو بمفتاح الدولة مثل +971…");
         if (phone == u.Phone) throw new DomainException("هذا رقمك الحالي");
         if (await db.Users.AnyAsync(x => x.Phone == phone, ct)) throw new DomainException("رقم الجوال مسجل لحساب آخر");
         return await IssueOtpAsync(u.Id, OtpPurposes.Phone, phone, ct);
@@ -165,6 +209,75 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         return Mapper.User(u);
     }
 
+    // ───── profile completion (dashboard) ─────
+    private async Task<UserDto> UpdateAddressAsync(AddressInput i, CancellationToken ct)
+    {
+        var u = await access.MeAsync(ct);
+        var country = Country(i.AddressCountry, "البلد");
+        string Text(string? v, string label, int max) { var t = Regex.Replace((v ?? "").Trim(), @"\s+", " "); return t.Length >= 2 && t.Length <= max ? t : throw new DomainException($"أدخل {label}"); }
+        var city = Text(i.AddressCity, "المدينة", 60);
+        var district = Text(i.District, "الحي", 80);
+        var postal = NameMatcher.NormalizePhone(i.PostalCode);
+        if (postal.Length is < 3 or > 10) throw new DomainException("الرمز البريدي أرقام فقط، مثل 12345");
+        var street = string.IsNullOrWhiteSpace(i.Street) ? null : Text(i.Street, "الشارع", 120);
+        string? alt = null;
+        if (!string.IsNullOrWhiteSpace(i.AltPhone))
+        {
+            alt = Phones.Normalize(i.AltPhoneCountry, i.AltPhone) ?? throw new DomainException("رقم التواصل الآخر غير صحيح");
+            if (alt == u.Phone) throw new DomainException("رقم التواصل الآخر هو رقمك الأساسي نفسه");
+        }
+        u.AddressCountry = country; u.AddressCity = city; u.District = district; u.PostalCode = postal; u.Street = street; u.AltPhone = alt;
+        await db.SaveChangesAsync(ct);
+        return Mapper.User(u);
+    }
+
+    private async Task<UserDto> UpdatePersonalAsync(PersonalInput i, CancellationToken ct)
+    {
+        var u = await access.MeAsync(ct);
+        var first = Part(i.FirstName, "الاسم الأول");
+        var father = Part(i.FatherName, "اسم الأب");
+        var grand = Part(i.GrandfatherName, "اسم الجد");
+        var family = Part(i.FamilyName, "اسم العائلة");
+        var birth = Birth(i.BirthDate);
+        if (i.Gender is not ("male" or "female")) throw new DomainException("اختر الجنس");
+        var nationality = Country(i.Nationality, "الجنسية");
+        var residence = Country(i.ResidenceCountry, "بلد الإقامة");
+        var city = (i.ResidenceCity ?? "").Trim();
+        if (city.Length is < 2 or > 60) throw new DomainException("اختر مدينة الإقامة");
+        if (u.NationalId == null)
+        {
+            // accounts made before the identity number was required add it once; changing it later goes through the administration
+            var nid = (i.NationalId ?? "").Trim().ToUpperInvariant();
+            if (Identity.Validate(nid, nationality, residence) is { } idError) throw new DomainException(idError);
+            if (await db.Users.AnyAsync(x => x.NationalId == nid && x.Id != u.Id, ct)) throw new DomainException("رقم الهوية مسجل لحساب آخر");
+            u.NationalId = nid;
+        }
+        var full = $"{first} {father} {grand} {family}";
+        if (full != u.FullName)
+            await db.ReservedNames.Where(r => r.OwnerId == u.Id).ExecuteUpdateAsync(x => x.SetProperty(r => r.OwnerName, full), ct);
+        u.FullName = full; u.FirstName = first; u.FatherName = father; u.GrandfatherName = grand; u.FamilyName = family;
+        u.BirthDate = birth; u.Gender = i.Gender; u.Nationality = nationality; u.ResidenceCountry = residence; u.ResidenceCity = city;
+        await db.SaveChangesAsync(ct);
+        return Mapper.User(u);
+    }
+
+    private async Task<OtpChallengeDto> RequestEmailVerificationAsync(CancellationToken ct)
+    {
+        var u = await access.MeAsync(ct);
+        if (u.EmailVerifiedAt != null) throw new DomainException("بريدك موثّق مسبقًا");
+        return await IssueOtpAsync(u.Id, OtpPurposes.VerifyEmail, u.Email, ct);
+    }
+
+    private async Task<UserDto> ConfirmEmailVerificationAsync(string challenge, string code, CancellationToken ct)
+    {
+        var u = await access.MeAsync(ct);
+        var c = await ConsumeOtpAsync(challenge, code, OtpPurposes.VerifyEmail, ct);
+        if (c.UserId != u.Id || !string.Equals(c.Target, u.Email, StringComparison.OrdinalIgnoreCase)) throw new DomainException("تعذّر التحقق، اطلب رمزًا جديدًا");
+        u.EmailVerifiedAt = Now;
+        await db.SaveChangesAsync(ct);
+        return Mapper.User(u);
+    }
+
     // ───── one-time codes ─────
     private async Task<OtpChallengeDto> IssueOtpAsync(Guid userId, string purpose, string target, CancellationToken ct)
     {
@@ -175,7 +288,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         db.OtpChallenges.Add(c);
         await db.SaveChangesAsync(ct);
         if (string.IsNullOrEmpty(Otp.FixedCode)) await sms.SendCodeAsync(target, code, purpose);
-        return new OtpChallengeDto(c.Id.ToString(), purpose == OtpPurposes.Email ? MaskEmail(target) : MaskPhone(target), c.ExpiresAt, code.Length);
+        return new OtpChallengeDto(c.Id.ToString(), purpose is OtpPurposes.Email or OtpPurposes.VerifyEmail ? MaskEmail(target) : MaskPhone(target), c.ExpiresAt, code.Length);
     }
 
     /// <summary>A wrong code is counted and saved (not rolled back), so guessing stops after MaxAttempts.</summary>
@@ -196,7 +309,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         return c;
     }
 
-    public static string MaskPhone(string p) => p.Length < 7 ? p : $"{p[..2]}•••••{p[^3..]}";
+    public static string MaskPhone(string p) => p.Length < 7 ? p : p.StartsWith('+') ? $"{p[..4]}•••••{p[^3..]}" : $"{p[..2]}•••••{p[^3..]}";
     public static string MaskEmail(string e)
     {
         var at = e.IndexOf('@');
@@ -219,6 +332,10 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     }
     public Task<UserDto> Handle(UpdateProfileCommand q, CancellationToken ct) => UpdateProfileAsync(q.AvatarUrl, q.AvatarSet, q.ShowAvatar, ct);
     public Task<UserDto> Handle(UpdateAccountCommand q, CancellationToken ct) => UpdateAccountAsync(q.FullName, q.NationalId, ct);
+    public Task<UserDto> Handle(UpdateAddressCommand q, CancellationToken ct) => UpdateAddressAsync(q.Input, ct);
+    public Task<UserDto> Handle(UpdatePersonalCommand q, CancellationToken ct) => UpdatePersonalAsync(q.Input, ct);
+    public Task<OtpChallengeDto> Handle(RequestEmailVerificationCommand q, CancellationToken ct) => RequestEmailVerificationAsync(ct);
+    public Task<UserDto> Handle(ConfirmEmailVerificationCommand q, CancellationToken ct) => ConfirmEmailVerificationAsync(q.Challenge, q.Code, ct);
     public Task<OtpChallengeDto> Handle(RequestEmailChangeCommand q, CancellationToken ct) => RequestEmailChangeAsync(q.Email, ct);
     public Task<UserDto> Handle(ConfirmEmailChangeCommand q, CancellationToken ct) => ConfirmEmailChangeAsync(q.Challenge, q.Code, ct);
     public Task<OtpChallengeDto> Handle(RequestPhoneChangeCommand q, CancellationToken ct) => RequestPhoneChangeAsync(q.Phone, ct);
