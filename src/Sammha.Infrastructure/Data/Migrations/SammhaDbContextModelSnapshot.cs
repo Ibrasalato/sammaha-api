@@ -1175,6 +1175,71 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.ToTable("OtpChallenges");
                 });
 
+            modelBuilder.Entity("Sammha.Domain.OwnedCamel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Age")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("ChipNumbers")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTimeOffset?>("LinkedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid?>("ReservedId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Sex")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTimeOffset?>("SyncedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Type")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("OwnedCamels");
+                });
+
             modelBuilder.Entity("Sammha.Domain.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1254,6 +1319,9 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<int?>("AuctionDays")
+                        .HasColumnType("int");
+
                     b.Property<string>("ComingSoon")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1314,8 +1382,20 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<decimal?>("ManqiyaOpeningPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<int>("MaxLoginAttempts")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("MinIncrement")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<decimal?>("OpeningPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
 
                     b.Property<int>("PasswordMinLength")
                         .HasColumnType("int");
@@ -2135,6 +2215,15 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Sammha.Domain.OwnedCamel", b =>
+                {
+                    b.HasOne("Sammha.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Sammha.Domain.TicketMessage", b =>

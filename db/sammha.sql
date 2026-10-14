@@ -2192,3 +2192,89 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014194643_AuctionSettingsAndCamels'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [AuctionDays] int NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014194643_AuctionSettingsAndCamels'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [ManqiyaOpeningPrice] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014194643_AuctionSettingsAndCamels'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [MinIncrement] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014194643_AuctionSettingsAndCamels'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [OpeningPrice] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014194643_AuctionSettingsAndCamels'
+)
+BEGIN
+    CREATE TABLE [OwnedCamels] (
+        [Id] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [ExternalId] nvarchar(64) NULL,
+        [Name] nvarchar(120) NULL,
+        [ChipNumbers] nvarchar(200) NOT NULL DEFAULT N'',
+        [Sex] nvarchar(10) NULL,
+        [Color] nvarchar(60) NULL,
+        [Type] nvarchar(80) NULL,
+        [Age] nvarchar(40) NULL,
+        [Status] nvarchar(60) NULL,
+        [ReservedId] uniqueidentifier NULL,
+        [LinkedAt] datetimeoffset NULL,
+        [SyncedAt] datetimeoffset NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        CONSTRAINT [PK_OwnedCamels] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OwnedCamels_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014194643_AuctionSettingsAndCamels'
+)
+BEGIN
+    CREATE INDEX [IX_OwnedCamels_ExternalId] ON [OwnedCamels] ([ExternalId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014194643_AuctionSettingsAndCamels'
+)
+BEGIN
+    CREATE INDEX [IX_OwnedCamels_UserId] ON [OwnedCamels] ([UserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014194643_AuctionSettingsAndCamels'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014194643_AuctionSettingsAndCamels', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
