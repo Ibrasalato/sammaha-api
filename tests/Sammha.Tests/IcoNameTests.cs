@@ -94,15 +94,15 @@ public class IcoNameTests(TestApp app) : IClassFixture<TestApp>
         var a2 = await admin.Post<JsonElement>($"/api/admin/ico-names/{icoId}/auction", new { startsAt = now.AddMinutes(-1), endsAt = now.AddHours(1), openingPrice = 300 });
         var a2id = a2.GetProperty("id").GetString();
         Assert.Contains("قائم", await admin.Fails(() => admin.Post<JsonElement>($"/api/admin/ico-names/{icoId}/auction", new { startsAt = now, endsAt = now.AddHours(1) })));
-        Assert.Contains("ضمان دخول المزاد", await owner.Fails(() => owner.Post<JsonElement>($"/api/auctions/{a2id}/bids", new { amount = 300 })));
+        Assert.Contains("ضمان دخول المزاد", await owner.Fails(() => owner.Post<JsonElement>($"/api/auctions/{a2id}/bids", new { amount = 310 })));
         await owner.Post<JsonElement>($"/api/auctions/{a2id}/deposit");
         var ownerStart = await owner.Balance();
-        await owner.Post<JsonElement>($"/api/auctions/{a2id}/bids", new { amount = 300 });
+        await owner.Post<JsonElement>($"/api/auctions/{a2id}/bids", new { amount = 310 });
         app.Clock.Advance(TimeSpan.FromHours(2));
         await app.SweepAsync();
         var inv2 = (await owner.Get<JsonElement>("/api/me/invoices")).EnumerateArray().First(i => i.GetProperty("auctionId").GetString() == a2id);
         await owner.Post<JsonElement>($"/api/me/invoices/{inv2.GetProperty("id").GetString()}/pay");
-        Assert.Equal(ownerStart - 300 + 50, await owner.Balance());
+        Assert.Equal(ownerStart - 310 + 50, await owner.Balance());
         Assert.Contains((await owner.Get<JsonElement>("/api/me/names")).EnumerateArray(), n => n.GetProperty("name").GetString() == "صقر الفلاة");
         Assert.DoesNotContain((await admin.Get<JsonElement>("/api/admin/ico-names")).EnumerateArray(), n => n.GetProperty("name").GetString() == "صقر الفلاة");
     }
