@@ -101,6 +101,8 @@ public class PlatformSettings
     public int? PaymentDeadlineHours { get; set; }
     /// <summary>the guarantee paid with a mark request and to enter an auction; null = the server default (Platform:DepositAmount)</summary>
     public decimal? DepositAmount { get; set; }
+    /// <summary>fee for moving a name to another owner (VAT included); 0 = free</summary>
+    public decimal? TransferFee { get; set; }
 
     // ───── complaints, reports and enquiries ─────
     /// <summary>when on, only the handlers of a ticket's kind (and admins) can reply to it or change it</summary>

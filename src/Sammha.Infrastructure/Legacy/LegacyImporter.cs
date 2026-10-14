@@ -62,7 +62,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
     private static readonly string[] Tables =
     [
         "Members", "Orders", "Biddings", "Biddings_Details", "Biddings_Winners", "Bills", "CompoundNames_Master", "CompoundNames_Details",
-        "Members_Notifications", "Name_Logo", "MemberCamels", "Black_List", "MemberExcluded", "Request", "PaymentCard", "Administrators",
+        "Members_Notifications", "Name_Logo", "MemberCamels", "Black_List", "Request", "PaymentCard", "Administrators",
     ];
 
     // ───────────────────────── inspect ─────────────────────────
@@ -417,6 +417,59 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
         }
         await FlushAsync(true);
 
+        // ── ownership transfers (the old Request table, types named «نقل…») ──
+        var reqTypes = (await src.ReadAsync("C_RequestType", ct)).ToDictionary(r => r.Id, NameOf);
+        var reqStatus = (await src.ReadAsync("C_RequestStatus", ct)).ToDictionary(r => r.Id, NameOf);
+        var winnerById = winners.SelectMany(g => g).GroupBy(w => w.Id).ToDictionary(g => g.Key, g => g.First());
+        var billById = bills.GroupBy(b => b.Id).ToDictionary(g => g.Key, g => g.First());
+        var oldRequests = await src.ReadAsync("Request", ct);
+        foreach (var q in oldRequests.Where(q => Ar.Has(reqTypes.GetValueOrDefault(q.I("RequestTypeId") ?? 0), "نقل")).OrderBy(q => q.Dt("DateTime")))
+        {
+            if (links.ContainsKey((LegacyKinds.Transfer, q.Id))) continue;
+            if (!users.TryGetValue(q.I("MemberId") ?? 0, out var from) || !users.TryGetValue(q.I("ToMemberId") ?? 0, out var to)) { _r.Warn("transfers.withoutMember"); continue; }
+            ReservedName? rn = null;
+            if (q.I("Biddings_WinnersId") is { } wid && winnerById.TryGetValue(wid, out var w) && outcomes.TryGetValue(w.I("BidWin_BidCode_FK") ?? 0, out var oc))
+                rn = await db.ReservedNames.FirstOrDefaultAsync(n => n.AuctionId == oc.Id, ct);
+            if (rn == null && (q.S("Name") ?? q.S("Title")) is { } nm)
+            {
+                var norm = NameMatcher.Normalize(nm);
+                rn = await db.ReservedNames.FirstOrDefaultAsync(n => n.Normalized == norm, ct);
+            }
+            if (rn == null) { _r.Warn("transfers.nameNotFound"); continue; }
+            var st = reqStatus.GetValueOrDefault(q.I("RequestStatusId") ?? 0);
+            var status = Ar.Has(st, "رفض") ? TransferStatuses.Rejected
+                : Ar.Has(st, "ملغ", "الغاء", "الغي", "سحب") ? TransferStatuses.Cancelled
+                : Ar.Has(st, "مقبول", "قبول", "معتمد", "اعتماد", "منفذ", "تنفيذ", "موافق", "مكتمل", "اكتمل", "تم") ? TransferStatuses.Completed
+                : TransferStatuses.UnderReview;
+            var at = At(q.Dt("DateTime")) ?? _now;
+            var done = At(q.Dt("LatestUpdateDateTime")) ?? at;
+            var t = new NameTransfer
+            {
+                Number = $"NT-L{q.Id}", ReservedId = rn.Id, Name = rn.Name, Type = rn.Type, FromId = from, FromName = fullNames.GetValueOrDefault(from, ""),
+                ToId = to, ToName = fullNames.GetValueOrDefault(to, ""), Reason = TransferReasons.Other, Note = Cut(q.S("Title") ?? Sentinel, 500),
+                Fee = q.I("BillId") is { } bid && billById.TryGetValue(bid, out var fb) && fb.B("Bill_IsPaied") ? fb.D("Bill_Total") ?? 0 : 0,
+                Status = status, CreatedAt = at, RespondedAt = at, ReviewNote = Cut(q.S("RejectResion") ?? q.S("LatestNote"), 500),
+                ReviewerName = status is TransferStatuses.UnderReview ? null : Cut(q.S("LatestNoteBy"), 120) ?? Sentinel,
+                ReviewedAt = status is TransferStatuses.UnderReview ? null : done,
+                CompletedAt = status == TransferStatuses.Completed ? done : null, CancelledAt = status == TransferStatuses.Cancelled ? done : null,
+            };
+            Add(t);
+            if (status == TransferStatuses.Completed)
+            {
+                if (rn.OwnerId == from)
+                {
+                    rn.OwnerId = to; rn.OwnerName = t.ToName; rn.Source = ReservedSources.Transfer; rn.AcquiredAt = done;
+                    _pending++;
+                }
+                else if (rn.OwnerId != to) _r.Warn("transfers.completedButOwnerDiffers");
+            }
+            Link(LegacyKinds.Transfer, q.Id, t.Id);
+            _r.Count($"transfers.{status}");
+            await FlushAsync(true);
+        }
+        foreach (var g in oldRequests.Where(q => !Ar.Has(reqTypes.GetValueOrDefault(q.I("RequestTypeId") ?? 0), "نقل")).GroupBy(q => reqTypes.GetValueOrDefault(q.I("RequestTypeId") ?? 0) ?? "?"))
+            _r.Warn($"later.Request.type[{g.Key}]", g.Count());
+
         // ── wallets: past top-ups and refunds as history, then one adjustment so the balance equals the old balance ──
         var balances = new Dictionary<int, decimal>();
         await foreach (var m in src.StreamAsync("Members", ct)) if (newUsers.Contains(m.Id)) balances[m.Id] = Math.Round(m.D("WalletAmmount") ?? 0, 2);
@@ -453,7 +506,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
         await FlushAsync(true);
 
         // waiting for their own features
-        foreach (var t in new[] { "Name_Logo", "MemberCamels", "Request", "MemberExcluded" })
+        foreach (var t in new[] { "Name_Logo", "MemberCamels" })
             if (await src.CountAsync(t, ct) is > 0 and var c) _r.Warn($"later.{t}", c);
 
         // ── numbering continues after the old numbers ──

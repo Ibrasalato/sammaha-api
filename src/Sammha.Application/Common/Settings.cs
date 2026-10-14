@@ -22,6 +22,8 @@ public class SettingsStore(IAppDbContext db, TimeProvider clock, SettingsCache c
     public async Task<decimal> DepositAmountAsync(decimal fallback, CancellationToken ct = default) => (await GetAsync(ct)).DepositAmount ?? fallback;
 
     /// <summary>hours an auction winner has to pay before the win is cancelled</summary>
+    public async Task<decimal> TransferFeeAsync(CancellationToken ct = default) => (await GetAsync(ct)).TransferFee ?? 0;
+
     public async Task<int> PaymentDeadlineHoursAsync(CancellationToken ct = default) => (await GetAsync(ct)).PaymentDeadlineHours ?? 72;
 
     /// <summary>the tracked row for editing (inserted with defaults if missing)</summary>

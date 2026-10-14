@@ -38,7 +38,7 @@ public static class CandidateStatuses
 
 public static class ReservedSources
 {
-    public const string Auction = "auction", Legacy = "legacy", Compound = "compound", Investment = "investment", Resale = "resale", Exception = "exception";
+    public const string Auction = "auction", Legacy = "legacy", Compound = "compound", Investment = "investment", Resale = "resale", Exception = "exception", Transfer = "transfer";
     /// <summary>the owner of names that passed to the organization</summary>
     public const string IcoOwnerName = "المنظمة الدولية للإبل";
 }
@@ -77,7 +77,7 @@ public static class BidDepositStates
 
 public static class NotificationKinds
 {
-    public const string Outbid = "outbid", Won = "won", Lost = "lost", Reviewed = "reviewed", AuctionOpened = "auction_opened", AuctionUpdate = "auction_update", Refund = "refund", Ticket = "ticket", Reminder = "reminder", Delegation = "delegation", Certificate = "certificate";
+    public const string Outbid = "outbid", Won = "won", Lost = "lost", Reviewed = "reviewed", AuctionOpened = "auction_opened", AuctionUpdate = "auction_update", Refund = "refund", Ticket = "ticket", Reminder = "reminder", Delegation = "delegation", Certificate = "certificate", Transfer = "transfer";
 }
 
 public static class TicketKinds

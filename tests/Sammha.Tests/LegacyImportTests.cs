@@ -53,6 +53,12 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
             CREATE TABLE CompoundNames_Master (ID int, CompReg_User_FK int, CompReg_Date datetime, CompReg_Fee float, CompReg_Vat float, CompReg_FullValue float, CompReg_IsBillPaied bit, CompReg_PaiedDateTime datetime);
             CREATE TABLE CompoundNames_Details (ID int, CompDet_Master_FK int, CompDet_Name nvarchar(150), CompDet_Name_F nvarchar(150));
             CREATE TABLE Members_Notifications (ID int, MemNotf_Date nvarchar(50), MemNotf_MEM_ID_FK int, MemNotf_Description nvarchar(1000), MemNotf_IsSeen bit, MemNotf_Link nvarchar(500));
+            CREATE TABLE C_RequestType (Id int, Name nchar(100));
+            INSERT C_RequestType VALUES (1, N'نقل ملكية'), (2, N'طرح للبيع');
+            CREATE TABLE C_RequestStatus (Id int, Name nchar(100));
+            INSERT C_RequestStatus VALUES (1, N'جديد'), (2, N'تمت الموافقة'), (3, N'مرفوض');
+            CREATE TABLE Request (Id int, RequestTypeId int, RequestStatusId int, MemberId int, Title nvarchar(500), Name nvarchar(500), Biddings_WinnersId int, ToMemberId int,
+              DateTime datetime, LatestNote nvarchar(500), LatestNoteBy nvarchar(500), LatestUpdateDateTime datetime, BillId int, RejectResion nvarchar(500));
             CREATE TABLE PaymentCard (ID int, CardNumber nvarchar(50));
             INSERT PaymentCard VALUES (1, '4111111111111111');
             """);
@@ -84,7 +90,8 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
               (9008, 1, 1, 5003, 4347.83, 652.17, 5000, '{past}', 1, '{past}', 0, 0, NULL, 0, NULL),
               (9009, 7, 1, 7003, 100, 0, 100, '{past}', 1, '{past}', 0, 0, NULL, 0, NULL);
             INSERT CompoundNames_Master VALUES (8001, 1, '{past2}', 100, 15, 115, 1, '{past2}');
-            INSERT CompoundNames_Details VALUES (1, 8001, N'شعار الغيم البعيد الثاني', NULL);
+            INSERT CompoundNames_Details VALUES (1, 8001, N'شعار الغيم البعيد الثاني', NULL), (2, 8001, N'شعار الغيم البعيد الثالث', NULL);
+            INSERT Request VALUES (1, 1, 2, 1, N'هبة', N'شعار الغيم البعيد الثالث', NULL, 2, '{past2}', NULL, N'الإدارة', '{past2}', NULL, NULL), (2, 2, 1, 1, N'بيع', N'شعار الغيم البعيد', 1, NULL, '{past2}', NULL, NULL, NULL, NULL, NULL);
             INSERT Members_Notifications VALUES (1, '15/03/2025 10:30:00', 1, N'تم قبول طلبك', 1, NULL), (2, 'garbage', 1, N'رسالة قديمة', 0, NULL);
             """);
     }
@@ -184,6 +191,10 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
             var comp = await db.ReservedNames.SingleAsync(n => n.Name == "شعار الغيم البعيد الثاني");
             Assert.Equal(ReservedSources.Compound, comp.Source);
             Assert.Equal("شعار الغيم البعيد", comp.BaseName);
+            var moved = await db.ReservedNames.SingleAsync(n => n.Name == "شعار الغيم البعيد الثالث");
+            Assert.Equal(m.Id, moved.OwnerId);
+            Assert.Equal(ReservedSources.Transfer, moved.Source);
+            Assert.True(await db.Transfers.AnyAsync(t => t.Number == "NT-L1" && t.Status == TransferStatuses.Completed && t.FromId == s.Id));
 
             var notes = await db.Notifications.Where(n => n.UserId == s.Id && n.Kind == "legacy").ToListAsync();
             Assert.Equal(2, notes.Count);

@@ -41,6 +41,7 @@ public static class Permissions
     public const string CertificatesManage = "certificates.manage";
     public const string NamesLatin = "names.latin";
     public const string NamesIco = "names.ico";
+    public const string NamesTransfer = "names.transfer";
 
     public record Info(string Key, string Group, string Label, string Description);
 
@@ -65,6 +66,7 @@ public static class Permissions
         new(DepositsRefund, "المالية", "استرداد الضمان", "إعادة ضمان محجوز إلى محفظة صاحبه مع ذكر السبب"),
         new(CertificatesManage, "سجل الأسماء", "الشهادات الصادرة", "كل الشهادات التي أصدرها الملاك، والتحقق منها، وإلغاء شهادة مع ذكر السبب"),
         new(NamesIco, "سجل الأسماء", "أسماء المنظمة الدولية", "الأسماء التي آلت إلى المنظمة لعدم سداد الفائز في المهلة، وطرحها في مزاد جديد"),
+        new(NamesTransfer, "سجل الأسماء", "طلبات نقل الملكية", "مراجعة طلبات نقل ملكية اسم من مالك إلى آخر واعتمادها أو رفضها"),
         new(NamesLatin, "سجل الأسماء", "الكتابة اللاتينية للأسماء", "تصحيح كتابة الأسماء بالحروف اللاتينية كما تظهر في الموقع الإنجليزي والشهادات"),
         new(ReportsMarks, "التقارير", "تقرير الشعارات", "كل المزادات برقمها: الطلب والمالك والفائز وقيمة الفوز والفاتورة، مع الطباعة والتصدير"),
         new(TicketsView, "الدعم", "عرض الشكاوى والبلاغات", "قائمة التذاكر وتفاصيلها"),

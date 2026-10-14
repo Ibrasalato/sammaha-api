@@ -44,6 +44,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<Delegation> Delegations => Set<Delegation>();
     public DbSet<Certificate> Certificates => Set<Certificate>();
     public DbSet<LegacyLink> LegacyLinks => Set<LegacyLink>();
+    public DbSet<NameTransfer> Transfers => Set<NameTransfer>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
@@ -61,6 +62,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
         b.HasSequence<int>("AuctionNo").StartsAt(1001);
         b.HasSequence<int>("WithdrawalNo").StartsAt(1001);
         b.HasSequence<int>("CertificateNo").StartsAt(1);
+        b.HasSequence<int>("TransferNo").StartsAt(1001);
 
         b.Entity<User>(e =>
         {
@@ -205,6 +207,22 @@ public class SammhaDbContext : DbContext, IAppDbContext
             });
         });
         b.Entity<User>().HasOne<StaffRole>().WithMany().HasForeignKey(u => u.StaffRoleId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<NameTransfer>(e =>
+        {
+            e.Property(x => x.Number).HasMaxLength(20);
+            e.HasIndex(x => x.Number).IsUnique();
+            e.HasIndex(x => x.ReservedId);
+            e.HasIndex(x => x.FromId);
+            e.HasIndex(x => x.ToId);
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Name).HasMaxLength(150);
+            e.Property(x => x.FromName).HasMaxLength(120);
+            e.Property(x => x.ToName).HasMaxLength(120);
+            e.Property(x => x.Reason).HasMaxLength(20);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.Note).HasMaxLength(500);
+            e.Property(x => x.ReviewNote).HasMaxLength(500);
+        });
         b.Entity<LegacyLink>(e =>
         {
             e.HasKey(x => new { x.Kind, x.LegacyId });
@@ -317,7 +335,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
 
     public async Task<int> NextNumberAsync(string sequence, CancellationToken ct = default)
     {
-        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo" or "CertificateNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
+        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo" or "CertificateNo" or "TransferNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
         var conn = Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await Database.OpenConnectionAsync(ct);
         await using var cmd = conn.CreateCommand();

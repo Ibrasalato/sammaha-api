@@ -34,6 +34,7 @@ public interface IAppDbContext
     DbSet<Delegation> Delegations { get; }
     DbSet<Certificate> Certificates { get; }
     DbSet<LegacyLink> LegacyLinks { get; }
+    DbSet<NameTransfer> Transfers { get; }
     DbSet<ActivityLog> ActivityLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
