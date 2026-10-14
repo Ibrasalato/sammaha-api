@@ -1969,3 +1969,62 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014155625_NameLogos'
+)
+BEGIN
+    ALTER TABLE [ReservedNames] ADD [LogoAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014155625_NameLogos'
+)
+BEGIN
+    CREATE TABLE [Logos] (
+        [Id] uniqueidentifier NOT NULL,
+        [ReservedId] uniqueidentifier NOT NULL,
+        [OwnerId] uniqueidentifier NOT NULL,
+        [Name] nvarchar(150) NOT NULL,
+        [FileName] nvarchar(120) NOT NULL,
+        [ContentType] nvarchar(40) NOT NULL,
+        [Bytes] varbinary(max) NOT NULL,
+        [Status] nvarchar(20) NOT NULL,
+        [RejectReason] nvarchar(300) NULL,
+        [UploadedAt] datetimeoffset NOT NULL,
+        [ReviewedAt] datetimeoffset NULL,
+        [ReviewedBy] nvarchar(120) NULL,
+        CONSTRAINT [PK_Logos] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014155625_NameLogos'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_Logos_ReservedId] ON [Logos] ([ReservedId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014155625_NameLogos'
+)
+BEGIN
+    CREATE INDEX [IX_Logos_Status] ON [Logos] ([Status]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014155625_NameLogos'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014155625_NameLogos', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
