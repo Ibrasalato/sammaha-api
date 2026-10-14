@@ -492,7 +492,7 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<string>("ItemsJson")
                         .IsRequired()
                         .HasMaxLength(400)
-                        .HasColumnType("nvarchar(400)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("NationalId")
                         .HasMaxLength(20)

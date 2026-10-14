@@ -1510,3 +1510,30 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014100242_CertificateItemsMax'
+)
+BEGIN
+    DECLARE @var2 nvarchar(max);
+    SELECT @var2 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[Certificates]') AND [c].[name] = N'ItemsJson');
+    IF @var2 IS NOT NULL EXEC(N'ALTER TABLE [Certificates] DROP CONSTRAINT ' + @var2 + ';');
+    ALTER TABLE [Certificates] ALTER COLUMN [ItemsJson] nvarchar(max) NOT NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014100242_CertificateItemsMax'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014100242_CertificateItemsMax', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
