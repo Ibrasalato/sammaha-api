@@ -18,7 +18,7 @@ public class HyperPayController(ISender mediator, HyperPayGateway hyperPay, ICon
     {
         ["deposit"] = ("ضمان أو رسوم طلب", "Request guarantee or fee"), ["invoice"] = ("سداد فاتورة", "Invoice payment"),
         ["bid_deposit"] = ("ضمان دخول مزاد", "Auction entry guarantee"), ["listing"] = ("شراء اسم", "Name purchase"),
-        ["transfer"] = ("رسوم نقل ملكية", "Ownership transfer fee"), ["topup"] = ("شحن المحفظة", "Wallet top-up"),
+        ["transfer"] = ("رسوم نقل ملكية", "Ownership transfer fee"), ["violation"] = ("سداد مخالفة", "Violation fine"), ["topup"] = ("شحن المحفظة", "Wallet top-up"),
     };
 
     [HttpGet("{id:guid}/form")]

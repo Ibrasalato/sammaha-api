@@ -32,3 +32,4 @@ public record TicketPatch(string? Status, string? Priority, string? Assignee);
 public record ReplyBody(string Body, bool Internal);
 public record CardBody(string Purpose, Guid? Ref, decimal Amount, string Callback, string? Method = null);
 public record TopUpBody(decimal Amount, string? Callback);
+public record CamelLinkBody(Guid ReservedId);

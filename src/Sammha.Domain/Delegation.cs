@@ -59,7 +59,7 @@ public static class DelegationScopes
         (Requests, "طلبات الشعارات", "تقديم طلبات الشعارات والأسماء المركبة، ودفع ضمانها، وسحب اسم أو إلغاء الطلب"),
         (Invest, "استثمار الاسم", "تقديم طلبات استثمار الاسم ودفع رسوم الدراسة"),
         (Bids, "المزايدة والشراء", "المزايدة والمزايدة الآلية والمتابعة، وضمان دخول المزاد، وشراء الأسماء المعروضة"),
-        (Payments, "المحفظة والفواتير", "شحن المحفظة وسداد الفواتير"),
+        (Payments, "المحفظة والفواتير", "شحن المحفظة وسداد الفواتير والمخالفات"),
         (Sales, "بيع الأسماء", "عرض أسماء المالك للبيع بالمزاد أو بسعر ثابت وإلغاء العرض"),
         (Tickets, "الشكاوى والاستفسارات", "تقديم الشكاوى والاستفسارات ومتابعتها"),
     ];
@@ -72,7 +72,7 @@ public static class DelegationScopes
         ["CreateRequestCommand"] = Requests, ["PayDepositCommand"] = Requests, ["CancelMyRequestCommand"] = Requests, ["WithdrawNameCommand"] = Requests, ["CreateCompoundRequestCommand"] = Requests,
         ["CreateInvestmentRequestCommand"] = Invest,
         ["PlaceBidCommand"] = Bids, ["SetAutoBidCommand"] = Bids, ["CancelAutoBidCommand"] = Bids, ["ToggleWatchCommand"] = Bids, ["PayBidDepositCommand"] = Bids, ["BuyListingCommand"] = Bids,
-        ["PayInvoiceCommand"] = Payments, ["TopUpCommand"] = Payments, ["StartCardPaymentCommand"] = Payments,
+        ["PayInvoiceCommand"] = Payments, ["PayViolationCommand"] = Payments, ["TopUpCommand"] = Payments, ["StartCardPaymentCommand"] = Payments,
         ["CreateListingCommand"] = Sales, ["CancelListingCommand"] = Sales,
         ["SubmitTicketCommand"] = Tickets, ["FollowUpTicketCommand"] = Tickets,
     };

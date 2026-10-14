@@ -82,6 +82,13 @@ public class MeController(ISender mediator) : ControllerBase
     [HttpGet("camels")]
     public Task<MyCamelsDto> Camels(CancellationToken ct) => mediator.Send(new GetMyCamelsQuery(), ct);
 
+    /// <summary>«ربط بشريحة»: one of the owner's قعدان or بكار names on this camel</summary>
+    [HttpPost("camels/{id:guid}/link")]
+    public Task<OwnedCamelDto> LinkCamel(Guid id, CamelLinkBody b, CancellationToken ct) => mediator.Send(new LinkCamelCommand(id, b.ReservedId), ct);
+
+    [HttpDelete("camels/{id:guid}/link")]
+    public Task<OwnedCamelDto> UnlinkCamel(Guid id, CancellationToken ct) => mediator.Send(new UnlinkCamelCommand(id), ct);
+
     [HttpGet("bids")]
     public Task<List<MyBidDto>> Bids(CancellationToken ct) => mediator.Send(new GetMyBidsQuery(), ct);
 

@@ -144,6 +144,7 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
             rn.OwnerName = ReservedSources.IcoOwnerName;
             rn.Source = ReservedSources.Exception;
             rn.AcquiredAt = Now;
+            await Features.Camels.CamelLinks.ClearAsync(db, rn.Id, ct);
         }
         await notifier.NotifyAsync(inv.UserId, NotificationKinds.AuctionUpdate, $"أُلغي فوزك بشعار «{inv.Name}»",
             $"لم يُسدَّد طلب السداد {inv.Number} خلال المهلة، فخُصم الضمان ({forfeited:0.##} ريال) وأصبح الاسم ملكًا للمنظمة الدولية للإبل.", "/dashboard/invoices", ct);
@@ -264,6 +265,7 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
         r.Price = price;
         r.AcquiredAt = Now;
         r.Source = ReservedSources.Resale;
+        await Features.Camels.CamelLinks.ClearAsync(db, r.Id, ct);
     }
 
     private void Register(Auction a, User owner, decimal price, string source)

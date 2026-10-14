@@ -38,9 +38,12 @@ public interface IAppDbContext
     DbSet<NameLogo> Logos { get; }
     DbSet<ActivityLog> ActivityLogs { get; }
     DbSet<OwnedCamel> OwnedCamels { get; }
+    DbSet<ViolationType> ViolationTypes { get; }
+    DbSet<Violation> Violations { get; }
+    DbSet<Festival> Festivals { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
-    /// <summary>next value of a database sequence (RequestNo, InvoiceNo, ListingNo, TicketNo)</summary>
+    /// <summary>next value of a database sequence (RequestNo, InvoiceNo, ListingNo, TicketNo, ViolationNo…)</summary>
     Task<int> NextNumberAsync(string sequence, CancellationToken ct = default);
     /// <summary>wallet balance including transactions added but not yet saved</summary>
     Task<decimal> BalanceOfAsync(Guid userId, CancellationToken ct = default);

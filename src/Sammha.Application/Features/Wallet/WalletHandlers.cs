@@ -47,7 +47,14 @@ public class WalletHandlers(IAppDbContext db, Access access, Mapper map, Money m
             .Where(l => ids.Contains(l.ReservedId) && (l.Status == ListingStatuses.Scheduled || l.Status == ListingStatuses.Live))
             .ToDictionaryAsync(l => l.ReservedId, l => l.Id, ct);
         var logos = await db.Logos.AsNoTracking().Where(l => ids.Contains(l.ReservedId)).ToDictionaryAsync(l => l.ReservedId, l => l.Status, ct);
-        return list.Select(r => Mapper.Reserved(r, null, active.TryGetValue(r.Id, out var lid) ? lid : null, logos.GetValueOrDefault(r.Id))).ToList();
+        // «ربط بشريحة»: the owner's camel carrying each name
+        var camels = (await db.OwnedCamels.AsNoTracking().Where(c => c.UserId == u.Id && c.ReservedId != null && ids.Contains(c.ReservedId.Value)).ToListAsync(ct))
+            .GroupBy(c => c.ReservedId!.Value).ToDictionary(g => g.Key, g => g.First());
+        return list.Select(r =>
+        {
+            var dto = Mapper.Reserved(r, null, active.TryGetValue(r.Id, out var lid) ? lid : null, logos.GetValueOrDefault(r.Id));
+            return camels.TryGetValue(r.Id, out var c) ? dto with { CamelId = c.Id, CamelChip = Features.Camels.CamelLinks.Chips(c).FirstOrDefault() ?? "" } : dto;
+        }).ToList();
     }
 
     private async Task<List<NotificationDto>> NotificationsAsync(CancellationToken ct)

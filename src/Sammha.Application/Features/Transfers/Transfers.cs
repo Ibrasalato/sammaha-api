@@ -219,6 +219,8 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
             // the logo was the previous owner's; the new owner uploads their own
             r.LogoAt = null;
             db.Logos.RemoveRange(await db.Logos.Where(l => l.ReservedId == r.Id).ToListAsync(ct));
+            // the chip link was the previous owner's camel
+            await Camels.CamelLinks.ClearAsync(db, r.Id, ct);
             t.Status = TransferStatuses.Completed;
             t.CompletedAt = Now;
             t.ToName = to.FullName;

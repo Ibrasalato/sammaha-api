@@ -48,6 +48,9 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<NameLogo> Logos => Set<NameLogo>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
     public DbSet<OwnedCamel> OwnedCamels => Set<OwnedCamel>();
+    public DbSet<ViolationType> ViolationTypes => Set<ViolationType>();
+    public DbSet<Violation> Violations => Set<Violation>();
+    public DbSet<Festival> Festivals => Set<Festival>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
     {
@@ -66,6 +69,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
         b.HasSequence<int>("CertificateNo").StartsAt(1);
         b.HasSequence<int>("TransferNo").StartsAt(1001);
         b.HasSequence<int>("PayRequestNo").StartsAt(1);
+        b.HasSequence<int>("ViolationNo").StartsAt(1);
 
         b.Entity<User>(e =>
         {
@@ -298,6 +302,44 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.Property(x => x.Age).HasMaxLength(40);
             e.Property(x => x.Status).HasMaxLength(60);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.ReservedId);
+        });
+        b.Entity<ViolationType>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.NameEn).HasMaxLength(100);
+            e.HasIndex(x => x.Name).IsUnique();
+        });
+        b.Entity<Festival>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(150);
+            e.Property(x => x.NameEn).HasMaxLength(150);
+            e.HasIndex(x => x.Name).IsUnique();
+        });
+        b.Entity<Violation>(e =>
+        {
+            e.Property(x => x.FestivalName).HasMaxLength(150);
+            e.Property(x => x.CamelChip).HasMaxLength(40);
+            e.Property(x => x.Resolution).HasMaxLength(20);
+            e.Property(x => x.ResolvedByName).HasMaxLength(120);
+            e.Property(x => x.ResolutionNote).HasMaxLength(500);
+            e.HasIndex(x => x.FestivalId);
+            e.HasOne<Festival>().WithMany().HasForeignKey(x => x.FestivalId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Number).HasMaxLength(20);
+            e.HasIndex(x => x.Number).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.IssuedAt });
+            e.HasIndex(x => new { x.Status, x.IssuedAt });
+            e.Property(x => x.TypeName).HasMaxLength(100);
+            e.Property(x => x.Description).HasMaxLength(2000);
+            e.Property(x => x.AttachmentName).HasMaxLength(120);
+            e.Property(x => x.AttachmentType).HasMaxLength(40);
+            e.Property(x => x.AttachmentBytes).HasColumnType("varbinary(max)");
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.IssuedByName).HasMaxLength(120);
+            e.Property(x => x.CancelReason).HasMaxLength(500);
+            e.Property(x => x.CancelledByName).HasMaxLength(120);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ViolationType>().WithMany().HasForeignKey(x => x.TypeId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<ActivityLog>(e =>
         {
@@ -375,7 +417,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
 
     public async Task<int> NextNumberAsync(string sequence, CancellationToken ct = default)
     {
-        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo" or "CertificateNo" or "TransferNo" or "PayRequestNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
+        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo" or "CertificateNo" or "TransferNo" or "PayRequestNo" or "ViolationNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
         var conn = Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await Database.OpenConnectionAsync(ct);
         await using var cmd = conn.CreateCommand();
