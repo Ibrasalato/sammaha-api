@@ -6,7 +6,7 @@ using Sammha.Application.Features.Transfers;
 
 namespace Sammha.Api.Controllers;
 
-public record TransferBody(Guid ReservedId, string Phone, string Reason, string? Note);
+public record NameTransferBody(Guid ReservedId, string Phone, string Reason, string? Note);
 public record RecipientBody(string Phone);
 public record RespondBody(bool Accept);
 public record TransferReviewBody(bool Approve, string? Note);
@@ -23,7 +23,7 @@ public class TransfersController(ISender mediator) : ControllerBase
     public Task<RecipientDto> Recipient(RecipientBody b, CancellationToken ct) => mediator.Send(new FindRecipientQuery(b.Phone), ct);
 
     [HttpPost("me/transfers")]
-    public Task<TransferDto> Create(TransferBody b, CancellationToken ct) => mediator.Send(new CreateTransferCommand(b.ReservedId, b.Phone, b.Reason, b.Note), ct);
+    public Task<TransferDto> Create(NameTransferBody b, CancellationToken ct) => mediator.Send(new CreateTransferCommand(b.ReservedId, b.Phone, b.Reason, b.Note), ct);
 
     [HttpPost("me/transfers/{id:guid}/cancel")]
     public Task<TransferDto> Cancel(Guid id, CancellationToken ct) => mediator.Send(new CancelTransferCommand(id), ct);
