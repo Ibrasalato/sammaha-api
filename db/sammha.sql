@@ -1924,3 +1924,48 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014154819_Payouts'
+)
+BEGIN
+    ALTER TABLE [Withdrawals] ADD [PayoutError] nvarchar(400) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014154819_Payouts'
+)
+BEGIN
+    ALTER TABLE [Withdrawals] ADD [PayoutProvider] nvarchar(400) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014154819_Payouts'
+)
+BEGIN
+    ALTER TABLE [Withdrawals] ADD [PayoutRef] nvarchar(400) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014154819_Payouts'
+)
+BEGIN
+    ALTER TABLE [Withdrawals] ADD [PayoutSentAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014154819_Payouts'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014154819_Payouts', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
