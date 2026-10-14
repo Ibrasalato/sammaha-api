@@ -51,9 +51,9 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         // policy: a logo request has one name accepted at most; the others are rejected
         if (r.Kind == RequestKinds.Standard)
         {
-            var accepted = decisions.Where(d => d.Status == CandidateStatuses.Accepted)
+            var chosen = decisions.Where(d => d.Status == CandidateStatuses.Accepted)
                 .Select(d => r.Candidates.FirstOrDefault(c => c.Id == d.CandidateId)).Where(c => c != null && c.Status != CandidateStatuses.Withdrawn).Distinct().ToList();
-            if (accepted.Count > 1) throw new DomainException("يُقبل شعار واحد فقط في الطلب الواحد؛ اختر اسمًا واحدًا وارفض البقية");
+            if (chosen.Count > 1) throw new DomainException("يُقبل شعار واحد فقط في الطلب الواحد؛ اختر اسمًا واحدًا وارفض البقية");
         }
         foreach (var d in decisions)
         {
