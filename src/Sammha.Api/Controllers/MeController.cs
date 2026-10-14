@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Sammha.Application.Common;
 using Sammha.Application.Features.Auth;
 using Sammha.Application.Features.Bidding;
+using Sammha.Application.Features.Camels;
 using Sammha.Application.Features.Listings;
 using Sammha.Application.Features.Payments;
 using Sammha.Application.Features.Requests;
@@ -76,6 +77,10 @@ public class MeController(ISender mediator) : ControllerBase
     // ───── names and bids ─────
     [HttpGet("names")]
     public Task<List<ReservedNameDto>> Names(CancellationToken ct) => mediator.Send(new GetMyNamesQuery(), ct);
+
+    /// <summary>«إبلي»: camels registered to the owner on the camel registry platform</summary>
+    [HttpGet("camels")]
+    public Task<MyCamelsDto> Camels(CancellationToken ct) => mediator.Send(new GetMyCamelsQuery(), ct);
 
     [HttpGet("bids")]
     public Task<List<MyBidDto>> Bids(CancellationToken ct) => mediator.Send(new GetMyBidsQuery(), ct);

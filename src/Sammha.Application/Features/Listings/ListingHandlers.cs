@@ -32,7 +32,8 @@ public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access
         if (await PendingSaleAsync(db, r.Id, ct)) throw new DomainException("الاسم مبيع في مزاد وبانتظار سداد المشتري");
         if (await db.Auctions.AnyAsync(a => a.Name == r.Name && !a.Settled, ct)) throw new DomainException("للاسم مزاد قائم حاليًا");
         var p = decimal.Floor(price);
-        if (p < R.OpeningPrice) throw new DomainException($"أقل قيمة {R.OpeningPrice:0.##} ريال");
+        var lowest = await settings.OpeningPriceAsync(R, ct);
+        if (p < lowest) throw new DomainException($"أقل قيمة {lowest:0.##} ريال");
         if (p > 10_000_000) throw new DomainException("القيمة كبيرة جدًا");
         var auction = mode == ListingModes.Auction;
         var starts = auction ? Now.AddHours(R.ResaleNoticeHours) : Now;
@@ -50,7 +51,7 @@ public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access
             var a = new Auction
             {
                 Number = $"AU-{await db.NextNumberAsync("AuctionNo", ct)}",
-                ListingId = l.Id, Name = l.Name, Type = l.Type, RequesterId = u.Id, OpeningPrice = p, MinIncrement = R.MinIncrement,
+                ListingId = l.Id, Name = l.Name, Type = l.Type, RequesterId = u.Id, OpeningPrice = p, MinIncrement = await settings.MinIncrementAsync(R.MinIncrement, ct),
                 StartsAt = starts, EndsAt = ends, CurrentPrice = p, BidDeposit = R.ResaleBidDeposit,
             };
             db.Auctions.Add(a);

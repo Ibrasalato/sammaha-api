@@ -48,12 +48,13 @@ public class IcoNameHandlers(IAppDbContext db, Access access, Notifier notifier,
         if (rn.OwnerId != null || rn.Source != ReservedSources.Exception) throw new DomainException("هذا الاسم ليس من أسماء المنظمة");
         if (await db.Auctions.AnyAsync(a => a.IcoReservedId == rn.Id && !a.Settled && a.CancelledAt == null, ct)) throw new DomainException("للاسم مزاد قائم أو مجدول");
         var R = rules.Value;
-        var opening = Money.Round2(q.OpeningPrice ?? R.OpeningPrice);
+        var opening = Money.Round2(q.OpeningPrice ?? await settings.OpeningPriceAsync(rn.Type, R, ct));
+        var increment = await settings.MinIncrementAsync(R.MinIncrement, ct);
         var entry = await settings.DepositAmountAsync(R.DepositAmount, ct);
         var a = new Auction
         {
             Number = $"AU-{await db.NextNumberAsync("AuctionNo", ct)}", IcoReservedId = rn.Id, Name = rn.Name, Type = rn.Type, RequesterId = Guid.Empty,
-            OpeningPrice = opening, MinIncrement = R.MinIncrement, StartsAt = q.StartsAt, EndsAt = q.EndsAt, CurrentPrice = opening,
+            OpeningPrice = opening, MinIncrement = increment, StartsAt = q.StartsAt, EndsAt = q.EndsAt, CurrentPrice = opening,
             BidDeposit = entry > 0 ? entry : null,
         };
         db.Auctions.Add(a);

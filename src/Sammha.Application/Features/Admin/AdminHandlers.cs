@@ -197,6 +197,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         cands = cands.OrderBy(c => order[c.Id]).ToList();
         var created = new List<Auction>();
         var entry = await settings.DepositAmountAsync(R.DepositAmount, ct);
+        var increment = await settings.MinIncrementAsync(R.MinIncrement, ct);
         var tz = TimeZoneInfo.FindSystemTimeZoneById(R.TimeZone);
         var baseStart = startsAt; var baseEnd = endsAt;
         foreach (var (c, step) in cands.Select((c, i) => (c, i)))
@@ -204,11 +205,12 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
             startsAt = baseStart.AddMinutes(stagger * step);
             endsAt = baseEnd.AddMinutes(stagger * step);
             var when = TimeZoneInfo.ConvertTime(startsAt, tz).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+            var opening = await settings.OpeningPriceAsync(c.Request.Type, R, ct);
             var a = new Auction
             {
                 Number = $"AU-{await db.NextNumberAsync("AuctionNo", ct)}",
                 RequestId = c.RequestId, CandidateId = c.Id, Name = c.Name, Type = c.Request.Type, RequesterId = c.Request.UserId,
-                OpeningPrice = R.OpeningPrice, MinIncrement = R.MinIncrement, StartsAt = startsAt, EndsAt = endsAt, CurrentPrice = R.OpeningPrice,
+                OpeningPrice = opening, MinIncrement = increment, StartsAt = startsAt, EndsAt = endsAt, CurrentPrice = opening,
                 IsInvestment = c.Request.Kind == RequestKinds.Investment,
                 // every bidder but the requester pays the guarantee to enter (the requester's request guarantee covers them)
                 BidDeposit = c.Request.Kind == RequestKinds.Standard && entry > 0 ? entry : null,

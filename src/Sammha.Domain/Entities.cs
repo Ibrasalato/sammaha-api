@@ -116,6 +116,16 @@ public class PlatformSettings
     /// <summary>fee for moving a name to another owner (VAT included); 0 = free</summary>
     public decimal? TransferFee { get; set; }
 
+    // ───── auctions (null = the server default in PlatformOptions) ─────
+    /// <summary>opening price of committee and organization auctions for قعدان and بكار (and the lowest resale price)</summary>
+    public decimal? OpeningPrice { get; set; }
+    /// <summary>opening price for «منقية»; null = the same as the opening price</summary>
+    public decimal? ManqiyaOpeningPrice { get; set; }
+    /// <summary>the smallest raise over the current price</summary>
+    public decimal? MinIncrement { get; set; }
+    /// <summary>default auction length in days offered when the committee schedules an auction</summary>
+    public int? AuctionDays { get; set; }
+
     // ───── complaints, reports and enquiries ─────
     /// <summary>when on, only the handlers of a ticket's kind (and admins) can reply to it or change it</summary>
     public bool TicketsRestrictToHandlers { get; set; }
@@ -509,4 +519,32 @@ public class Payment
     public string? CallbackUrl { get; set; }
     public string? Integrity { get; set; }
     public string? ResultCode { get; set; }
+}
+
+/// <summary>
+/// «إبلي»: a camel registered to an owner on the camel registry platform. Filled by the integration with that platform
+/// (nothing is entered here by hand); a camel can be linked to one of the owner's registered names.
+/// </summary>
+public class OwnedCamel
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    /// <summary>the camel's id on the registry platform</summary>
+    public string? ExternalId { get; set; }
+    public string? Name { get; set; }
+    /// <summary>microchip numbers, comma-separated (up to 4)</summary>
+    public string ChipNumbers { get; set; } = "";
+    /// <summary>male | female</summary>
+    public string? Sex { get; set; }
+    public string? Color { get; set; }
+    /// <summary>breed or category, as the registry gives it</summary>
+    public string? Type { get; set; }
+    /// <summary>age as the registry gives it</summary>
+    public string? Age { get; set; }
+    public string? Status { get; set; }
+    /// <summary>the owner's registered name this camel carries, if any</summary>
+    public Guid? ReservedId { get; set; }
+    public DateTimeOffset? LinkedAt { get; set; }
+    public DateTimeOffset? SyncedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }

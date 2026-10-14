@@ -30,6 +30,21 @@ public class SettingsStore(IAppDbContext db, TimeProvider clock, SettingsCache c
 
     public async Task<int> PaymentDeadlineHoursAsync(CancellationToken ct = default) => (await GetAsync(ct)).PaymentDeadlineHours ?? 72;
 
+    /// <summary>the opening price of a committee or organization auction for this name type: the admin's value, or the server default</summary>
+    public async Task<decimal> OpeningPriceAsync(string type, PlatformOptions fallback, CancellationToken ct = default) => OpeningPriceOf(await GetAsync(ct), type, fallback);
+    /// <summary>the general opening price (قعدان and بكار), also the lowest price a name can be listed for sale at</summary>
+    public async Task<decimal> OpeningPriceAsync(PlatformOptions fallback, CancellationToken ct = default) => OpeningPriceOf(await GetAsync(ct), NameTypes.Qaadan, fallback);
+    public async Task<decimal> MinIncrementAsync(decimal fallback, CancellationToken ct = default) => (await GetAsync(ct)).MinIncrement ?? fallback;
+    /// <summary>default auction length in days offered when the committee schedules an auction</summary>
+    public async Task<int> AuctionDaysAsync(int fallback, CancellationToken ct = default) => (await GetAsync(ct)).AuctionDays ?? fallback;
+
+    /// <summary>«منقية» has its own opening price; unset, it follows the general one</summary>
+    public static decimal OpeningPriceOf(PlatformSettings s, string type, PlatformOptions r)
+    {
+        var general = s.OpeningPrice ?? r.OpeningPrice;
+        return type == NameTypes.Manqiya ? s.ManqiyaOpeningPrice ?? r.ManqiyaOpeningPrice ?? general : general;
+    }
+
     /// <summary>the tracked row for editing (inserted with defaults if missing)</summary>
     public async Task<PlatformSettings> ForUpdateAsync(CancellationToken ct = default)
     {

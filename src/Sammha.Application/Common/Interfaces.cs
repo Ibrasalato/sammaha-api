@@ -37,6 +37,7 @@ public interface IAppDbContext
     DbSet<NameTransfer> Transfers { get; }
     DbSet<NameLogo> Logos { get; }
     DbSet<ActivityLog> ActivityLogs { get; }
+    DbSet<OwnedCamel> OwnedCamels { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     /// <summary>next value of a database sequence (RequestNo, InvoiceNo, ListingNo, TicketNo)</summary>

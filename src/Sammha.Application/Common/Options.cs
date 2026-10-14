@@ -59,3 +59,10 @@ public static class PayChannels
     public const string Mada = "mada", Card = "card", ApplePay = "applepay";
     public static readonly string[] All = [Mada, Card, ApplePay];
 }
+
+/// <summary>Section "CamelRegistry": the camel registry platform the owners' camels come from («إبلي»). Off until the integration is live.</summary>
+public class CamelRegistryOptions
+{
+    public bool Enabled { get; set; }
+    public string BaseUrl { get; set; } = "";
+}

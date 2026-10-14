@@ -62,7 +62,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
     private static readonly string[] Tables =
     [
         "Members", "Orders", "Biddings", "Biddings_Details", "Biddings_Winners", "Bills", "CompoundNames_Master", "CompoundNames_Details",
-        "Members_Notifications", "Name_Logo", "MemberCamels", "Black_List", "Request", "PaymentCard", "Administrators",
+        "Members_Notifications", "Name_Logo", "MemberCamels", "Black_List", "Request", "PaymentCard", "Administrators", "ContactUs", "C_Settings",
     ];
 
     // ───────────────────────── inspect ─────────────────────────
@@ -156,7 +156,10 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         var links = await db.LegacyLinks.AsNoTracking().ToDictionaryAsync(l => (l.Kind, l.LegacyId), l => l.NewId, ct);
+        // the old platform's guarantee and auction settings apply first, so live auctions carry them
+        await SettingsAsync(src);
         var deposit = await settings.DepositAmountAsync(rules.Value.DepositAmount, ct);
+        var increment = await settings.MinIncrementAsync(rules.Value.MinIncrement, ct);
         var deadline = await settings.PaymentDeadlineHoursAsync(ct);
 
         // ── members ──
@@ -325,7 +328,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
                 RequestId = reqIds.TryGetValue(oc.Order, out var r0) ? r0 : null,
                 CandidateId = candIds.TryGetValue((oc.Order, oc.Pos), out var cid) && cid != Guid.Empty ? cid : null,
                 Name = Cut(name, 150)!, Type = type, RequesterId = requester,
-                OpeningPrice = b.D("Bid_StartValue") ?? 0, MinIncrement = rules.Value.MinIncrement, StartsAt = oc.Starts, EndsAt = oc.Ends,
+                OpeningPrice = b.D("Bid_StartValue") ?? 0, MinIncrement = increment, StartsAt = oc.Starts, EndsAt = oc.Ends,
                 CurrentPrice = oc.Top?.Value ?? b.D("Bid_StartValue") ?? 0, BidCount = dets.Count, LeaderId = u(oc.Top?.Member),
                 Settled = oc.Ended, IsInvestment = o?.B("IsInvestment") == true,
                 InvestorId = u(b.I("InvestedByMember")), InvestorSharePercent = b.I("InvestedPersenategValue"),
@@ -508,6 +511,35 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
         }
         await FlushAsync(true);
 
+        // ── «تواصل معنا» messages → closed enquiry tickets (kept for the record; the old site kept no replies) ──
+        var phoneOwners = (await db.Users.AsNoTracking().Select(x => new { x.Phone, x.Id }).ToListAsync(ct))
+            .GroupBy(x => x.Phone).ToDictionary(g => g.Key, g => g.First().Id);
+        await foreach (var c in src.StreamAsync("ContactUs", ct))
+        {
+            if (links.ContainsKey((LegacyKinds.Ticket, c.Id))) continue;
+            var msg = c.S("Cont_Msg")?.Trim();
+            if (string.IsNullOrEmpty(msg)) { _r.Warn("tickets.emptySkipped"); continue; }
+            var raw = c.S("Cont_Mobile") ?? "";
+            var at = At(c.Dt("Cont_Date")) ?? _now;
+            var t = new Ticket
+            {
+                Kind = TicketKinds.Inquiry, Topic = "النظام السابق", Subject = Cut(c.S("Cont_Tilte")?.Trim() is { Length: > 0 } st ? st : "رسالة تواصل", 120)!,
+                Name = Cut(c.S("Cont_Name")?.Trim() is { Length: > 0 } nm ? nm : "—", 80)!, Phone = Cut(NameMatcher.NormalizePhone(raw), 20)!,
+                Message = Cut(msg, 3000)!, Status = TicketStatuses.Closed, CreatedAt = at, UpdatedAt = at,
+            };
+            if (Phones.FromInput(raw) is { } up && phoneOwners.TryGetValue(up, out var byIntl)) t.UserId = byIntl;
+            else if (phoneOwners.TryGetValue(t.Phone, out var byLocal)) t.UserId = byLocal;
+            if (t.UserId == null) _r.Warn("tickets.noMatchingAccount");
+            var seq = await db.NextNumberAsync("TicketNo", ct);
+            t.Number = $"BL-{at.ToOffset(Riyadh).Year % 100:D2}{seq:D4}";
+            t.Messages.Add(new TicketMessage { TicketId = t.Id, By = "staff", Author = Sentinel, Body = "رسالة منقولة من نموذج «تواصل معنا» في المنصة السابقة، ولا يوجد لها رد مسجل.", Internal = true, CreatedAt = at });
+            Add(t);
+            Link(LegacyKinds.Ticket, c.Id, t.Id);
+            _r.Count("tickets");
+            await FlushAsync();
+        }
+        await FlushAsync(true);
+
         // waiting for their own features
         // ── mark logos (Name_Logo): the image files come from the old site's folder (--files) ──
         if (filesRoot != null && Directory.Exists(filesRoot))
@@ -549,8 +581,54 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
 
         if (commit) await tx.CommitAsync(ct);
         else await tx.RollbackAsync(ct);
+        // a dry run must not leave its settings in the cache
+        settings.Invalidate();
         db.ChangeTracker.AutoDetectChangesEnabled = true;
         return _r;
+    }
+
+    /// <summary>C_Settings (one row, ID = 1): the guarantee, the opening prices, the minimum raise and the default auction length</summary>
+    private async Task SettingsAsync(LegacySource src)
+    {
+        var row = (await src.ReadAsync("C_Settings", _ct)).OrderBy(r => r.Id == 1 ? 0 : 1).ThenBy(r => r.Id).FirstOrDefault();
+        if (row == null) return;
+        var s = await settings.ForUpdateAsync(_ct);
+        var changed = 0;
+        void Apply(string field, decimal? value, decimal? current, Action<decimal> set)
+        {
+            // only a value the old platform actually set
+            if (value is not { } raw || raw <= 0) return;
+            var v = Math.Round(raw, 2);
+            if (current == v) return;
+            set(v);
+            changed++;
+            Add(new SettingsChange
+            {
+                At = _now, UserName = Sentinel, Field = field,
+                OldValue = current?.ToString(CultureInfo.InvariantCulture), NewValue = v.ToString(CultureInfo.InvariantCulture),
+            });
+        }
+        Apply("DepositAmount", row.D("Sett_GuaranteeValue"), s.DepositAmount, v => s.DepositAmount = v);
+        Apply("OpeningPrice", row.D("Sett_Fardeyya_BidStartValue"), s.OpeningPrice, v => s.OpeningPrice = v);
+        Apply("ManqiyaOpeningPrice", row.D("Sett_Manqeyya_BidStartValue"), s.ManqiyaOpeningPrice, v => s.ManqiyaOpeningPrice = v);
+        Apply("MinIncrement", row.D("Sett_Fardeyya_BidMinValue"), s.MinIncrement, v => s.MinIncrement = v);
+        if (row.I("Sett_Default_BidPeriod_InDays") is int period && period > 0 && s.AuctionDays != Math.Min(period, 60))
+        {
+            var days = Math.Min(period, 60);
+            Add(new SettingsChange { At = _now, UserName = Sentinel, Field = "AuctionDays", OldValue = s.AuctionDays?.ToString(CultureInfo.InvariantCulture), NewValue = days.ToString(CultureInfo.InvariantCulture) });
+            s.AuctionDays = days;
+            changed++;
+        }
+        // no equivalent here: the guarantee for a withdrawn win and the reservation fee
+        if (row.D("Sett_GuaranteeValue_Withdrawn") is > 0) _r.Warn("settings.guaranteeWithdrawnIgnored");
+        if ((row.D("Sett_Fardeyya_ResFees") ?? row.D("Sett_Manqeyya_ResFees")) is > 0) _r.Warn("settings.resFeesIgnored");
+        if (changed == 0) return;
+        s.UpdatedAt = _now;
+        s.UpdatedBy = Sentinel;
+        _pending++;
+        _r.Count("settings.fromLegacy", changed);
+        await FlushAsync(true);
+        settings.Invalidate();
     }
 
     private enum OutcomeKind { Live, Cancelled, NoWinner, Owned, Registered, Ico, Unpaid }

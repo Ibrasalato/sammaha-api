@@ -18,7 +18,8 @@ public record PublicSettingsDto(
     int PasswordMinLength, int StaffIdleMinutes, decimal DepositAmount = 0, int PaymentDeadlineHours = 72, decimal TransferFee = 0,
     bool TransferOpen = true, string? TransferClosedNote = null, List<string>? ComingSoon = null,
     decimal InvestFee = 0, decimal CompoundFee = 0, decimal ResaleCommission = 0, decimal InstantCommission = 0, Dictionary<string, ServiceText>? ServiceTexts = null,
-    List<string>? PaymentChannels = null, string? PaymentProvider = null);
+    List<string>? PaymentChannels = null, string? PaymentProvider = null,
+    decimal OpeningPrice = 0, decimal ManqiyaOpeningPrice = 0, decimal MinIncrement = 0, int AuctionDays = 2);
 
 public record AdminSettingsDto(
     bool RequestsOpen, string? RequestsClosedNote, bool CompoundOpen, string? CompoundClosedNote,
@@ -28,12 +29,13 @@ public record AdminSettingsDto(
     int PasswordMinLength, int MaxLoginAttempts, int LockoutMinutes, int StaffIdleMinutes,
     DateTimeOffset UpdatedAt, string? UpdatedBy, RulesDto Rules, int PaymentDeadlineHours = 72, decimal TransferFee = 0,
     bool TransferOpen = true, string? TransferClosedNote = null, List<string>? ComingSoon = null,
-    decimal InvestFee = 0, decimal CompoundFee = 0, decimal ResaleCommission = 0, decimal InstantCommission = 0, Dictionary<string, ServiceText>? ServiceTexts = null);
+    decimal InvestFee = 0, decimal CompoundFee = 0, decimal ResaleCommission = 0, decimal InstantCommission = 0, Dictionary<string, ServiceText>? ServiceTexts = null,
+    decimal DepositAmount = 0, decimal OpeningPrice = 0, decimal ManqiyaOpeningPrice = 0, decimal MinIncrement = 0, int AuctionDays = 2);
 
-/// <summary>fees and rules from the server configuration (read-only in the dashboard)</summary>
+/// <summary>the fees and rules in force (the admin's values where set, otherwise the server configuration)</summary>
 public record RulesDto(decimal DepositAmount, int NamesPerRequest, decimal OpeningPrice, decimal MinIncrement, int ExtendMinutes, decimal VatRate,
     decimal InvestFee, decimal InvestOwnerShare, int InvestMaxNames, int ResaleNoticeHours, int ResaleAuctionDays, decimal ResaleCommission,
-    decimal ResaleBidDeposit, int InstantSaleHours, decimal InstantCommission);
+    decimal ResaleBidDeposit, int InstantSaleHours, decimal InstantCommission, decimal ManqiyaOpeningPrice = 0, int AuctionDays = 2);
 
 /// <summary>a partial update: only the fields that are sent change</summary>
 public record SettingsPatch(
@@ -43,7 +45,8 @@ public record SettingsPatch(
     bool? AnnouncementOn = null, string? Announcement = null, string? AnnouncementTone = null, bool? Maintenance = null, string? MaintenanceNote = null,
     int? PasswordMinLength = null, int? MaxLoginAttempts = null, int? LockoutMinutes = null, int? StaffIdleMinutes = null, decimal? DepositAmount = null, int? PaymentDeadlineHours = null, decimal? TransferFee = null,
     bool? TransferOpen = null, string? TransferClosedNote = null, List<string>? ComingSoon = null,
-    decimal? InvestFee = null, decimal? CompoundFee = null, decimal? ResaleCommission = null, decimal? InstantCommission = null, Dictionary<string, ServiceText>? ServiceTexts = null);
+    decimal? InvestFee = null, decimal? CompoundFee = null, decimal? ResaleCommission = null, decimal? InstantCommission = null, Dictionary<string, ServiceText>? ServiceTexts = null,
+    decimal? OpeningPrice = null, decimal? ManqiyaOpeningPrice = null, decimal? MinIncrement = null, int? AuctionDays = null);
 
 public record SettingsChangeDto(long Id, DateTimeOffset At, string UserName, string Field, string? OldValue, string? NewValue);
 
@@ -87,19 +90,26 @@ public class SettingsHandlers(IPaymentGateway gateway, IOptions<PaymentOptions> 
             s.AnnouncementOn ? s.Announcement : null, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote, s.PasswordMinLength, s.StaffIdleMinutes,
             s.DepositAmount ?? rules.Value.DepositAmount, s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon),
             s.InvestFee ?? rules.Value.InvestFee, s.CompoundFee ?? 0, s.ResaleCommission ?? rules.Value.ResaleCommission, s.InstantCommission ?? rules.Value.InstantCommission, ServiceTexts.Parse(s.ServiceTextsJson),
-            payments.Value.Simulate ? [.. PayChannels.All] : [.. gateway.Channels], payments.Value.Simulate ? "simulated" : gateway.Name);
+            payments.Value.Simulate ? [.. PayChannels.All] : [.. gateway.Channels], payments.Value.Simulate ? "simulated" : gateway.Name,
+            SettingsStore.OpeningPriceOf(s, NameTypes.Qaadan, rules.Value), SettingsStore.OpeningPriceOf(s, NameTypes.Manqiya, rules.Value),
+            s.MinIncrement ?? rules.Value.MinIncrement, s.AuctionDays ?? rules.Value.AuctionDays);
     }
 
     private AdminSettingsDto Admin(PlatformSettings s)
     {
         var r = rules.Value;
+        var opening = SettingsStore.OpeningPriceOf(s, NameTypes.Qaadan, r);
+        var manqiya = SettingsStore.OpeningPriceOf(s, NameTypes.Manqiya, r);
+        var increment = s.MinIncrement ?? r.MinIncrement;
+        var days = s.AuctionDays ?? r.AuctionDays;
         return new AdminSettingsDto(s.RequestsOpen, s.RequestsClosedNote, s.CompoundOpen, s.CompoundClosedNote, s.ResaleAuctionOpen, s.InstantSaleOpen,
             s.SaleClosedNote, s.InvestmentOpen, s.InvestmentClosedNote, s.SignupOpen, s.SupportEmail, s.SupportPhone, s.WhatsApp,
             s.AnnouncementOn, s.Announcement, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote,
             s.PasswordMinLength, s.MaxLoginAttempts, s.LockoutMinutes, s.StaffIdleMinutes, s.UpdatedAt, s.UpdatedBy,
-            new RulesDto(s.DepositAmount ?? r.DepositAmount, r.NamesPerRequest, r.OpeningPrice, r.MinIncrement, r.ExtendMinutes, r.VatRate, r.InvestFee, r.InvestOwnerShare,
-                r.InvestMaxNames, r.ResaleNoticeHours, r.ResaleAuctionDays, r.ResaleCommission, r.ResaleBidDeposit, r.InstantSaleHours, r.InstantCommission), s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon),
-            s.InvestFee ?? r.InvestFee, s.CompoundFee ?? 0, s.ResaleCommission ?? r.ResaleCommission, s.InstantCommission ?? r.InstantCommission, ServiceTexts.Parse(s.ServiceTextsJson));
+            new RulesDto(s.DepositAmount ?? r.DepositAmount, r.NamesPerRequest, opening, increment, r.ExtendMinutes, r.VatRate, r.InvestFee, r.InvestOwnerShare,
+                r.InvestMaxNames, r.ResaleNoticeHours, r.ResaleAuctionDays, r.ResaleCommission, r.ResaleBidDeposit, r.InstantSaleHours, r.InstantCommission, manqiya, days), s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon),
+            s.InvestFee ?? r.InvestFee, s.CompoundFee ?? 0, s.ResaleCommission ?? r.ResaleCommission, s.InstantCommission ?? r.InstantCommission, ServiceTexts.Parse(s.ServiceTextsJson),
+            s.DepositAmount ?? r.DepositAmount, opening, manqiya, increment, days);
     }
 
     public async Task<AdminSettingsDto> Handle(GetAdminSettingsQuery q, CancellationToken ct)
@@ -152,6 +162,10 @@ public class SettingsHandlers(IPaymentGateway gateway, IOptions<PaymentOptions> 
         if (p.CompoundFee is { } cf && (cf < 0 || cf > 100_000)) throw new DomainException("رسوم الاسم المركب بين 0 و100,000 ريال");
         if (p.ResaleCommission is { } rc && (rc < 0 || rc > 0.5m)) throw new DomainException("عمولة مزاد إعادة البيع بين 0% و50%");
         if (p.InstantCommission is { } ic && (ic < 0 || ic > 0.5m)) throw new DomainException("عمولة البيع الفوري بين 0% و50%");
+        if (p.OpeningPrice is { } op && (op < 0 || op > 10_000_000)) throw new DomainException("السعر الافتتاحي بين 0 و10,000,000 ريال");
+        if (p.ManqiyaOpeningPrice is { } mop && (mop < 0 || mop > 10_000_000)) throw new DomainException("السعر الافتتاحي للمنقية بين 0 و10,000,000 ريال");
+        if (p.MinIncrement is { } mi && (mi < 1 || mi > 1_000_000)) throw new DomainException("أقل زيادة في المزايدة بين 1 و1,000,000 ريال");
+        if (p.AuctionDays != null) Range(p.AuctionDays, 1, 60, "مدة المزاد الافتراضية بالأيام");
 
         SetV("RequestsOpen", p.RequestsOpen, () => s.RequestsOpen, v => s.RequestsOpen = v);
         SetS("RequestsClosedNote", Note(p.RequestsClosedNote), () => s.RequestsClosedNote ?? "", v => s.RequestsClosedNote = v);
@@ -203,6 +217,11 @@ public class SettingsHandlers(IPaymentGateway gateway, IOptions<PaymentOptions> 
         SetV("PaymentDeadlineHours", p.PaymentDeadlineHours, () => s.PaymentDeadlineHours ?? 72, v => s.PaymentDeadlineHours = v);
         SetV("TransferFee", p.TransferFee is { } tf0 ? Math.Round(tf0, 2) : null, () => s.TransferFee ?? 0, v => s.TransferFee = v);
         SetV("DepositAmount", p.DepositAmount is { } d0 ? Math.Round(d0, 2) : null, () => s.DepositAmount ?? rules.Value.DepositAmount, v => s.DepositAmount = v);
+        // the manqiya price is compared before the general one changes, so it keeps following it unless set on its own
+        SetV("ManqiyaOpeningPrice", p.ManqiyaOpeningPrice is { } m0 ? Math.Round(m0, 2) : null, () => SettingsStore.OpeningPriceOf(s, NameTypes.Manqiya, rules.Value), v => s.ManqiyaOpeningPrice = v);
+        SetV("OpeningPrice", p.OpeningPrice is { } o0 ? Math.Round(o0, 2) : null, () => s.OpeningPrice ?? rules.Value.OpeningPrice, v => s.OpeningPrice = v);
+        SetV("MinIncrement", p.MinIncrement is { } i0 ? Math.Round(i0, 2) : null, () => s.MinIncrement ?? rules.Value.MinIncrement, v => s.MinIncrement = v);
+        SetV("AuctionDays", p.AuctionDays, () => s.AuctionDays ?? rules.Value.AuctionDays, v => s.AuctionDays = v);
 
         if (changes.Count > 0)
         {

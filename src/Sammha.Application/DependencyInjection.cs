@@ -14,6 +14,7 @@ public static class DependencyInjection
         s.Configure<OtpOptions>(cfg.GetSection("Otp"));
         s.Configure<IntegrationOptions>(cfg.GetSection("Integrations"));
         s.Configure<PaymentOptions>(cfg.GetSection("Payments"));
+        s.Configure<CamelRegistryOptions>(cfg.GetSection("CamelRegistry"));
         s.AddSingleton(TimeProvider.System);
 
         s.AddScoped<Access>();

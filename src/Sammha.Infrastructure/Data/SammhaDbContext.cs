@@ -47,6 +47,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<NameTransfer> Transfers => Set<NameTransfer>();
     public DbSet<NameLogo> Logos => Set<NameLogo>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+    public DbSet<OwnedCamel> OwnedCamels => Set<OwnedCamel>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
     {
@@ -283,6 +284,20 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.HasIndex(x => x.DelegateUserId);
             e.HasIndex(x => new { x.NationalId, x.Phone });
             e.HasOne<User>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<OwnedCamel>(e =>
+        {
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.ExternalId);
+            e.Property(x => x.ExternalId).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(120);
+            e.Property(x => x.ChipNumbers).HasMaxLength(200).HasDefaultValue("");
+            e.Property(x => x.Sex).HasMaxLength(10);
+            e.Property(x => x.Color).HasMaxLength(60);
+            e.Property(x => x.Type).HasMaxLength(80);
+            e.Property(x => x.Age).HasMaxLength(40);
+            e.Property(x => x.Status).HasMaxLength(60);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<ActivityLog>(e =>
         {

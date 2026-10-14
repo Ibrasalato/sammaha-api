@@ -61,6 +61,12 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
               DateTime datetime, LatestNote nvarchar(500), LatestNoteBy nvarchar(500), LatestUpdateDateTime datetime, BillId int, RejectResion nvarchar(500));
             CREATE TABLE PaymentCard (ID int, CardNumber nvarchar(50));
             INSERT PaymentCard VALUES (1, '4111111111111111');
+            CREATE TABLE C_Settings (ID int, Sett_GuaranteeValue int, Sett_GuaranteeValue_Withdrawn int, Sett_Fardeyya_BidStartValue int, Sett_Manqeyya_BidStartValue int,
+              Sett_Fardeyya_BidMinValue int, Sett_Fardeyya_BidMaxValue int, Sett_Default_BidPeriod_InDays int, Sett_Fardeyya_ResFees int, Sett_Manqeyya_ResFees int);
+            INSERT C_Settings VALUES (1, 5000, 10000, 50, 3000, 500, 500, 2, 5000, 5000);
+            CREATE TABLE ContactUs (ID int, Cont_Name nvarchar(1000), Cont_Mobile nvarchar(20), Cont_Tilte nvarchar(500), Cont_Msg nvarchar(3000), Cont_Date datetime);
+            INSERT ContactUs VALUES (1, N'سعد', '0551110001', N'استفسار عن المزاد', N'متى يبدأ مزاد الاسم؟', '2024-03-01T10:00:00'),
+              (2, N'زائر', '0559999999', NULL, N'أريد التواصل مع الإدارة', '2024-03-02T11:00:00'), (3, N'فارغ', '0559999998', N'', N'  ', '2024-03-03T11:00:00');
             """);
         await Exec(db, $"""
             INSERT Members VALUES
@@ -137,12 +143,23 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
         var dry = await Run(false);
         Assert.Equal(4, dry.Counts["members"]);
         await using (var scope = app.Services.CreateAsyncScope())
-            Assert.False(await scope.ServiceProvider.GetRequiredService<SammhaDbContext>().Users.AnyAsync(u => u.Phone == "0551110001"));
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SammhaDbContext>();
+            Assert.False(await db.Users.AnyAsync(u => u.Phone == "0551110001"));
+            Assert.False(await db.Settings.AnyAsync(x => x.ManqiyaOpeningPrice == 3000m));
+        }
 
         var rep = await Run(true);
         Assert.Equal(4, rep.Counts["members"]);
         Assert.Equal(1, rep.Warnings["members.duplicatePhone (placeholder phone)"]);
         Assert.Equal(1, rep.Warnings["members.duplicateNationalId"]);
+        // C_Settings: the guarantee, both opening prices, the minimum raise and the auction length
+        Assert.Equal(5, rep.Counts["settings.fromLegacy"]);
+        Assert.Equal(1, rep.Warnings["settings.guaranteeWithdrawnIgnored"]);
+        // ContactUs → closed enquiry tickets; the one from a member's mobile is linked to the account
+        Assert.Equal(2, rep.Counts["tickets"]);
+        Assert.Equal(1, rep.Warnings["tickets.emptySkipped"]);
+        Assert.Equal(1, rep.Warnings["tickets.noMatchingAccount"]);
 
         // the old password still works
         var saad = await app.SignInAsync("0551110001", "Old@pass1");
@@ -186,7 +203,15 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
             var live = await db.Auctions.SingleAsync(a => a.Number == "AU-7003");
             Assert.False(live.Settled);
             Assert.Equal(m.Id, live.LeaderId);
-            Assert.True(live.BidDeposit > 0);
+            Assert.Equal(5000m, live.BidDeposit);
+            Assert.Equal(500m, live.MinIncrement);
+
+            var cfg = await db.Settings.SingleAsync();
+            Assert.Equal(5000m, cfg.DepositAmount);
+            Assert.Equal(50m, cfg.OpeningPrice);
+            Assert.Equal(3000m, cfg.ManqiyaOpeningPrice);
+            Assert.Equal(500m, cfg.MinIncrement);
+            Assert.Equal(2, cfg.AuctionDays);
 
             var comp = await db.ReservedNames.SingleAsync(n => n.Name == "شعار الغيم البعيد الثاني");
             Assert.Equal(ReservedSources.Compound, comp.Source);
@@ -200,12 +225,23 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
             Assert.Equal(2, notes.Count);
             Assert.Contains(notes, n => n.Read && n.CreatedAt.Year == 2025);
             Assert.True(await db.NextNumberAsync("RequestNo") >= 5004);
+
+            var tickets = await db.Tickets.Include(t => t.Messages).Where(t => t.Topic == "النظام السابق").ToListAsync();
+            Assert.Equal(2, tickets.Count);
+            Assert.All(tickets, t => Assert.Equal(TicketStatuses.Closed, t.Status));
+            var mine = tickets.Single(t => t.UserId == s.Id);
+            Assert.Equal("استفسار عن المزاد", mine.Subject);
+            Assert.Equal(2024, mine.CreatedAt.Year);
+            Assert.StartsWith("BL-24", mine.Number);
+            Assert.Equal("رسالة تواصل", tickets.Single(t => t.UserId == null).Subject);
         }
 
         // a second run adds nothing
         var again = await Run(true);
         Assert.False(again.Counts.ContainsKey("members"));
         Assert.False(again.Counts.ContainsKey("requests"));
+        Assert.False(again.Counts.ContainsKey("settings.fromLegacy"));
+        Assert.False(again.Counts.ContainsKey("tickets"));
         await using (var scope = app.Services.CreateAsyncScope())
             Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<SammhaDbContext>().Requests.CountAsync(r => r.Number == "SM-5001"));
     }
