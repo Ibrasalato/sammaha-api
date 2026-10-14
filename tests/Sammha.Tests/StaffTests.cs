@@ -66,10 +66,13 @@ public class StaffTests(TestApp app) : IClassFixture<TestApp>
     {
         var admin = await Admin();
         var role = await admin.Post<JsonElement>("/api/admin/roles", new { name = "مسؤول الحسابات", permissions = new[] { "users.view", "users.create", "users.roles" } });
-        var (manager, _) = await NewStaffAsync(admin, "0500000073", "m73@example.com", role.GetProperty("id").GetString());
+        var managerRole = role.GetProperty("id").GetString();
+        var (manager, _) = await NewStaffAsync(admin, "0500000073", "m73@example.com", managerRole);
 
         Assert.Equal(HttpStatusCode.Forbidden, await StatusOf(() => manager.Post<JsonElement>("/api/admin/users", new { fullName = "مدير جديد", phone = "0500000074", email = "a74@example.com", password = "Staff#2026x", role = "admin" })));
-        var u = await manager.Post<JsonElement>("/api/admin/users", new { fullName = "موظف جديد", phone = "0500000075", email = "s75@example.com", password = "Staff#2026x", role = "committee" });
+        // no role chosen means the default committee role, which holds permissions this manager does not
+        Assert.Equal(HttpStatusCode.Forbidden, await StatusOf(() => manager.Post<JsonElement>("/api/admin/users", new { fullName = "موظف جديد", phone = "0500000075", email = "s75@example.com", password = "Staff#2026x", role = "committee" })));
+        var u = await manager.Post<JsonElement>("/api/admin/users", new { fullName = "موظف جديد", phone = "0500000075", email = "s75@example.com", password = "Staff#2026x", role = "committee", staffRoleId = managerRole });
         Assert.Equal(HttpStatusCode.Forbidden, await StatusOf(() => manager.Put<JsonElement>($"/api/admin/users/{u.GetProperty("id").GetString()}/role", new { role = "admin" })));
         // the system committee role includes permissions this manager does not hold
         var system = (await admin.Get<JsonElement>("/api/admin/roles")).EnumerateArray().First(r => r.GetProperty("isSystem").GetBoolean()).GetProperty("id").GetString();

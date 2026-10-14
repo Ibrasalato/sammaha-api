@@ -175,7 +175,7 @@ public class StaffHandlers(IAppDbContext db, TimeProvider clock, Access access, 
         {
             if (!TicketKinds.All.Contains(kind)) throw new DomainException("نوع غير معروف");
             var list = (raw ?? "").Split([',', '،', ';', ' ', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var bad = list.FirstOrDefault(e => !System.Text.RegularExpressions.Regex.IsMatch(e, @"^[^\s@]+@[^\s@]+\.[^\s@]+$"));
+            var bad = list.FirstOrDefault(e => e.Length > 160 || !System.Text.RegularExpressions.Regex.IsMatch(e, @"^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$"));
             if (bad != null) throw new DomainException($"البريد غير صحيح: {bad}");
             if (list.Count > 10) throw new DomainException("عشرة عناوين بريد على الأقصى لكل نوع");
             var value = string.Join(", ", list);

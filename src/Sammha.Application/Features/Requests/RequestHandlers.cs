@@ -9,7 +9,8 @@ using Sammha.Domain;
 namespace Sammha.Application.Features.Requests;
 
 /// <summary>Logo requests (three names), compound names and «استثمار الاسم», as their owner sees them.</summary>
-public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Matching matching, Money money, SettingsStore settings, IOptions<PlatformOptions> rules)
+public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access, Mapper map, Matching matching, Money money, SettingsStore settings, IOptions<PlatformOptions> rules,
+    AuctionEngine engine)
     : IRequestHandler<GetMyRequestsQuery, List<RequestDto>>, IRequestHandler<GetRequestQuery, RequestDto>, IRequestHandler<CreateRequestCommand, RequestDto>, IRequestHandler<CreateCompoundRequestCommand, RequestDto>, IRequestHandler<CreateInvestmentRequestCommand, RequestDto>, IRequestHandler<GetMyInvestmentsQuery, List<InvestmentItemDto>>, IRequestHandler<PayDepositCommand, RequestDto>, IRequestHandler<CancelMyRequestCommand, CancelResult>, IRequestHandler<WithdrawNameCommand, WithdrawResult>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -30,6 +31,7 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
         var u = await access.MeAsync(ct);
         var r = await Full.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (r == null || (u.Role == Roles.Owner && r.UserId != u.Id)) throw DomainException.NotFound("الطلب غير موجود");
+        if (r.UserId != u.Id) await access.RequireAsync(Permissions.RequestsView, ct);
         if (u.Role != Roles.Owner && r.Status == RequestStatuses.UnderReview)
         {
             foreach (var c in r.Candidates)
@@ -234,13 +236,19 @@ public class RequestHandlers(IAppDbContext db, TimeProvider clock, Access access
         return result;
     }
 
-    /// <summary>removes auctions that were scheduled but have not started</summary>
+    /// <summary>removes auctions that were scheduled but have not started; entry guarantees already paid on them go back to the wallets</summary>
     private async Task RemoveScheduledAsync(List<Guid> auctionIds, CancellationToken ct)
     {
         if (auctionIds.Count == 0) return;
+        // under the auctions' locks (bids and entry guarantees take them), checked again against the database
+        await using var locks = await db.BeginAsync(auctionIds.Select(id => $"a:{id}"), ct);
+        var now = Now;
+        if (await db.Auctions.AsNoTracking().AnyAsync(a => auctionIds.Contains(a.Id) && (a.StartsAt <= now || a.BidCount > 0), ct))
+            throw new DomainException("بدأ مزاد أحد أسماء هذا الطلب، فلا يمكن إلغاؤه الآن");
         await db.Watches.Where(w => auctionIds.Contains(w.AuctionId)).ExecuteDeleteAsync(ct);
         await db.AutoBids.Where(w => auctionIds.Contains(w.AuctionId)).ExecuteDeleteAsync(ct);
         var list = await db.Auctions.Where(a => auctionIds.Contains(a.Id)).ToListAsync(ct);
+        foreach (var a in list) await engine.RefundHeldBidDepositsAsync(a, ct);
         db.Auctions.RemoveRange(list);
     }
 

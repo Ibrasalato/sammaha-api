@@ -10,13 +10,17 @@ namespace Sammha.Application.Features.Auth;
 
 /// <summary>Sign-up, two-step sign-in (password then one-time code) and account changes.</summary>
 public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, IPasswordHasher hasher, Sessions sessions, ISmsSender sms,
-    SettingsStore settings, IOptions<OtpOptions> otpOpt)
+    SettingsStore settings, IOptions<OtpOptions> otpOpt, ICurrentUser caller)
     : IRequestHandler<GetCurrentUserQuery, UserDto?>, IRequestHandler<SignUpCommand, AuthResult>, IRequestHandler<StartSignUpCommand, OtpChallengeDto>, IRequestHandler<StartSignInCommand, OtpChallengeDto>, IRequestHandler<CompleteSignInCommand, AuthResult>, IRequestHandler<ResendOtpCommand, OtpChallengeDto>, IRequestHandler<ChangePasswordCommand, AuthResult>, IRequestHandler<RefreshSessionCommand, AuthResult>, IRequestHandler<SignOutCommand, MediatR.Unit>, IRequestHandler<UpdateProfileCommand, UserDto>, IRequestHandler<UpdateAccountCommand, UserDto>, IRequestHandler<RequestEmailChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailChangeCommand, UserDto>, IRequestHandler<RequestPhoneChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmPhoneChangeCommand, UserDto>,
       IRequestHandler<UpdateAddressCommand, UserDto>, IRequestHandler<UpdatePersonalCommand, UserDto>, IRequestHandler<RequestEmailVerificationCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailVerificationCommand, UserDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     private OtpOptions Otp => otpOpt.Value;
-    [GeneratedRegex(@"^[^\s@]+@[^\s@]+\.[^\s@]+$")] private static partial Regex EmailRx();
+    // linear: the domain labels cannot contain the dot that separates them, so there is nothing to backtrack over (length is checked first)
+    [GeneratedRegex(@"^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$")] private static partial Regex EmailRx();
+    private static bool IsEmail(string e) => e.Length <= 160 && EmailRx().IsMatch(e);
+    /// <summary>codes one person may be sent for one step and destination per hour (sign-in codes are only counted when resent)</summary>
+    private const int MaxCodesPerHour = 5;
     [GeneratedRegex(@"^[12]\d{9}$")] private static partial Regex NationalIdRx();
 
     private async Task<UserDto?> CurrentAsync(CancellationToken ct) => (await access.MaybeAsync(ct)) is { } u ? await access.DtoAsync(u, ct) : null;
@@ -69,7 +73,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         if (Identity.Validate(nid, nationality, residence) is { } idError) throw new DomainException(idError);
         var phone = Phones.Normalize(i.PhoneCountry, i.Phone) ?? throw new DomainException(NameMatcher.NormalizePhone(i.PhoneCountry) is "" or "966" ? "رقم الجوال يبدأ بـ 5 ويتكون من 9 أرقام" : "رقم الجوال غير صحيح لهذا البلد");
         var email = (i.Email ?? "").Trim();
-        if (!EmailRx().IsMatch(email) || email.Length > 160) throw new DomainException("البريد الإلكتروني غير صحيح");
+        if (!IsEmail(email)) throw new DomainException("البريد الإلكتروني غير صحيح");
         await settings.EnsurePasswordAsync(i.Password, ct);
         if (await db.Users.AnyAsync(u => u.NationalId == nid, ct)) throw new DomainException("رقم الهوية مسجل مسبقًا، سجّل الدخول");
         if (await db.Users.AnyAsync(u => u.Phone == phone, ct)) throw new DomainException("رقم الجوال مسجل مسبقًا، سجّل الدخول");
@@ -81,7 +85,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     private async Task<OtpChallengeDto> StartSignUpAsync(SignUpInput i, CancellationToken ct)
     {
         var n = await CheckSignUpAsync(i, ct);
-        return await IssueOtpAsync(Guid.Empty, OtpPurposes.SignUp, n.Phone, ct);
+        return await IssueOtpAsync(Guid.Empty, OtpPurposes.SignUp, n.Phone, ct, capped: true);
     }
 
     /// <summary>step 2: the code proves the mobile number belongs to the person signing up, then the account is created</summary>
@@ -122,10 +126,13 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
             throw new DomainException($"تم إيقاف الدخول مؤقتًا بعد محاولات خاطئة متكررة، حاول بعد {Math.Max(1, (int)Math.Ceiling((until - Now).TotalMinutes))} دقيقة", 429);
         if (!hasher.Verify(u.PasswordHash, password ?? ""))
         {
-            // counted and saved even though sign-in fails, so guessing stops at the limit
-            u.FailedLogins += 1;
-            if (u.FailedLogins >= policy.MaxLoginAttempts) { u.LockedUntil = Now.AddMinutes(policy.LockoutMinutes); u.FailedLogins = 0; }
-            await db.SaveChangesAsync(ct);
+            // counted in the database itself (not read-modify-write), so parallel guesses cannot slip past the limit
+            var uid = u.Id;
+            await db.Users.Where(x => x.Id == uid).ExecuteUpdateAsync(x => x.SetProperty(v => v.FailedLogins, v => v.FailedLogins + 1), ct);
+            var max = Math.Max(1, policy.MaxLoginAttempts);
+            var until = Now.AddMinutes(policy.LockoutMinutes);
+            await db.Users.Where(x => x.Id == uid && x.FailedLogins >= max)
+                .ExecuteUpdateAsync(x => x.SetProperty(v => v.LockedUntil, until).SetProperty(v => v.FailedLogins, 0), ct);
             throw wrong;
         }
         if (!u.Active) throw new DomainException("هذا الحساب موقوف، تواصل مع مدير النظام");
@@ -144,10 +151,15 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
 
     private async Task<OtpChallengeDto> ResendOtpAsync(string challenge, CancellationToken ct)
     {
-        var c = Guid.TryParse(challenge, out var id) ? await db.OtpChallenges.FirstOrDefaultAsync(x => x.Id == id && !x.Used, ct) : null;
-        if (c == null) throw new DomainException("انتهت الجلسة، أعد إدخال بياناتك");
+        var gone = new DomainException("انتهت الجلسة، أعد إدخال بياناتك");
+        if (!Guid.TryParse(challenge, out var id)) throw gone;
+        // the same lock as checking a code, so a challenge is never resent and guessed at the same time
+        await using var uow = await db.BeginAsync([$"otp:{id}"], ct);
+        var c = await db.OtpChallenges.FirstOrDefaultAsync(x => x.Id == id && !x.Used, ct) ?? throw gone;
         c.Used = true;
-        return await IssueOtpAsync(c.UserId, c.Purpose, c.Target, ct);
+        var next = await IssueOtpAsync(c.UserId, c.Purpose, c.Target, ct, capped: true);
+        await uow.CommitAsync(ct);
+        return next;
     }
 
     private async Task<AuthResult> ChangePasswordAsync(string current, string next, CancellationToken ct)
@@ -199,7 +211,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     {
         var u = await access.MeAsync(ct);
         var mail = (newEmail ?? "").Trim();
-        if (!EmailRx().IsMatch(mail)) throw new DomainException("البريد الإلكتروني غير صحيح");
+        if (!IsEmail(mail)) throw new DomainException("البريد الإلكتروني غير صحيح");
         if (string.Equals(mail, u.Email, StringComparison.OrdinalIgnoreCase)) throw new DomainException("هذا بريدك الحالي");
         if (access.IsSuper(u)) throw new DomainException("بريد مدير النظام الرئيسي ثابت");
         if (await db.Users.AnyAsync(x => x.Email == mail, ct)) throw new DomainException("البريد الإلكتروني مسجل لحساب آخر");
@@ -308,33 +320,58 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     }
 
     // ───── one-time codes ─────
-    private async Task<OtpChallengeDto> IssueOtpAsync(Guid userId, string purpose, string target, CancellationToken ct)
+    private async Task<OtpChallengeDto> IssueOtpAsync(Guid userId, string purpose, string target, CancellationToken ct, bool capped = false)
     {
+        // sign-in codes need the password first; sign-up, contact changes and every resend are capped per hour
+        capped |= purpose != OtpPurposes.Login;
+        await using var uow = await db.BeginAsync([$"otp-to:{purpose}:{userId:N}:{target}"], ct);
+        if (capped)
+        {
+            // a challenge stores its expiry, so «issued in the last hour» is «expires after an hour ago + TTL»
+            var since = Now.AddHours(-1).AddMinutes(Otp.TtlMinutes);
+            var recent = await db.OtpChallenges.CountAsync(x => x.UserId == userId && x.Purpose == purpose && x.Target == target && x.ExpiresAt > since, ct);
+            if (recent >= MaxCodesPerHour) throw new DomainException("طلبت رموز تحقق كثيرة، حاول بعد ساعة", 429);
+        }
         var code = string.IsNullOrEmpty(Otp.FixedCode)
             ? RandomNumberGenerator.GetInt32((int)Math.Pow(10, Otp.Length - 1), (int)Math.Pow(10, Otp.Length)).ToString()
             : Otp.FixedCode;
         var c = new OtpChallenge { UserId = userId, Purpose = purpose, Target = target, CodeHash = hasher.Hash(code), ExpiresAt = Now.AddMinutes(Otp.TtlMinutes) };
         db.OtpChallenges.Add(c);
         await db.SaveChangesAsync(ct);
+        await uow.CommitAsync(ct); // no-op inside an outer unit of work (resend), which commits
         if (string.IsNullOrEmpty(Otp.FixedCode)) await sms.SendCodeAsync(target, code, purpose);
         return new OtpChallengeDto(c.Id.ToString(), purpose is OtpPurposes.Email or OtpPurposes.VerifyEmail ? MaskEmail(target) : MaskPhone(target), c.ExpiresAt, code.Length);
     }
 
-    /// <summary>A wrong code is counted and saved (not rolled back), so guessing stops after MaxAttempts.</summary>
+    /// <summary>
+    /// A wrong code is counted and committed (not rolled back), so guessing stops after MaxAttempts.
+    /// Checked under a lock on the challenge: parallel guesses are taken one at a time and each sees the last count.
+    /// </summary>
     private async Task<OtpChallenge> ConsumeOtpAsync(string challenge, string code, string purpose, CancellationToken ct)
     {
-        var c = Guid.TryParse(challenge, out var id) ? await db.OtpChallenges.FirstOrDefaultAsync(x => x.Id == id, ct) : null;
-        if (c == null || c.Used || c.Purpose != purpose || Now > c.ExpiresAt) throw new DomainException("انتهت صلاحية الرمز، اطلب رمزًا جديدًا");
-        if (c.Attempts >= Otp.MaxAttempts) { c.Used = true; await db.SaveChangesAsync(ct); throw new DomainException("تجاوزت عدد المحاولات، اطلب رمزًا جديدًا"); }
+        var expired = new DomainException("انتهت صلاحية الرمز، اطلب رمزًا جديدًا");
+        if (!Guid.TryParse(challenge, out var id)) throw expired;
+        await using var uow = await db.BeginAsync([$"otp:{id}"], ct);
+        var c = await db.OtpChallenges.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (c == null || c.Used || c.Purpose != purpose || Now > c.ExpiresAt) { await uow.CommitAsync(ct); throw expired; }
+        if (c.Attempts >= Otp.MaxAttempts)
+        {
+            c.Used = true;
+            await db.SaveChangesAsync(ct);
+            await uow.CommitAsync(ct);
+            throw new DomainException("تجاوزت عدد المحاولات، اطلب رمزًا جديدًا");
+        }
         c.Attempts += 1;
         var digits = NameMatcher.NormalizePhone(code); // keeps digits only (Arabic digits too)
         if (!hasher.Verify(c.CodeHash, digits))
         {
             await db.SaveChangesAsync(ct);
+            await uow.CommitAsync(ct);
             throw new DomainException($"الرمز غير صحيح، بقي {Otp.MaxAttempts - c.Attempts} محاولات");
         }
         c.Used = true;
         await db.SaveChangesAsync(ct);
+        await uow.CommitAsync(ct);
         return c;
     }
 
@@ -356,7 +393,16 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     public Task<AuthResult> Handle(RefreshSessionCommand q, CancellationToken ct) => sessions.RefreshAsync(q.RefreshToken, ct);
     public async Task<MediatR.Unit> Handle(SignOutCommand q, CancellationToken ct)
     {
-        if (q.Everywhere && await access.MaybeAsync(ct) is { } u) { await sessions.RevokeAllAsync(u, "signout-all", ct); await db.SaveChangesAsync(ct); }
+        if (q.Everywhere && await access.MaybeAsync(ct) is { } u)
+        {
+            // a delegate cannot sign the owner out of their own devices: only this delegated session ends
+            if (caller.DelegationId != null)
+            {
+                if (caller.SessionId is { } sid) await sessions.RevokeSessionAsync(sid, "signout", ct);
+                await sessions.RevokeAsync(q.RefreshToken, ct);
+            }
+            else { await sessions.RevokeAllAsync(u, "signout-all", ct); await db.SaveChangesAsync(ct); }
+        }
         else await sessions.RevokeAsync(q.RefreshToken, ct);
         return Unit.Value;
     }

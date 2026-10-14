@@ -29,6 +29,9 @@ public class Money(IAppDbContext db, TimeProvider clock, Notifier notifier, IOpt
     {
         var p = await db.Payments.Where(x => x.UserId == userId && x.Purpose == purpose && x.Ref == reference && x.Status == "paid" && x.UsedAt == null && x.Amount >= amount)
             .OrderBy(x => x.PaidAt).FirstOrDefaultAsync(ct) ?? throw new DomainException(CardOnly);
+        // the card money sits in the wallet between the credit and this debit: if it was spent meanwhile (e.g. on a guarantee), the purpose cannot complete
+        if (await db.BalanceOfAsync(userId, ct) < amount)
+            throw new DomainException("مبلغ الدفع بالبطاقة لم يعد متاحًا في محفظتك (استُخدم في عملية أخرى)، ادفع من جديد");
         p.UsedAt = Now;
         Add(userId, -amount, kind, note, reference);
     }
@@ -86,9 +89,28 @@ public class Money(IAppDbContext db, TimeProvider clock, Notifier notifier, IOpt
         }
     }
 
+    /// <summary>
+    /// Takes more locks inside the caller's transaction (sp_getapplock is re-entrant, and the outer unit of work commits).
+    /// Without an open transaction it does nothing: a unit of work of its own would roll back when disposed here.
+    /// </summary>
+    public async Task<IUnitOfWork?> JoinLocksAsync(IEnumerable<string> keys, CancellationToken ct) =>
+        db is DbContext ctx && ctx.Database.CurrentTransaction != null ? await db.BeginAsync(keys, ct) : null;
+
+    /// <summary>
+    /// Idempotent: an invoice already paid is left as it is. Callers may hold only the invoice's lock (staff marking it paid),
+    /// so the buyer's wallet lock (and a resold name's) is taken here and the stored status is read again under them.
+    /// </summary>
     public async Task MarkInvoicePaidAsync(Invoice inv, CancellationToken ct)
     {
-        if (inv.Status == InvoiceStatuses.Cancelled) throw new DomainException("أُلغيت هذه الفاتورة لانتهاء مهلة السداد");
+        if (inv.Status == InvoiceStatuses.Paid) return;
+        var reservedId = inv.ListingId is { } lid ? await db.Listings.AsNoTracking().Where(l => l.Id == lid).Select(l => (Guid?)l.ReservedId).FirstOrDefaultAsync(ct) : null;
+        var keys = new List<string> { $"i:{inv.Id}", $"u:{inv.UserId}" };
+        if (reservedId is { } nid) keys.Add($"n:{nid}");
+        await using var locks = await JoinLocksAsync(keys, ct);
+        var stored = await db.Invoices.AsNoTracking().Where(i => i.Id == inv.Id).Select(i => i.Status).FirstOrDefaultAsync(ct);
+        // paid by someone else since the caller loaded it: fail, so the caller's own debit rolls back
+        if (stored == InvoiceStatuses.Paid) throw new DomainException("سُدّدت هذه الفاتورة مسبقًا");
+        if (inv.Status == InvoiceStatuses.Cancelled || stored == InvoiceStatuses.Cancelled) throw new DomainException("أُلغيت هذه الفاتورة لانتهاء مهلة السداد");
         inv.Status = InvoiceStatuses.Paid;
         inv.PaidAt = Now;
         if (!inv.Number.StartsWith("INV-"))
@@ -98,8 +120,26 @@ public class Money(IAppDbContext db, TimeProvider clock, Notifier notifier, IOpt
             inv.IssuedAt = Now;
             await PublishTaxInvoiceAsync(inv, ct);
         }
+        if (inv.ListingId != null) await HandOverResoldNameAsync(inv, ct);
         await PayOwnerShareAsync(inv, ct);
         await ReleaseWinnerGuaranteeAsync(inv, ct);
+    }
+
+    /// <summary>a resale auction's name stays with the seller until the winner pays; it moves to the buyer here (an instant sale moved it already)</summary>
+    private async Task HandOverResoldNameAsync(Invoice inv, CancellationToken ct)
+    {
+        var l = await db.Listings.FirstOrDefaultAsync(x => x.Id == inv.ListingId, ct);
+        if (l == null) return;
+        var r = await db.ReservedNames.FirstOrDefaultAsync(x => x.Id == l.ReservedId, ct) ?? throw new DomainException("الاسم لم يعد في السجل، تواصل مع الدعم");
+        if (r.OwnerId == inv.UserId) return;
+        if (r.OwnerId != l.SellerId) throw new DomainException("لم يعد الاسم مسجلًا باسم البائع، تواصل مع الدعم");
+        var buyer = await db.Users.FirstAsync(x => x.Id == inv.UserId, ct);
+        r.OwnerId = buyer.Id;
+        r.OwnerName = buyer.FullName;
+        r.Price = inv.Total;
+        r.AcquiredAt = Now;
+        r.Source = ReservedSources.Resale;
+        await notifier.NotifyAsync(buyer.Id, NotificationKinds.Won, $"أصبح «{inv.Name}» باسمك", "سُدّدت الفاتورة وانتقلت ملكية الاسم إليك، ويمكنك إصدار شهادة التسجيل الآن.", "/dashboard/names", ct);
     }
 
     /// <summary>a paid auction win returns the winner's guarantee: the request guarantee (the requester won) or the entry guarantee</summary>

@@ -57,8 +57,15 @@ public class PayoutEngine(IAppDbContext db, IPayoutGateway gateway, Notifier not
     public async Task SendAsync(Withdrawal w, string by, CancellationToken ct)
     {
         PayoutResult r;
+        // the gateway gets the withdrawal itself, with w.Number as the merchant reference (idempotency key for a resend and the key for status checks)
         try { r = await gateway.SendAsync(w, ct); }
-        catch (Exception e) when (e is not DomainException) { log.LogWarning(e, "payout {Number} failed", w.Number); r = new(PayoutResult.Failed, null, "تعذّر الاتصال ببوابة التحويل"); }
+        catch (Exception e) when (e is HttpRequestException || (e is TaskCanceledException or TimeoutException && !ct.IsCancellationRequested))
+        {
+            // no answer: the bank may have taken it. Not failed (a retry could pay twice) — the sweeper asks the gateway again
+            log.LogWarning(e, "payout {Number}: no answer from the gateway, checking again later", w.Number);
+            r = new(PayoutResult.Processing, null, null);
+        }
+        catch (Exception e) when (e is not DomainException and not OperationCanceledException) { log.LogWarning(e, "payout {Number} failed", w.Number); r = new(PayoutResult.Failed, null, "تعذّر الاتصال ببوابة التحويل"); }
         w.PayoutProvider = gateway.Name;
         w.PayoutSentAt = Now;
         w.ProcessedBy = by;

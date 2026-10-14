@@ -14,22 +14,22 @@ public class AuthController(ISender mediator) : ControllerBase
     public Task<UserDto?> Me(CancellationToken ct) => mediator.Send(new GetCurrentUserQuery(), ct);
 
     /// <summary>sign-up step 1: checks the details and texts a code to the mobile number</summary>
-    [HttpPost("signup/start"), EnableRateLimiting("auth")]
+    [HttpPost("signup/start"), EnableRateLimiting("auth"), RequestSizeLimit(64 * 1024)]
     public Task<OtpChallengeDto> StartSignUp(SignUpInput body, CancellationToken ct) => mediator.Send(new StartSignUpCommand(body), ct);
 
     /// <summary>sign-up step 2: the same details plus the challenge and code → account and session</summary>
-    [HttpPost("signup"), EnableRateLimiting("auth")]
+    [HttpPost("signup"), EnableRateLimiting("auth"), RequestSizeLimit(64 * 1024)]
     public Task<AuthResult> SignUp(SignUpInput body, CancellationToken ct) => mediator.Send(new SignUpCommand(body), ct);
 
     /// <summary>step 1: password → one-time code challenge</summary>
-    [HttpPost("signin"), EnableRateLimiting("auth")]
+    [HttpPost("signin"), EnableRateLimiting("auth"), RequestSizeLimit(64 * 1024)]
     public Task<OtpChallengeDto> SignIn(SignInBody b, CancellationToken ct) => mediator.Send(new StartSignInCommand(b.Login, b.Password, b.Portal), ct);
 
     /// <summary>step 2: the code → token</summary>
-    [HttpPost("signin/complete"), EnableRateLimiting("auth")]
+    [HttpPost("signin/complete"), EnableRateLimiting("auth"), RequestSizeLimit(64 * 1024)]
     public Task<AuthResult> Complete(CodeBody b, CancellationToken ct) => mediator.Send(new CompleteSignInCommand(b.Challenge, b.Code), ct);
 
-    [HttpPost("otp/resend"), EnableRateLimiting("auth")]
+    [HttpPost("otp/resend"), EnableRateLimiting("auth"), RequestSizeLimit(64 * 1024)]
     public Task<OtpChallengeDto> Resend(ChallengeBody b, CancellationToken ct) => mediator.Send(new ResendOtpCommand(b.Challenge), ct);
 
     /// <summary>signs every other device out and returns a new session for this one</summary>
@@ -37,11 +37,11 @@ public class AuthController(ISender mediator) : ControllerBase
     public Task<AuthResult> Password(PasswordBody b, CancellationToken ct) => mediator.Send(new ChangePasswordCommand(b.Current, b.Next), ct);
 
     /// <summary>refresh token → new access token + new refresh token (the old one stops working)</summary>
-    [HttpPost("refresh"), EnableRateLimiting("refresh")]
+    [HttpPost("refresh"), EnableRateLimiting("refresh"), RequestSizeLimit(64 * 1024)]
     public Task<AuthResult> Refresh(RefreshBody b, CancellationToken ct) => mediator.Send(new RefreshSessionCommand(b.RefreshToken), ct);
 
     /// <summary>revokes this device's refresh token (or every session with everywhere=true)</summary>
-    [HttpPost("signout")]
+    [HttpPost("signout"), RequestSizeLimit(64 * 1024)]
     public async Task<IActionResult> SignOutUser(SignOutBody b, CancellationToken ct)
     {
         await mediator.Send(new SignOutCommand(b.RefreshToken, b.Everywhere), ct);

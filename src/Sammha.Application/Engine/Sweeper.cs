@@ -10,7 +10,7 @@ namespace Sammha.Application.Engine;
 /// watchlist reminders, close expired fixed-price listings, open scheduled resale listings.
 /// </summary>
 public class Sweeper(IAppDbContext db, TimeProvider clock, AuctionEngine engine, Notifier notifier, IAuctionRealtime realtime, IPostCommit postCommit, ILogger<Sweeper> log,
-    Features.Finance.PayoutEngine payouts)
+    Features.Finance.PayoutEngine payouts, MediatR.ISender sender)
 {
     private DateTimeOffset Now => clock.GetUtcNow();
 
@@ -21,20 +21,33 @@ public class Sweeper(IAppDbContext db, TimeProvider clock, AuctionEngine engine,
         await RemindersAsync(ct);
         await ListingsAsync(ct);
         await ForfeitOverdueAsync(ct);
+        await CompletePaidPaymentsAsync(ct);
         await payouts.PollAsync(ct);
     }
 
-    /// <summary>auction wins not paid by their deadline: cancelled, guarantee forfeited, the name passes to the organization</summary>
+    /// <summary>card payments credited to the wallet whose purpose did not complete (crash, timeout): try again</summary>
+    public async Task CompletePaidPaymentsAsync(CancellationToken ct)
+    {
+        try { await sender.Send(new Features.Payments.RetryPaidPaymentsRequest(), ct); }
+        catch (Exception e) when (e is not OperationCanceledException) { log.LogError(e, "Retrying paid card payments failed"); }
+    }
+
+    /// <summary>
+    /// auction wins not paid by their deadline: cancelled, guarantee forfeited; the name passes to the organization
+    /// (a resale: the name stays with the seller)
+    /// </summary>
     public async Task ForfeitOverdueAsync(CancellationToken ct)
     {
         var now = Now;
-        var due = await db.Invoices.Where(i => i.Status == InvoiceStatuses.Unpaid && i.DueAt != null && i.DueAt <= now && i.AuctionId != null && i.ListingId == null)
+        var due = await db.Invoices.Where(i => i.Status == InvoiceStatuses.Unpaid && i.DueAt != null && i.DueAt <= now && i.AuctionId != null)
             .OrderBy(i => i.DueAt).Select(i => new { i.Id, i.UserId, i.AuctionId }).Take(100).ToListAsync(ct);
         foreach (var x in due)
         {
             try
             {
-                await using var uow = await db.BeginAsync([$"a:{x.AuctionId}", $"u:{x.UserId}"], ct);
+                // the invoice lock first, as paying it takes it first (owner payment, staff marking it paid)
+                await using var uow = await db.BeginAsync([$"i:{x.Id}"], ct);
+                await using var more = await db.BeginAsync([$"a:{x.AuctionId}", $"u:{x.UserId}"], ct);
                 var inv = await db.Invoices.FirstAsync(i => i.Id == x.Id, ct);
                 if (inv.Status != InvoiceStatuses.Unpaid) continue;
                 await engine.ForfeitAsync(inv, ct);

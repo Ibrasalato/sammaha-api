@@ -97,7 +97,7 @@ dotnet run --project src/Sammha.Api
 | `SuperAdmin:InitialPassword` | كلمة مرور أول دخول لحساب `ibrasalato@gmail.com` |
 | `Cors:Origins` | نطاقات الواجهة المسموحة |
 | `Payments:Simulate` / `MoyasarSecretKey` / `WebhookSecret` | الدفع عبر ميسّر |
-| `Otp:FixedCode` | اتركه فارغًا لتصبح الرموز عشوائية وتُرسل عبر `Integrations:SmsWebhookUrl` |
+| `Otp:FixedCode` / `Otp:AllowFixedCode` | حاليًا الرمز ثابت (4321) مؤقتًا. عند ربط مزود SMS على خادم المنظمة: احذف `FixedCode` واجعل `AllowFixedCode` = false واضبط `Integrations:SmsWebhookUrl`؛ الخادم يرفض التشغيل برمز ثابت خارج التطوير ما لم يُسمح صراحة |
 | `Integrations:*` | روابط n8n: الإشعارات، الرسائل، إيميلات الشكاوى، الفواتير |
 | `Platform:*` | قواعد الأعمال: الضمان، والسعر الافتتاحي، والعمولات، والمدد، والنسب |
 

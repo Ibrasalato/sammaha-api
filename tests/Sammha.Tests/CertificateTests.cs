@@ -76,7 +76,7 @@ public class CertificateTests(TestApp app) : IClassFixture<TestApp>
         var id = page.GetProperty("items").EnumerateArray().Single().GetProperty("id").GetString();
         Assert.Contains("سبب", await admin.Fails(() => admin.Post<JsonElement>($"/api/admin/certificates/{id}/revoke", new { reason = "" })));
         await admin.Post<JsonElement>($"/api/admin/certificates/{id}/revoke", new { reason = "صدرت ببيانات تحتاج تصحيحًا" });
-        var after = await anon.Get<JsonElement>($"/api/certificates/issued/{number}");
+        var after = await anon.Get<JsonElement>($"/api/certificates/issued/{number}?s={sig}");
         Assert.Equal("revoked", after.GetProperty("status").GetString());
         Assert.Equal("صدرت ببيانات تحتاج تصحيحًا", after.GetProperty("revokeReason").GetString());
     }

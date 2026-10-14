@@ -34,8 +34,15 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
     private DateTimeOffset Now => clock.GetUtcNow();
     private const string Link = "/dashboard/transfers";
 
-    public static TransferDto Dto(NameTransfer t, string? fromPhone = null, string? toPhone = null) => new(t.Id, t.Number, t.ReservedId, t.Name, t.Type, t.FromId, t.FromName,
-        t.ToId, t.ToName, t.Reason, t.Note, t.Fee, t.Status, t.CreatedAt, t.RespondedAt, t.ReviewedAt, t.ReviewerName, t.ReviewNote, t.CompletedAt, t.CancelledAt, fromPhone, toPhone);
+    public static TransferDto Dto(NameTransfer t, string? fromPhone = null, string? toPhone = null) => Build(t, t.ToName, fromPhone, toPhone);
+
+    private static TransferDto Build(NameTransfer t, string toName, string? fromPhone, string? toPhone) => new(t.Id, t.Number, t.ReservedId, t.Name, t.Type, t.FromId, t.FromName,
+        t.ToId, toName, t.Reason, t.Note, t.Fee, t.Status, t.CreatedAt, t.RespondedAt, t.ReviewedAt, t.ReviewerName, t.ReviewNote, t.CompletedAt, t.CancelledAt, fromPhone, toPhone);
+
+    /// <summary>a mobile number must not reveal who it belongs to: the sender sees the recipient's full name only once they accept</summary>
+    private static bool Accepted(NameTransfer t) => t.RespondedAt != null && t.Status != TransferStatuses.Declined;
+    public static string RecipientNameForSender(NameTransfer t) => Accepted(t) ? t.ToName : NameMatcher.MaskName(t.ToName);
+    private static TransferDto SenderDto(NameTransfer t) => Build(t, RecipientNameForSender(t), null, null);
 
     /// <summary>ownership is the account holder's decision: delegates cannot move names</summary>
     private async Task<User> OwnerAsync(CancellationToken ct)
@@ -59,7 +66,7 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
     {
         var u = await access.MeAsync(ct);
         var list = await db.Transfers.AsNoTracking().Where(t => t.FromId == u.Id || t.ToId == u.Id).OrderByDescending(t => t.CreatedAt).ToListAsync(ct);
-        return new(list.Where(t => t.FromId == u.Id).Select(t => Dto(t)).ToList(), list.Where(t => t.ToId == u.Id && t.Status != TransferStatuses.PendingPayment).Select(t => Dto(t)).ToList(), await settings.TransferFeeAsync(ct));
+        return new(list.Where(t => t.FromId == u.Id).Select(SenderDto).ToList(), list.Where(t => t.ToId == u.Id && t.Status != TransferStatuses.PendingPayment).Select(t => Dto(t)).ToList(), await settings.TransferFeeAsync(ct));
     }
 
     public async Task<RecipientDto> Handle(FindRecipientQuery q, CancellationToken ct)
@@ -91,7 +98,7 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
         if (fee <= 0) await SendToRecipientAsync(t, ct);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);
-        return Dto(t);
+        return SenderDto(t);
     }
 
     private async Task SendToRecipientAsync(NameTransfer t, CancellationToken ct)
@@ -106,13 +113,13 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
         await using var uow = await db.BeginAsync([$"t:{q.Id}", $"u:{u.Id}"], ct);
         var t = await LoadAsync(q.Id, ct);
         if (t.FromId != u.Id) throw DomainException.NotFound("طلب النقل غير موجود");
-        if (t.Status != TransferStatuses.PendingPayment) return Dto(t);
+        if (t.Status != TransferStatuses.PendingPayment) return SenderDto(t);
         await money.DebitByCardAsync(u.Id, t.Fee, PaymentPurposes.Transfer, t.Id, TxKinds.ServiceFee, $"رسوم نقل ملكية «{t.Name}» ({t.Number})", ct);
         t.FeePaidAt = Now;
         await SendToRecipientAsync(t, ct);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);
-        return Dto(t);
+        return SenderDto(t);
     }
 
     /// <summary>a name that is on sale, being auctioned or not yet paid for cannot change hands</summary>
@@ -121,6 +128,7 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
         if (await db.Listings.AnyAsync(l => l.ReservedId == r.Id && (l.Status == ListingStatuses.Scheduled || l.Status == ListingStatuses.Live), ct)) throw new DomainException("الاسم معروض للبيع حاليًا، ألغِ العرض أولًا");
         if (await db.Auctions.AnyAsync(a => a.Name == r.Name && !a.Settled && a.CancelledAt == null, ct)) throw new DomainException("للاسم مزاد قائم حاليًا");
         if (await db.Invoices.AnyAsync(i => i.UserId == ownerId && i.Name == r.Name && i.Status == InvoiceStatuses.Unpaid, ct)) throw new DomainException("سدّد فاتورة الاسم أولًا");
+        if (await Features.Listings.ListingHandlers.PendingSaleAsync(db, r.Id, ct)) throw new DomainException("الاسم مبيع في مزاد وبانتظار سداد المشتري");
     }
 
     private async Task<NameTransfer> LoadAsync(Guid id, CancellationToken ct) =>
@@ -145,7 +153,7 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
         if (told) await notifier.NotifyAsync(t.ToId, NotificationKinds.Transfer, $"أُلغي طلب نقل ملكية «{t.Name}»", $"ألغى {t.FromName} طلب نقل الاسم إليك.", Link, ct);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);
-        return Dto(t);
+        return SenderDto(t);
     }
 
     public async Task<TransferDto> Handle(RespondTransferCommand q, CancellationToken ct)
@@ -165,7 +173,7 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
         {
             t.Status = TransferStatuses.Declined;
             RefundFee(t, "رفضه المستلم");
-            await notifier.NotifyAsync(t.FromId, NotificationKinds.Transfer, $"رفض {t.ToName} نقل «{t.Name}»", t.Fee > 0 ? "أُعيدت رسوم النقل إلى محفظتك، ويمكنك استردادها إلى حسابك البنكي." : "بقي الاسم مسجلًا باسمك.", Link, ct);
+            await notifier.NotifyAsync(t.FromId, NotificationKinds.Transfer, $"رفض {NameMatcher.MaskName(t.ToName)} نقل «{t.Name}»", t.Fee > 0 ? "أُعيدت رسوم النقل إلى محفظتك، ويمكنك استردادها إلى حسابك البنكي." : "بقي الاسم مسجلًا باسمك.", Link, ct);
         }
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);

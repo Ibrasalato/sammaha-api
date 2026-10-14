@@ -2,8 +2,8 @@ namespace Sammha.Application.Common;
 
 public class OtpOptions
 {
-    /// <summary>fixed code until an SMS provider is connected; leave empty for random codes sent by SMS</summary>
-    public string? FixedCode { get; set; } = "4321";
+    /// <summary>development only: a fixed code instead of random codes sent by SMS (the API refuses to start with it outside Development)</summary>
+    public string? FixedCode { get; set; }
     public int Length { get; set; } = 4;
     public int TtlMinutes { get; set; } = 5;
     public int MaxAttempts { get; set; } = 5;
@@ -26,8 +26,8 @@ public class IntegrationOptions
 
 public class PaymentOptions
 {
-    /// <summary>development: card payments succeed at once without Moyasar</summary>
-    public bool Simulate { get; set; } = true;
+    /// <summary>development only: card payments succeed at once without a gateway (the API refuses to start with it outside Development)</summary>
+    public bool Simulate { get; set; }
     public string? MoyasarSecretKey { get; set; }
     /// <summary>the secret_token configured on the Moyasar webhook</summary>
     public string? WebhookSecret { get; set; }

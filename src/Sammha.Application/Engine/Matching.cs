@@ -8,6 +8,20 @@ namespace Sammha.Application.Engine;
 /// <summary>Name availability: registered names plus names in live requests and unsettled auctions.</summary>
 public class Matching(IAppDbContext db, IOptions<PlatformOptions> rules)
 {
+    /// <summary>pool entries from other owners' live requests (pending payment, under review, accepted without an auction): not public</summary>
+    public const string RequestSource = "request";
+
+    public static bool IsPrivateSource(string? source) => source == RequestSource;
+
+    /// <summary>
+    /// the public form of a check (/api/names/check): hits from private sources keep their type, source and score
+    /// (they still drive the verdict and the count) but lose the name text.
+    /// </summary>
+    public static NameCheck Redact(NameCheck c) => c with
+    {
+        Hits = c.Hits.Select(h => IsPrivateSource(h.Source) ? h with { Name = "" } : h).ToList(),
+    };
+
     public async Task<List<MatchSource>> PoolAsync(Guid? excludeRequestId, CancellationToken ct)
     {
         var pool = await db.ReservedNames.AsNoTracking().Select(r => new MatchSource(r.Name, r.Normalized, r.Type, "reserved")).ToListAsync(ct);
@@ -21,7 +35,7 @@ public class Matching(IAppDbContext db, IOptions<PlatformOptions> rules)
                                 && !(r.Kind == RequestKinds.Compound && r.Status == RequestStatuses.Accepted)
                                 && (a == null || !a.Settled)
                           select new { c.Name, c.Normalized, r.Type, HasAuction = a != null }).ToListAsync(ct);
-        pool.AddRange(rows.Select(x => new MatchSource(x.Name, x.Normalized, x.Type, x.HasAuction ? "auction" : "request")));
+        pool.AddRange(rows.Select(x => new MatchSource(x.Name, x.Normalized, x.Type, x.HasAuction ? "auction" : RequestSource)));
         return pool;
     }
 
@@ -41,7 +55,7 @@ public class Matching(IAppDbContext db, IOptions<PlatformOptions> rules)
             if (!seen.Add(normalized)) { outList.Add(new(name, normalized, "duplicate", "مكرر داخل نفس الطلب", [])); continue; }
             var hits = NameMatcher.FindMatches(normalized, pool, rules.Value.SimilarThreshold);
             var exact = hits.FirstOrDefault(h => h.Score >= 1);
-            if (exact != null) outList.Add(new(name, normalized, "exact", $"مطابق تمامًا لاسم {(exact.Source == "reserved" ? "مسجل" : "تحت الطلب أو المزاد")}: «{exact.Name}»", hits));
+            if (exact != null) outList.Add(new(name, normalized, "exact", $"مطابق تمامًا لاسم {(exact.Source == "reserved" ? "مسجل" : "تحت الطلب أو المزاد")}: «{(IsPrivateSource(exact.Source) ? name.Trim() : exact.Name)}»", hits));
             else if (hits.Count > 0) outList.Add(new(name, normalized, "similar", $"متاح، وستراجع اللجنة تشابهه مع {NameMatcher.NamesCount(hits.Count)}", hits));
             else outList.Add(new(name, normalized, "available", "متاح", []));
         }

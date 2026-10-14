@@ -39,7 +39,8 @@ public record RequestWithdrawalCommand(decimal Amount) : ICommand<WithdrawalDto>
 
 public record ListBankAccountsQuery(string? Status) : IQuery<List<StaffBankAccountDto>>;
 public record GetBankDocumentQuery(Guid UserId) : IQuery<DocumentDto>;
-public record ReviewBankAccountCommand(Guid UserId, bool Approve, string? Reason) : ICommand<StaffBankAccountDto>;
+/// <summary>Iban: the account the reviewer looked at (optional; when given, approval fails if the owner changed it since)</summary>
+public record ReviewBankAccountCommand(Guid UserId, bool Approve, string? Reason, string? Iban = null) : ICommand<StaffBankAccountDto>;
 public record ListWalletsQuery : IQuery<List<WalletRowDto>>;
 public record GetWalletDetailQuery(Guid UserId) : IQuery<WalletDetailDto>;
 public record ListWithdrawalsQuery(string? Status) : IQuery<List<WithdrawalDto>>;
@@ -180,7 +181,8 @@ public class FinanceHandlers(IAppDbContext db, Access access, Money money, Notif
         if (!string.IsNullOrEmpty(q.Status) && q.Status != "all") query = query.Where(b => b.Status == q.Status);
         var list = await (from b in query join u in db.Users.AsNoTracking() on b.UserId equals u.Id orderby b.UpdatedAt descending
                           select new { b, u.FullName, u.Phone }).Take(2000).ToListAsync(ct);
-        return list.Select(x => new StaffBankAccountDto(x.b.UserId, x.FullName, x.Phone, Dto(x.b, full))).ToList();
+        var phones = await access.CanAsync(me, Permissions.OwnersFull, ct); // the mobile in full only with «owners.full»
+        return list.Select(x => new StaffBankAccountDto(x.b.UserId, x.FullName, phones ? x.Phone : global::Sammha.Application.Features.Admin.OwnersHandlers.Mask(x.Phone), Dto(x.b, full))).ToList();
     }
 
     public async Task<DocumentDto> Handle(GetBankDocumentQuery q, CancellationToken ct)
@@ -198,6 +200,8 @@ public class FinanceHandlers(IAppDbContext db, Access access, Money money, Notif
         var owner = await db.Users.FirstAsync(u => u.Id == c.UserId, ct);
         var reason = Clip(c.Reason, 300);
         if (!c.Approve && reason.Length < 3) throw new DomainException("اكتب سبب الرفض، يصل للمالك");
+        if (c.Approve && !string.IsNullOrWhiteSpace(c.Iban) && Iban.Clean(c.Iban) != b.Iban)
+            throw new DomainException("غيّر المالك الحساب البنكي بعد فتحه للمراجعة، راجع البيانات الجديدة");
         b.Status = c.Approve ? BankAccountStatuses.Verified : BankAccountStatuses.Rejected;
         b.RejectReason = c.Approve ? null : reason;
         b.ReviewedAt = Now; b.ReviewedBy = me.FullName;

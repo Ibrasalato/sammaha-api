@@ -30,7 +30,8 @@ public partial class DelegationHandlers(IAppDbContext db, Access access, ICurren
 {
     private const int MaxActive = 5;
     private DateTimeOffset Now => clock.GetUtcNow();
-    [GeneratedRegex(@"^[^\s@]+@[^\s@]+\.[^\s@]+$")] private static partial Regex EmailRx();
+    // linear: the domain labels cannot contain the dot that separates them, so there is nothing to backtrack over
+    [GeneratedRegex(@"^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$")] private static partial Regex EmailRx();
 
     private DelegationDto Dto(Delegation d, string ownerName, bool forDelegate = false) => new(d.Id, d.OwnerId, ownerName, d.FullName,
         forDelegate ? d.NationalId : d.NationalId, d.Phone, d.Email, d.Capacity, DelegationCapacities.Arabic.GetValueOrDefault(d.Capacity, d.Capacity),
@@ -70,7 +71,7 @@ public partial class DelegationHandlers(IAppDbContext db, Access access, ICurren
         if (!(nid.Length is >= 5 and <= 20 && nid.All(char.IsAsciiLetterOrDigit))) throw new DomainException("رقم هوية المفوض غير صحيح");
         var phone = Phones.Normalize(i.PhoneCountry, i.Phone) ?? throw new DomainException("رقم جوال المفوض غير صحيح");
         var email = (i.Email ?? "").Trim();
-        if (!EmailRx().IsMatch(email) || email.Length > 160) throw new DomainException("بريد المفوض غير صحيح");
+        if (email.Length > 160 || !EmailRx().IsMatch(email)) throw new DomainException("بريد المفوض غير صحيح");
         if (nid == u.NationalId || phone == u.Phone) throw new DomainException("لا يمكنك تفويض نفسك");
         if (!DelegationCapacities.Arabic.ContainsKey(i.Capacity ?? "")) throw new DomainException("اختر صفة المفوض");
         var note = string.IsNullOrWhiteSpace(i.CapacityNote) ? null : i.CapacityNote.Trim()[..Math.Min(i.CapacityNote.Trim().Length, 100)];
@@ -142,6 +143,8 @@ public partial class DelegationHandlers(IAppDbContext db, Access access, ICurren
         if (status != DelegationStatuses.Active)
             throw new DomainException(status switch { DelegationStatuses.Scheduled => "لم يبدأ التفويض بعد", DelegationStatuses.Expired => "انتهت مدة التفويض", _ => "التفويض ملغى" });
         var owner = await db.Users.FirstOrDefaultAsync(x => x.Id == d.OwnerId && x.Active, ct) ?? throw new DomainException("حساب صاحب التفويض موقوف");
+        // delegation is for owners' accounts only (an owner later made staff cannot be entered through an old delegation)
+        if (owner.Role != Roles.Owner) throw new DomainException("التفويض ملغى");
         d.LastUsedAt = Now;
         await db.SaveChangesAsync(ct);
         await notifier.NotifyAsync(owner.Id, NotificationKinds.Delegation, $"دخل المفوض {me.FullName} إلى حسابك", "كل ما يجريه مسجّل باسمه في سجل النشاط.", "/dashboard/settings?tab=delegation", ct);
@@ -151,14 +154,17 @@ public partial class DelegationHandlers(IAppDbContext db, Access access, ICurren
     public async Task<AuthResult> Handle(StopActingCommand c, CancellationToken ct)
     {
         if (current.DelegationId is not { } did) throw new DomainException("أنت في حسابك");
-        var d = await db.Delegations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == did, ct) ?? throw DomainException.Unauthorized();
+        // the delegated session itself must still be valid (owner's stamp, delegation in force, delegate active),
+        // and still signed in: a leftover access token of an ended session cannot be traded for a fresh one
+        var owner = await access.MeAsync(ct);
+        var d = await access.DelegationAsync(ct) ?? throw DomainException.Unauthorized();
+        if (d.OwnerId != owner.Id) throw DomainException.Unauthorized();
+        if (current.SessionId is not { } sid || !await db.RefreshTokens.AnyAsync(t => t.FamilyId == sid && t.DelegationId == did && t.RevokedAt == null, ct))
+            throw DomainException.Unauthorized("انتهت الجلسة، سجّل الدخول من جديد");
         var me = await db.Users.FirstOrDefaultAsync(x => x.Id == d.DelegateUserId && x.Active, ct) ?? throw DomainException.Unauthorized("سجّل الدخول من جديد");
-        if (current.SessionId is { } sid)
-        {
-            var now = Now;
-            await db.RefreshTokens.Where(t => t.FamilyId == sid && t.RevokedAt == null)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, now).SetProperty(t => t.RevokedReason, "delegation_ended"), ct);
-        }
+        var now = Now;
+        await db.RefreshTokens.Where(t => t.FamilyId == sid && t.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, now).SetProperty(t => t.RevokedReason, "delegation_ended"), ct);
         return await sessions.IssueAsync(me, null, ct);
     }
 }

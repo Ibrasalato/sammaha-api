@@ -21,12 +21,18 @@ public record RequestDto(Guid Id, string Number, Guid UserId, string OwnerName, 
     string? ReviewerName, string? ReviewNote, bool? Cancellable, DateTimeOffset? CancelledAt, string? CancelledBy, string? CancelReason,
     string? Kind, string? BaseName, Guid? BaseReservedId);
 
-public record AuctionDto(Guid Id, Guid? RequestId, Guid? CandidateId, string Name, string Type, Guid RequesterId, decimal OpeningPrice, decimal MinIncrement,
+/// <summary>
+/// RequesterId, LeaderId and WinnerId are filled for staff only; the public projection leaves them null, masks WinnerName
+/// and sets IsLeader / IsWinner / IsRequester for the signed-in caller (true or omitted).
+/// </summary>
+public record AuctionDto(Guid Id, Guid? RequestId, Guid? CandidateId, string Name, string Type, Guid? RequesterId, decimal OpeningPrice, decimal MinIncrement,
     DateTimeOffset StartsAt, DateTimeOffset EndsAt, decimal CurrentPrice, int BidCount, Guid? LeaderId, string? LeaderLabel, bool Settled,
     Guid? WinnerId, string? WinnerName, decimal? FinalPrice, bool? WonByRequester, int? Extensions, bool? Investment, Guid? ListingId, decimal? BidDeposit,
-    bool? Paused = null, DateTimeOffset? PausedAt = null, string? PauseReason = null, bool? Cancelled = null, string? CancelReason = null, string? Number = null, string? Latin = null);
+    bool? Paused = null, DateTimeOffset? PausedAt = null, string? PauseReason = null, bool? Cancelled = null, string? CancelReason = null, string? Number = null, string? Latin = null,
+    bool? IsLeader = null, bool? IsWinner = null, bool? IsRequester = null);
 
-public record BidDto(Guid Id, Guid AuctionId, Guid UserId, string BidderLabel, decimal Amount, DateTimeOffset CreatedAt, bool? Auto);
+/// <summary>UserId is filled for staff only; Mine marks the caller's own bids</summary>
+public record BidDto(Guid Id, Guid AuctionId, Guid? UserId, string BidderLabel, decimal Amount, DateTimeOffset CreatedAt, bool? Auto, bool? Mine = null);
 
 public record MyBidDto(Guid Id, Guid AuctionId, Guid UserId, string BidderLabel, decimal Amount, DateTimeOffset CreatedAt, bool? Auto, AuctionDto Auction);
 
@@ -34,6 +40,7 @@ public record AuctionMineDto(bool Watching, decimal? AutoMax, bool? DepositPaid)
 
 public record AuctionViewDto(AuctionDto Auction, List<BidDto> Bids, AuctionMineDto? Mine);
 
+/// <summary>OwnerId is left null on the public registry (/api/names, certificate verification)</summary>
 public record ReservedNameDto(Guid Id, string Name, string Normalized, string Type, Guid? OwnerId, string OwnerName, decimal Price, DateTimeOffset AcquiredAt,
     string Source, string? BaseName, string? OwnerAvatar, Guid? ListingId, string? Latin = null, bool? LatinOverride = null, string? Logo = null, string? LogoStatus = null);
 

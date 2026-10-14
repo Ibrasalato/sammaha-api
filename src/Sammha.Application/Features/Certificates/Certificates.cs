@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using MediatR;
@@ -89,12 +91,17 @@ public partial class CertificateHandlers(IAppDbContext db, Access access, ICerti
             if (q.ReservedNameId is not { } rid) throw new DomainException("اختر الشعار");
             var r = await db.ReservedNames.AsNoTracking().FirstOrDefaultAsync(x => x.Id == rid, ct) ?? throw DomainException.NotFound("الشعار غير موجود");
             if (r.OwnerId != me.Id) throw DomainException.Forbidden("هذا الشعار ليس مسجلًا باسمك");
+            if (await db.Invoices.AnyAsync(i => i.UserId == me.Id && i.Name == r.Name && i.Status == InvoiceStatuses.Unpaid, ct))
+                throw new DomainException("سدّد فاتورة الشعار أولًا، ثم أصدر شهادته");
             marks = [r];
         }
         else
         {
-            marks = await db.ReservedNames.AsNoTracking().Where(x => x.OwnerId == me.Id).OrderBy(x => x.AcquiredAt).Take(MaxMarks + 1).ToListAsync(ct);
-            if (marks.Count == 0) throw new DomainException("لا توجد شعارات مسجلة باسمك بعد");
+            // a mark won at auction counts once its invoice is paid
+            marks = await db.ReservedNames.AsNoTracking()
+                .Where(x => x.OwnerId == me.Id && !db.Invoices.Any(i => i.UserId == me.Id && i.Name == x.Name && i.Status == InvoiceStatuses.Unpaid))
+                .OrderBy(x => x.AcquiredAt).Take(MaxMarks + 1).ToListAsync(ct);
+            if (marks.Count == 0) throw new DomainException("لا توجد شعارات مسجلة باسمك بعد (أو لم تُسدَّد فواتيرها)");
             if (marks.Count > MaxMarks) throw new DomainException($"الشهادة الشاملة تتسع لـ {MaxMarks} شعار، تواصل معنا لإصدار شهادة أكبر");
         }
 
@@ -151,10 +158,18 @@ public partial class CertificateHandlers(IAppDbContext db, Access access, ICerti
         if (c == null) return null;
         var (items, status) = await CurrentAsync(c, ct);
         // the stored signature must still match its content, and the code the visitor brought (from the QR or typed) must match it
-        var intact = signer.Sign(Content(c)) == c.Signature;
+        var intact = SameCode(signer.Sign(Content(c)), c.Signature);
         if (!intact) status = "revoked";
-        bool? matches = string.IsNullOrWhiteSpace(q.Signature) ? null : intact && string.Equals(q.Signature.Trim().Replace(" ", ""), c.Signature, StringComparison.OrdinalIgnoreCase);
+        bool? matches = string.IsNullOrWhiteSpace(q.Signature) ? null : intact && SameCode(q.Signature.Trim().Replace(" ", ""), c.Signature);
+        // a certificate number alone (they are sequential) only says whether it exists and its status: the owner and the names need the printed code
+        if (matches != true)
+            return new(c.Number, "", "", "", null, c.IssuedAt, status, matches, null, null, []);
         return new(c.Number, c.Scope, c.OwnerNameAr, c.OwnerNameEn, c.Nationality, c.IssuedAt, status, matches, c.RevokedAt, intact ? c.RevokeReason : "تعذّر التحقق من سلامة بيانات الشهادة", items);
+    }
+
+    /// <summary>constant-time, case-insensitive comparison of two signature codes</summary>
+    private static bool SameCode(string a, string b) =>
+        CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(a.ToUpperInvariant()), Encoding.UTF8.GetBytes(b.ToUpperInvariant()));
     }
 
     public async Task<CertificatePage> Handle(ListCertificatesQuery q, CancellationToken ct)

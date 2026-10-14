@@ -23,7 +23,8 @@ public class PublicController(ISender mediator) : ControllerBase
     [HttpGet("auctions/{id:guid}")]
     public Task<AuctionViewDto> Auction(Guid id, CancellationToken ct) => mediator.Send(new GetAuctionQuery(id), ct);
 
-    [HttpGet("names")]
+    // the whole registry in one response: throttled per IP like the availability check
+    [HttpGet("names"), EnableRateLimiting("check")]
     public Task<List<ReservedNameDto>> Names([FromQuery] string? q, [FromQuery] string? type, CancellationToken ct) => mediator.Send(new ListReservedNamesQuery(q, type), ct);
 
     [HttpPost("names/check"), EnableRateLimiting("check")]
@@ -41,12 +42,12 @@ public class PublicController(ISender mediator) : ControllerBase
     [HttpPost("market/{id:guid}/buy"), Authorize]
     public Task<ListingDto> Buy(Guid id, CancellationToken ct) => mediator.Send(new BuyListingCommand(id), ct);
 
-    [HttpPost("tickets"), EnableRateLimiting("auth")]
+    [HttpPost("tickets"), EnableRateLimiting("auth"), RequestSizeLimit(64 * 1024)]
     public Task<TicketDto> Submit(TicketInput b, CancellationToken ct) => mediator.Send(new SubmitTicketCommand(b), ct);
 
-    [HttpPost("tickets/track"), EnableRateLimiting("auth")]
+    [HttpPost("tickets/track"), EnableRateLimiting("auth"), RequestSizeLimit(64 * 1024)]
     public Task<TicketDto?> Track(TrackBody b, CancellationToken ct) => mediator.Send(new TrackTicketQuery(b.Number, b.Phone), ct);
 
-    [HttpPost("tickets/follow-up"), EnableRateLimiting("auth")]
+    [HttpPost("tickets/follow-up"), EnableRateLimiting("auth"), RequestSizeLimit(64 * 1024)]
     public Task<TicketDto> FollowUp(FollowUpBody b, CancellationToken ct) => mediator.Send(new FollowUpTicketCommand(b.Number, b.Phone, b.Body), ct);
 }

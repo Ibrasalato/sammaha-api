@@ -78,7 +78,9 @@ public static class ActivityLabels
     /// <summary>too frequent to be useful in the log</summary>
     public static readonly HashSet<string> Skip = ["RefreshSessionCommand", "MarkNotificationsReadCommand"];
 
-    private static readonly string[] Secret = ["password", "code", "challenge", "token", "base64", "iban", "card", "secret", "next", "current"];
+    /// <summary>never written to the log: credentials, and personal data (identity numbers, contact details, birth dates, sign-in names)</summary>
+    private static readonly string[] Secret = ["password", "code", "challenge", "token", "base64", "iban", "card", "secret", "next", "current",
+        "nationalid", "phone", "email", "birth", "login"];
 
     /// <summary>the command's values without secrets, for the details column</summary>
     public static string Describe(object request)

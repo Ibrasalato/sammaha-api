@@ -16,6 +16,16 @@ var legacyArgs = args.Length > 0 && args[0] == "legacy" ? args : null;
 var builder = WebApplication.CreateBuilder(legacyArgs is null ? args : []);
 var cfg = builder.Configuration;
 
+// development shortcuts must never reach a real deployment
+if (!builder.Environment.IsDevelopment())
+{
+    // a fixed code is allowed only while explicitly opted in (until the SMS provider is connected on the organization's server)
+    if (!string.IsNullOrWhiteSpace(cfg["Otp:FixedCode"]) && !cfg.GetValue("Otp:AllowFixedCode", false))
+        throw new InvalidOperationException("Otp:FixedCode is for development only; remove it so one-time codes are random and sent by SMS.");
+    if (cfg.GetValue("Payments:Simulate", false))
+        throw new InvalidOperationException("Payments:Simulate is for development only; set it to false and configure the payment gateway.");
+}
+
 // ───── layers ─────
 builder.Services.AddApplication(cfg);
 builder.Services.AddInfrastructure(cfg);
@@ -99,6 +109,20 @@ builder.Services.AddOpenApi(o => o.AddDocumentTransformer<BearerSecurityTransfor
 
 var app = builder.Build();
 
+// baseline security headers on every response, error responses included (set as the response starts, after the
+// exception handler has cleared it). No global CSP: the HyperPay payment page needs inline scripts and oppwa.com.
+app.Use((ctx, next) =>
+{
+    ctx.Response.OnStarting(() =>
+    {
+        var h = ctx.Response.Headers;
+        h["X-Content-Type-Options"] = "nosniff";
+        h["Referrer-Policy"] = "no-referrer";
+        h["X-Frame-Options"] = "DENY";
+        return Task.CompletedTask;
+    });
+    return next(ctx);
+});
 app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment()) app.UseHsts();
 app.UseHttpsRedirection();
@@ -109,10 +133,11 @@ app.UseAuthorization();
 app.UseMiddleware<MaintenanceMiddleware>();
 
 app.MapControllers();
-app.MapHub<AuctionHub>("/hubs/auctions");
+// a live connection ends when its access token expires (the client reconnects with a fresh one)
+app.MapHub<AuctionHub>("/hubs/auctions", o => o.CloseOnAuthenticationExpiration = true);
 app.MapGet("/health", () => Results.Ok(new { ok = true, at = DateTimeOffset.UtcNow }));
-// Swagger: the OpenAPI document at /openapi/v1.json and its UI at /swagger (Swagger:Enabled, on by default)
-if (cfg.GetValue("Swagger:Enabled", true))
+// Swagger: the OpenAPI document at /openapi/v1.json and its UI at /swagger (Swagger:Enabled, on by default in Development only)
+if (cfg.GetValue("Swagger:Enabled", app.Environment.IsDevelopment()))
 {
     app.MapOpenApi();
     app.UseSwaggerUI(o =>

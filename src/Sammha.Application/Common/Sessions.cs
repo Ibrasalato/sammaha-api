@@ -55,7 +55,10 @@ public class Sessions(IAppDbContext db, TimeProvider clock, ITokenIssuer tokens,
         {
             // a delegated session lives only while the delegation is in force
             var d = await db.Delegations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == did, ct);
-            if (d == null || d.OwnerId != u.Id || d.StatusAt(Now) != DelegationStatuses.Active) throw DomainException.Unauthorized("انتهى التفويض أو أُلغي، سجّل الدخول بحسابك");
+            var ended = DomainException.Unauthorized("انتهى التفويض أو أُلغي، سجّل الدخول بحسابك");
+            if (d == null || d.OwnerId != u.Id || u.Role != Roles.Owner || d.StatusAt(Now) != DelegationStatuses.Active) throw ended;
+            // the delegate's own account must still be in good standing
+            if (!await db.Users.AsNoTracking().AnyAsync(x => x.Id == d.DelegateUserId && x.Active, ct)) throw ended;
         }
         var next = await IssueAsync(u, row.FamilyId, ct, row.DelegationId);
         row.RevokedAt = Now;
@@ -84,7 +87,14 @@ public class Sessions(IAppDbContext db, TimeProvider clock, ITokenIssuer tokens,
         var now = Now;
         await db.RefreshTokens.Where(x => x.UserId == u.Id && x.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now).SetProperty(x => x.RevokedReason, reason), ct);
+        // and the sessions this person opened on other owners' accounts as their delegate
+        var asDelegate = db.Delegations.Where(d => d.DelegateUserId == u.Id).Select(d => (Guid?)d.Id);
+        await db.RefreshTokens.Where(x => x.DelegationId != null && asDelegate.Contains(x.DelegationId) && x.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now).SetProperty(x => x.RevokedReason, reason), ct);
     }
+
+    /// <summary>end one sign-in (every refresh token of its family)</summary>
+    public Task RevokeSessionAsync(Guid family, string reason, CancellationToken ct) => RevokeFamilyAsync(family, reason, ct);
 
     private async Task RevokeFamilyAsync(Guid family, string reason, CancellationToken ct)
     {

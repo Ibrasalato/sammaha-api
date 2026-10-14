@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Sammha.Application.Common;
 using Sammha.Application.Features.Auth;
 using Sammha.Application.Features.Bidding;
@@ -32,22 +33,22 @@ public class MeController(ISender mediator) : ControllerBase
     public Task<UserDto> Personal(PersonalInput b, CancellationToken ct) => mediator.Send(new UpdatePersonalCommand(b), ct);
 
     /// <summary>sends a code to the account's email; confirming it marks the email verified</summary>
-    [HttpPost("email/verify")]
+    [HttpPost("email/verify"), EnableRateLimiting("auth")]
     public Task<OtpChallengeDto> VerifyEmail(CancellationToken ct) => mediator.Send(new RequestEmailVerificationCommand(), ct);
 
-    [HttpPost("email/verify/confirm")]
+    [HttpPost("email/verify/confirm"), EnableRateLimiting("auth")]
     public Task<UserDto> ConfirmVerifyEmail(CodeBody b, CancellationToken ct) => mediator.Send(new ConfirmEmailVerificationCommand(b.Challenge, b.Code), ct);
 
-    [HttpPost("email")]
+    [HttpPost("email"), EnableRateLimiting("auth")]
     public Task<OtpChallengeDto> Email(EmailBody b, CancellationToken ct) => mediator.Send(new RequestEmailChangeCommand(b.Email), ct);
 
-    [HttpPost("email/confirm")]
+    [HttpPost("email/confirm"), EnableRateLimiting("auth")]
     public Task<UserDto> ConfirmEmail(CodeBody b, CancellationToken ct) => mediator.Send(new ConfirmEmailChangeCommand(b.Challenge, b.Code), ct);
 
-    [HttpPost("phone")]
+    [HttpPost("phone"), EnableRateLimiting("auth")]
     public Task<OtpChallengeDto> Phone(PhoneBody b, CancellationToken ct) => mediator.Send(new RequestPhoneChangeCommand(b.Phone), ct);
 
-    [HttpPost("phone/confirm")]
+    [HttpPost("phone/confirm"), EnableRateLimiting("auth")]
     public Task<UserDto> ConfirmPhone(CodeBody b, CancellationToken ct) => mediator.Send(new ConfirmPhoneChangeCommand(b.Challenge, b.Code), ct);
 
     [HttpGet("notifications")]

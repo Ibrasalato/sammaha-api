@@ -49,11 +49,7 @@ public class HyperPayController(ISender mediator, HyperPayGateway hyperPay, ICon
     }
 
     /// <summary>only send people back to the platform's own sites</summary>
-    private bool Allowed(string url)
-    {
-        var origins = cfg.GetSection("Cors:Origins").Get<string[]>() ?? ["https://ibrasalato.github.io", "http://localhost:5173", "http://localhost:4173"];
-        return Uri.TryCreate(url, UriKind.Absolute, out var u) && origins.Any(o => Uri.TryCreate(o, UriKind.Absolute, out var ou) && ou.Scheme == u.Scheme && ou.Authority == u.Authority);
-    }
+    private bool Allowed(string url) => CallbackUrls.Allowed(url, CallbackUrls.Origins(cfg));
 
     private static string Page(string title, string body) => $$"""
         <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

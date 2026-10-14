@@ -32,7 +32,7 @@ public class Access(IAppDbContext db, ICurrentUser current, IOptions<PlatformOpt
         // password changed or account suspended since this token was issued
         if (current.Stamp != u.SecurityStamp) throw DomainException.Unauthorized("انتهت الجلسة، سجّل الدخول من جديد");
         // a delegated session ends the moment the delegation is revoked or expires
-        if (current.DelegationId != null && (await DelegationAsync(ct) is not { } d || d.OwnerId != u.Id))
+        if (current.DelegationId != null && (await DelegationAsync(ct) is not { } d || d.OwnerId != u.Id || u.Role != Roles.Owner))
             throw DomainException.Unauthorized("انتهى التفويض أو أُلغي، سجّل الدخول بحسابك");
         return _me = u;
     }
@@ -96,9 +96,15 @@ public class Access(IAppDbContext db, ICurrentUser current, IOptions<PlatformOpt
             var did = delegationId ?? current.DelegationId;
             if (did == null) return dto;
             var d = delegationId != null ? await db.Delegations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == did, ct) : await DelegationAsync(ct);
-            if (d == null) return dto;
+            if (d == null || d.OwnerId != u.Id) return dto; // e.g. the delegate's own account, returned by «stop acting»
             var actor = await db.Users.AsNoTracking().Where(x => x.Id == d.DelegateUserId).Select(x => x.FullName).FirstOrDefaultAsync(ct) ?? d.FullName;
-            return dto with { Acting = new ActingDto(d.Id, d.DelegateUserId ?? Guid.Empty, actor, d.Capacity, d.ScopeList().ToList(), d.Permanent ? null : d.EndsAt) };
+            // a delegate manages the account but does not need the owner's identity number, birth date or address
+            return dto with
+            {
+                NationalId = global::Sammha.Application.Features.Admin.OwnersHandlers.Mask(dto.NationalId),
+                Profile = dto.Profile is { } p ? p with { BirthDate = null, AltPhone = null, AddressCountry = null, AddressCity = null, District = null, PostalCode = null, Street = null } : null,
+                Acting = new ActingDto(d.Id, d.DelegateUserId ?? Guid.Empty, actor, d.Capacity, d.ScopeList().ToList(), d.Permanent ? null : d.EndsAt),
+            };
         }
         var (set, role) = await PermissionsOfAsync(u, ct);
         return Mapper.User(u, set, role);

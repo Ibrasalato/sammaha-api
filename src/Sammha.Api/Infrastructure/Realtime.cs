@@ -19,7 +19,7 @@ public static class RealtimeGroups
 /// also receives its own notifications.
 /// Server → client events: "auction" (AuctionDto), "changed" (auction id, kept for older clients), "notification" (NotificationDto).
 /// </summary>
-public class AuctionHub(IAppDbContext db, ILogger<AuctionHub> log) : Hub
+public class AuctionHub(IAppDbContext db, TimeProvider clock, ILogger<AuctionHub> log) : Hub
 {
     public override async Task OnConnectedAsync()
     {
@@ -30,6 +30,9 @@ public class AuctionHub(IAppDbContext db, ILogger<AuctionHub> log) : Hub
             var stamp = Context.User?.FindFirstValue(SammhaClaims.Stamp);
             var ok = Guid.TryParse(sub, out var id) && await db.Users.AsNoTracking()
                 .AnyAsync(u => u.Id == id && u.Active && u.SecurityStamp == stamp, Context.ConnectionAborted);
+            // a delegated session (as in Access.MeAsync): the delegation is still in force, on an owner's account, and the delegate is active
+            if (ok && Context.User?.FindFirstValue(SammhaClaims.Delegation) is { } dlg)
+                ok = await DelegationValidAsync(dlg, id, Context.ConnectionAborted);
             if (!ok)
             {
                 log.LogInformation("Hub connection refused for {User}: stale session", sub);
@@ -38,6 +41,15 @@ public class AuctionHub(IAppDbContext db, ILogger<AuctionHub> log) : Hub
             }
         }
         await base.OnConnectedAsync();
+    }
+
+    private async Task<bool> DelegationValidAsync(string claim, Guid ownerId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(claim, out var did)) return false;
+        var d = await db.Delegations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == did, ct);
+        if (d == null || d.OwnerId != ownerId || d.StatusAt(clock.GetUtcNow()) != Sammha.Domain.DelegationStatuses.Active) return false;
+        var ownerIsOwner = await db.Users.AsNoTracking().AnyAsync(u => u.Id == ownerId && u.Role == Sammha.Domain.Roles.Owner, ct);
+        return ownerIsOwner && await db.Users.AsNoTracking().AnyAsync(u => u.Id == d.DelegateUserId && u.Active, ct);
     }
 
     public Task Join(string auctionId) => Groups.AddToGroupAsync(Context.ConnectionId, RealtimeGroups.Auction(Parse(auctionId)));

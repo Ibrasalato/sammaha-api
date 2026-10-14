@@ -17,7 +17,8 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     private DateTimeOffset Now => clock.GetUtcNow();
     private PlatformOptions R => rules.Value;
     private IQueryable<LogoRequest> Full => db.Requests.Include(r => r.User).Include(r => r.Candidates);
-    [GeneratedRegex(@"^[^\s@]+@[^\s@]+\.[^\s@]+$")] private static partial Regex EmailRx();
+    // linear: the domain labels cannot contain the dot that separates them, so there is nothing to backtrack over (length is checked first)
+    [GeneratedRegex(@"^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$")] private static partial Regex EmailRx();
 
     private async Task<AdminOverviewDto> OverviewAsync(CancellationToken ct)
     {
@@ -245,11 +246,28 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     // ───── users & permissions (super admin) ─────
     private async Task<List<UserDto>> ListUsersAsync(CancellationToken ct)
     {
-        await access.RequireAsync(Permissions.UsersView, ct);
+        var me = await access.RequireAsync(Permissions.UsersView, ct);
+        // identity numbers and contact details in full only with «owners.full», as on the customers page; profiles never
+        var full = await access.CanAsync(me, Permissions.OwnersFull, ct);
+        UserDto Shown(UserDto d) => full ? d : d with
+        {
+            NationalId = OwnersHandlers.Mask(d.NationalId), Phone = OwnersHandlers.Mask(d.Phone) ?? "", Email = OwnersHandlers.Mask(d.Email) ?? "", Profile = null,
+        };
         var roles = await db.StaffRoles.AsNoTracking().ToDictionaryAsync(r => r.Id, ct);
         StaffRole? RoleOf(User u) => u.Role != Roles.Committee ? null : roles.GetValueOrDefault(u.StaffRoleId ?? Permissions.CommitteeRoleId) ?? roles.GetValueOrDefault(Permissions.CommitteeRoleId);
         return (await db.Users.AsNoTracking().OrderByDescending(u => u.CreatedAt).ToListAsync(ct))
-            .Select(u => Roles.IsStaff(u.Role) ? Mapper.User(u, u.Role == Roles.Admin ? Permissions.All : RoleOf(u)?.PermissionList() ?? Permissions.CommitteeDefault, RoleOf(u)) : Mapper.User(u)).ToList();
+            .Select(u => Shown(Roles.IsStaff(u.Role) ? Mapper.User(u, u.Role == Roles.Admin ? Permissions.All : RoleOf(u)?.PermissionList() ?? Permissions.CommitteeDefault, RoleOf(u)) : Mapper.User(u))).ToList();
+    }
+
+    /// <summary>a committee member gets a staff role (the default committee role when none is chosen): only one whose permissions the actor holds</summary>
+    private async Task EnsureCanGrantAsync(User actor, Guid? staffRoleId, CancellationToken ct)
+    {
+        var id = staffRoleId ?? Permissions.CommitteeRoleId;
+        var role = await db.StaffRoles.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct)
+            ?? await db.StaffRoles.AsNoTracking().FirstOrDefaultAsync(r => r.Id == Permissions.CommitteeRoleId, ct);
+        var perms = role?.PermissionList() ?? Permissions.CommitteeDefault;
+        var mine = (await access.PermissionsOfAsync(actor, ct)).Permissions;
+        if (perms.Any(p => !mine.Contains(p))) throw DomainException.Forbidden("لا يمكنك إسناد دور فيه صلاحيات لا تملكها");
     }
 
     private async Task<UserDto> CreateStaffAsync(StaffInput i, CancellationToken ct)
@@ -260,10 +278,10 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         var email = (i.Email ?? "").Trim();
         if ((i.FullName ?? "").Trim().Length < 3) throw new DomainException("اكتب اسم الموظف");
         if (!NameMatcher.IsSaudiMobile(phone)) throw new DomainException("رقم الجوال يبدأ بـ 05 ويتكون من 10 أرقام");
-        if (!EmailRx().IsMatch(email)) throw new DomainException("البريد الإلكتروني غير صحيح");
+        if (email.Length > 160 || !EmailRx().IsMatch(email)) throw new DomainException("البريد الإلكتروني غير صحيح");
         if (await db.Users.AnyAsync(u => u.Phone == phone, ct)) throw new DomainException("رقم الجوال مسجل لحساب آخر");
         if (await db.Users.AnyAsync(u => u.Email == email, ct)) throw new DomainException("البريد الإلكتروني مسجل لحساب آخر");
-        if ((i.Password ?? "").Length < 8) throw new DomainException("كلمة المرور المؤقتة 8 أحرف على الأقل");
+        await settings.EnsurePasswordAsync(i.Password, ct); // the platform's password policy, like every other password
         if (i.Role is not (Roles.Committee or Roles.Admin)) throw new DomainException("اختر الصلاحية");
         var u = new User { FullName = i.FullName!.Trim(), Phone = phone, Email = email, Role = i.Role, Active = true, CreatedAt = Now };
         if (i.Role == Roles.Committee && i.StaffRoleId is { } rid)
@@ -271,6 +289,8 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
             if (!await db.StaffRoles.AnyAsync(r => r.Id == rid, ct)) throw new DomainException("الدور غير موجود");
             u.StaffRoleId = rid;
         }
+        // a user manager cannot create an account stronger than their own
+        if (i.Role == Roles.Committee) await EnsureCanGrantAsync(actor, u.StaffRoleId, ct);
         u.PasswordHash = hasher.Hash(i.Password!);
         db.Users.Add(u);
         await db.SaveChangesAsync(ct);
@@ -292,7 +312,18 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     {
         var t = await TargetAsync(id, Permissions.UsersRoles, ct);
         if (!Roles.All.Contains(role)) throw new DomainException("صلاحية غير معروفة");
-        if (role == Roles.Admin && (await access.MeAsync(ct)).Role != Roles.Admin) throw DomainException.Forbidden("ترقية حساب إلى مدير نظام لمدير النظام فقط");
+        var actor = await access.MeAsync(ct);
+        if (role == Roles.Admin && actor.Role != Roles.Admin) throw DomainException.Forbidden("ترقية حساب إلى مدير نظام لمدير النظام فقط");
+        // making someone a committee member gives them their staff role (or the default one): only within the actor's own permissions
+        if (role == Roles.Committee && t.Role != Roles.Committee) await EnsureCanGrantAsync(actor, t.StaffRoleId, ct);
+        if (t.Role == Roles.Owner && role != Roles.Owner)
+        {
+            // delegations are for owners' accounts: they end with the owner role (their sessions end with RevokeAllAsync below)
+            var now = Now;
+            var by = actor.FullName;
+            await db.Delegations.Where(d => d.OwnerId == t.Id && d.RevokedAt == null)
+                .ExecuteUpdateAsync(x => x.SetProperty(d => d.RevokedAt, now).SetProperty(d => d.RevokedBy, by), ct);
+        }
         if (t.Role != role) await sessions.RevokeAllAsync(t, "role", ct); // the role is in the token: sign in again
         t.Role = role;
         await db.SaveChangesAsync(ct);
@@ -318,7 +349,11 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         var row = await db.Events.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (row == null) { row = new CamelEvent { Id = id }; db.Events.Add(row); }
         row.Title = e.Title.Trim(); row.TitleEn = e.TitleEn ?? ""; row.Kind = e.Kind; row.StartsOn = e.StartsOn; row.EndsOn = e.EndsOn; row.Approx = e.Approx;
-        row.City = e.City ?? ""; row.Country = e.Country ?? ""; row.Description = e.Description ?? ""; row.Url = e.Url;
+        var url = string.IsNullOrWhiteSpace(e.Url) ? null : e.Url.Trim();
+        // shown as a link on the public calendar: web addresses only (no javascript: or data: links)
+        if (url != null && (url.Length > 500 || !Uri.TryCreate(url, UriKind.Absolute, out var link) || (link.Scheme != Uri.UriSchemeHttps && link.Scheme != Uri.UriSchemeHttp)))
+            throw new DomainException("رابط الفعالية يبدأ بـ https:// (500 حرف على الأكثر)");
+        row.City = e.City ?? ""; row.Country = e.Country ?? ""; row.Description = e.Description ?? ""; row.Url = url;
         row.CityEn = e.CityEn; row.CountryEn = e.CountryEn; row.DescriptionEn = e.DescriptionEn;
         await db.SaveChangesAsync(ct);
         return Mapper.Event(row);

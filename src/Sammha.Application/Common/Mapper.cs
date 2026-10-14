@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Sammha.Application.Engine;
 using Sammha.Domain;
 
 namespace Sammha.Application.Common;
@@ -63,8 +64,17 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
         return await db.Auctions.AsNoTracking().Where(a => ids.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct);
     }
 
-    public CandidateDto Candidate(LogoRequest r, Candidate c, IReadOnlyDictionary<Guid, Auction> auctions) =>
-        new(c.Id, c.Name, c.Normalized, c.Status, Hits(c.SimilarJson), c.RejectReason, c.AuctionId, c.WithdrawnAt, Withdrawable(r, c, auctions, Now));
+    /// <summary>the committee sees every similar name; the applicant does not see names from other owners' unpublished requests</summary>
+    public CandidateDto Candidate(LogoRequest r, Candidate c, IReadOnlyDictionary<Guid, Auction> auctions)
+    {
+        var hits = Hits(c.SimilarJson);
+        if (me.Id != null && me.Id == r.UserId) hits = PublicHits(hits);
+        return new(c.Id, c.Name, c.Normalized, c.Status, hits, c.RejectReason, c.AuctionId, c.WithdrawnAt, Withdrawable(r, c, auctions, Now));
+    }
+
+    /// <summary>similar hits as shown outside the committee: names from live requests (not yet public) are blanked, the hit still counts</summary>
+    public static List<SimilarHitDto> PublicHits(IEnumerable<SimilarHitDto> hits) =>
+        hits.Select(h => Matching.IsPrivateSource(h.Source) ? h with { Name = "" } : h).ToList();
 
     public RequestDto Request(LogoRequest r, IReadOnlyDictionary<Guid, Auction> auctions) =>
         new(r.Id, r.Number, r.UserId, r.User?.FullName ?? "", r.Type, r.Candidates.OrderBy(c => c.Position).Select(c => Candidate(r, c, auctions)).ToList(), r.Status,
@@ -87,6 +97,24 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
         return await db.Users.AsNoTracking().Where(u => set.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
     }
 
+    private bool? _staffViewer;
+
+    /// <summary>an active committee/admin session (its token's stamp still current) sees user ids; everyone else gets the public projection</summary>
+    public async Task<bool> IsStaffViewerAsync(CancellationToken ct)
+    {
+        if (_staffViewer is { } known) return known;
+        var staff = false;
+        if (me.Id is { } uid && me.DelegationId == null)
+        {
+            var stamp = me.Stamp;
+            staff = await db.Users.AsNoTracking()
+                .AnyAsync(u => u.Id == uid && u.Active && u.SecurityStamp == stamp && (u.Role == Roles.Committee || u.Role == Roles.Admin), ct);
+        }
+        _staffViewer = staff;
+        return staff;
+    }
+
+    /// <summary>full projection for staff screens: user ids and the winner's full name</summary>
     public static AuctionDto Auction(Auction a, IReadOnlyDictionary<Guid, string> names) =>
         new(a.Id, a.RequestId, a.CandidateId, a.Name, a.Type, a.RequesterId, a.OpeningPrice, a.MinIncrement, a.StartsAt, a.EndsAt, a.CurrentPrice, a.BidCount,
             a.LeaderId, a.LeaderId is { } l && names.TryGetValue(l, out var ln) ? NameMatcher.MaskName(ln) : null, a.Settled,
@@ -94,18 +122,50 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
             a.Extensions > 0 ? a.Extensions : null, a.IsInvestment ? true : null, a.ListingId, a.BidDeposit,
             a.PausedAt != null ? true : null, a.PausedAt, a.PausedAt != null ? a.PauseReason : null, a.CancelledAt != null ? true : null, a.CancelReason, string.IsNullOrEmpty(a.Number) ? null : a.Number, Transliterator.ToLatin(a.Name));
 
+    /// <summary>
+    /// public projection: no user ids (the anonymous registry maps ids to full names, which would unmask bidders),
+    /// the winner masked like the leader, and flags relative to the viewer instead.
+    /// </summary>
+    public static AuctionDto PublicAuction(Auction a, IReadOnlyDictionary<Guid, string> names, Guid? viewer)
+    {
+        var full = Auction(a, names);
+        return WithFlags(full with
+        {
+            RequesterId = null,
+            LeaderId = null,
+            WinnerId = null,
+            WinnerName = full.WinnerName is { } wn ? NameMatcher.MaskName(wn) : null,
+        }, a, viewer);
+    }
+
+    private static AuctionDto WithFlags(AuctionDto d, Auction a, Guid? viewer) => viewer is not { } v ? d : d with
+    {
+        IsLeader = a.LeaderId == v ? true : null,
+        IsWinner = a.WinnerId == v ? true : null,
+        IsRequester = a.RequesterId == v ? true : null,
+    };
+
+    /// <summary>for the signed-in caller: the full projection for staff, otherwise the public one with the caller's flags</summary>
     public async Task<List<AuctionDto>> AuctionsAsync(List<Auction> list, CancellationToken ct)
     {
         var names = await NamesAsync(list.SelectMany(a => new[] { a.LeaderId, a.WinnerId }), ct);
-        return list.Select(a => Auction(a, names)).ToList();
+        if (await IsStaffViewerAsync(ct)) return list.Select(a => WithFlags(Auction(a, names), a, me.Id)).ToList();
+        return list.Select(a => PublicAuction(a, names, me.Id)).ToList();
     }
 
-    public async Task<AuctionDto> AuctionAsync(Auction a, CancellationToken ct) => (await AuctionsAsync([a], ct))[0];
+    /// <summary>
+    /// the anonymous public projection, used for realtime pushes that go to everyone in the lobby or auction room.
+    /// It deliberately ignores the caller: a push runs inside the bidder's (or staff member's) request, and their flags
+    /// or ids must not reach other viewers. Clients refetch their own view (GET /api/auctions/{id}) on each push.
+    /// </summary>
+    public async Task<AuctionDto> AuctionAsync(Auction a, CancellationToken ct) =>
+        PublicAuction(a, await NamesAsync([a.LeaderId, a.WinnerId], ct), null);
 
     public async Task<AuctionViewDto> ViewAsync(Auction a, CancellationToken ct)
     {
         var bids = await db.Bids.AsNoTracking().Where(b => b.AuctionId == a.Id).OrderByDescending(b => b.Amount).ThenByDescending(b => b.CreatedAt).ToListAsync(ct);
         var names = await NamesAsync(bids.Select(b => (Guid?)b.UserId).Concat([a.LeaderId, a.WinnerId]), ct);
+        var staff = await IsStaffViewerAsync(ct);
         AuctionMineDto? mine = null;
         if (me.Id is { } uid)
         {
@@ -114,8 +174,9 @@ public class Mapper(IAppDbContext db, TimeProvider clock, ICurrentUser me)
             var dep = await db.BidDeposits.AnyAsync(d => d.AuctionId == a.Id && d.UserId == uid && d.State == BidDepositStates.Held, ct);
             mine = new AuctionMineDto(watching, auto, dep ? true : null);
         }
-        return new AuctionViewDto(Auction(a, names),
-            bids.Select(b => new BidDto(b.Id, b.AuctionId, b.UserId, NameMatcher.MaskName(names.GetValueOrDefault(b.UserId)), b.Amount, b.CreatedAt, b.Auto ? true : null)).ToList(),
+        return new AuctionViewDto(staff ? WithFlags(Auction(a, names), a, me.Id) : PublicAuction(a, names, me.Id),
+            bids.Select(b => new BidDto(b.Id, b.AuctionId, staff ? b.UserId : (Guid?)null, NameMatcher.MaskName(names.GetValueOrDefault(b.UserId)), b.Amount, b.CreatedAt, b.Auto ? true : null,
+                me.Id != null && b.UserId == me.Id ? true : null)).ToList(),
             mine);
     }
 

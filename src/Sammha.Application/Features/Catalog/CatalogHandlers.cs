@@ -71,7 +71,7 @@ public class CatalogHandlers(IAppDbContext db, TimeProvider clock, Mapper map, M
             var hits = all.Where(r => Transliterator.Key(Mapper.LatinOf(r)).Contains(key)).Take(1000).ToList();
             var ids = hits.Where(r => r.OwnerId != null).Select(r => r.OwnerId!.Value).Distinct().ToList();
             var av = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id) && u.ShowAvatar && u.AvatarUrl != null).ToDictionaryAsync(u => u.Id, u => u.AvatarUrl, ct);
-            return hits.Select(r => Mapper.Reserved(r, r.OwnerId is { } o ? av.GetValueOrDefault(o) : null)).ToList();
+            return PublicRows(hits, av);
         }
         if (!string.IsNullOrWhiteSpace(q))
         {
@@ -83,13 +83,27 @@ public class CatalogHandlers(IAppDbContext db, TimeProvider clock, Mapper map, M
         var ownerIds = list.Where(r => r.OwnerId != null).Select(r => r.OwnerId!.Value).Distinct().ToList();
         var avatars = await db.Users.AsNoTracking().Where(u => ownerIds.Contains(u.Id) && u.ShowAvatar && u.AvatarUrl != null)
             .ToDictionaryAsync(u => u.Id, u => u.AvatarUrl, ct);
-        return list.Select(r => Mapper.Reserved(r, r.OwnerId is { } o ? avatars.GetValueOrDefault(o) : null)).ToList();
+        return PublicRows(list, avatars);
+    }
+
+    /// <summary>
+    /// registry rows for anyone: no owner id (it would link a person across auctions and requests), and each owner's
+    /// opted-in photo only on their first row rather than repeated on every name they hold
+    /// </summary>
+    private static List<ReservedNameDto> PublicRows(List<ReservedName> rows, IReadOnlyDictionary<Guid, string?> avatars)
+    {
+        var shown = new HashSet<Guid>();
+        return rows.Select(r =>
+        {
+            var avatar = r.OwnerId is { } o && shown.Add(o) ? avatars.GetValueOrDefault(o) : null;
+            return Mapper.Reserved(r, avatar) with { OwnerId = null };
+        }).ToList();
     }
 
     private async Task<List<NameCheckDto>> CheckNamesAsync(List<string> names, CancellationToken ct)
     {
         if (names.Count > 10) throw new DomainException("عدد الأسماء كبير");
-        var checks = await matching.CheckAsync(names, null, ct);
+        var checks = (await matching.CheckAsync(names, null, ct)).Select(Matching.Redact);
         return checks.Select(c => new NameCheckDto(c.Name, c.Normalized, c.Verdict, c.Message, Mapper.Hits(c.Hits))).ToList();
     }
 
@@ -100,7 +114,7 @@ public class CatalogHandlers(IAppDbContext db, TimeProvider clock, Mapper map, M
     {
         var c = (code ?? "").Trim().ToUpperInvariant();
         var r = await db.ReservedNames.AsNoTracking().FirstOrDefaultAsync(x => x.CertCode == c, ct);
-        return r == null ? null : Mapper.Reserved(r);
+        return r == null ? null : Mapper.Reserved(r) with { OwnerId = null };
     }
 
     // ───── MediatR entry points ─────

@@ -14,7 +14,8 @@ public partial class TicketHandlers(IAppDbContext db, TimeProvider clock, Access
     : IRequestHandler<SubmitTicketCommand, TicketDto>, IRequestHandler<TrackTicketQuery, TicketDto?>, IRequestHandler<FollowUpTicketCommand, TicketDto>, IRequestHandler<GetMyTicketsQuery, List<TicketDto>>, IRequestHandler<ListTicketsQuery, List<TicketDto>>, IRequestHandler<GetTicketQuery, TicketDto>, IRequestHandler<UpdateTicketCommand, TicketDto>, IRequestHandler<ReplyTicketCommand, TicketDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
-    [GeneratedRegex(@"^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$")] private static partial Regex EmailRx();
+    // linear: the domain labels cannot contain the dot that separates them, so there is nothing to backtrack over
+    [GeneratedRegex(@"^[^\s@<>]+@[^\s@<>.]+(\.[^\s@<>.]+)+$")] private static partial Regex EmailRx();
 
     private static string Clip(string? s, int max) { var t = (s ?? "").Trim(); return t.Length > max ? t[..max] : t; }
 
@@ -29,7 +30,7 @@ public partial class TicketHandlers(IAppDbContext db, TimeProvider clock, Access
         if (!TicketKinds.All.Contains(t.Kind)) throw new DomainException("اختر نوع الطلب");
         if (t.Name.Length < 2) throw new DomainException("اكتب الاسم");
         if (!NameMatcher.IsSaudiMobile(t.Phone)) throw new DomainException("اكتب رقم جوال سعودي صحيح يبدأ بـ 05");
-        if (t.Email != null && !EmailRx().IsMatch(t.Email)) throw new DomainException("البريد الإلكتروني غير صحيح");
+        if (t.Email != null && (t.Email.Length > 160 || !EmailRx().IsMatch(t.Email))) throw new DomainException("البريد الإلكتروني غير صحيح");
         if (t.Subject.Length < 3) throw new DomainException("اكتب عنوانًا مختصرًا");
         if (t.Message.Length < 10) throw new DomainException("اكتب التفاصيل (10 أحرف على الأقل)");
         t.UserId = (await access.MaybeAsync(ct))?.Id;

@@ -28,6 +28,8 @@ public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access
         var r = await db.ReservedNames.FirstOrDefaultAsync(x => x.Id == reservedId && x.OwnerId == u.Id, ct) ?? throw new DomainException("الاسم غير مسجل باسمك");
         if (await db.Listings.AnyAsync(l => l.ReservedId == r.Id && Active.Contains(l.Status), ct)) throw new DomainException("الاسم معروض للبيع حاليًا");
         if (await db.Invoices.AnyAsync(i => i.UserId == u.Id && i.Name == r.Name && i.Status == InvoiceStatuses.Unpaid, ct)) throw new DomainException("سدّد فاتورة الاسم أولًا قبل عرضه للبيع");
+        // sold at a resale auction and awaiting the buyer's payment: the name is still the seller's but is spoken for
+        if (await PendingSaleAsync(db, r.Id, ct)) throw new DomainException("الاسم مبيع في مزاد وبانتظار سداد المشتري");
         if (await db.Auctions.AnyAsync(a => a.Name == r.Name && !a.Settled, ct)) throw new DomainException("للاسم مزاد قائم حاليًا");
         var p = decimal.Floor(price);
         if (p < R.OpeningPrice) throw new DomainException($"أقل قيمة {R.OpeningPrice:0.##} ريال");
@@ -73,8 +75,12 @@ public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access
         var l = await db.Listings.FirstOrDefaultAsync(x => x.Id == id && x.SellerId == u.Id, ct) ?? throw DomainException.NotFound("العرض غير موجود");
         if (l.Mode == ListingModes.Auction)
         {
-            var a = l.AuctionId is { } aid ? await db.Auctions.FirstOrDefaultAsync(x => x.Id == aid, ct) : null;
-            if (l.Status != ListingStatuses.Scheduled || a == null || Now >= a.StartsAt) throw new DomainException("بدأ المزاد، فلا يمكن إلغاء العرض");
+            if (l.Status != ListingStatuses.Scheduled || l.AuctionId is not { } aid) throw new DomainException("بدأ المزاد، فلا يمكن إلغاء العرض");
+            // entry guarantees may be paid before the start (under the auction lock)
+            await using var auctionLock = await db.BeginAsync([$"a:{aid}"], ct);
+            var a = await db.Auctions.FirstOrDefaultAsync(x => x.Id == aid, ct);
+            if (a == null || Now >= a.StartsAt || a.BidCount > 0) throw new DomainException("بدأ المزاد، فلا يمكن إلغاء العرض");
+            await engine.RefundHeldBidDepositsAsync(a, ct);
             await db.Watches.Where(w => w.AuctionId == a.Id).ExecuteDeleteAsync(ct);
             await db.AutoBids.Where(w => w.AuctionId == a.Id).ExecuteDeleteAsync(ct);
             db.Auctions.Remove(a);
@@ -86,6 +92,10 @@ public class ListingHandlers(IAppDbContext db, TimeProvider clock, Access access
         await uow.CommitAsync(ct);
         return await map.ListingAsync(l, ct);
     }
+
+    /// <summary>a resale of this name won at auction whose invoice is still unpaid</summary>
+    public static Task<bool> PendingSaleAsync(IAppDbContext db, Guid reservedId, CancellationToken ct) =>
+        db.Invoices.AnyAsync(i => i.Status == InvoiceStatuses.Unpaid && i.ListingId != null && db.Listings.Any(x => x.Id == i.ListingId && x.ReservedId == reservedId), ct);
 
     private async Task<List<ListingDto>> MineAsync(CancellationToken ct)
     {

@@ -79,7 +79,12 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
         var others = await db.Auctions.Where(x => x.RequestId == r.Id && x.Id != a.Id).Select(x => x.Settled).ToListAsync(ct);
         var pendingNames = r.Candidates.Any(c => c.Status == CandidateStatuses.Accepted && c.AuctionId == null);
         if (winnerId != r.UserId && !pendingNames && others.All(s => s) && r.DepositState == DepositStates.Held)
-            await money.RefundDepositAsync(r, "لم يُرسَ عليك أي اسم", ct);
+        {
+            // staff may refund the guarantee meanwhile (under the request and wallet locks): take them and read the state again
+            await using var locks = await money.JoinLocksAsync([$"r:{r.Id}", $"u:{r.UserId}"], ct);
+            var state = await db.Requests.AsNoTracking().Where(x => x.Id == r.Id).Select(x => x.DepositState).FirstAsync(ct);
+            if (state == DepositStates.Held) await money.RefundDepositAsync(r, "لم يُرسَ عليك أي اسم", ct);
+        }
     }
 
     private static string WonBody(decimal price, int hours) =>
@@ -114,7 +119,8 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
     /// </summary>
     public async Task ForfeitAsync(Invoice inv, CancellationToken ct)
     {
-        if (inv.Status != InvoiceStatuses.Unpaid || inv.AuctionId is not { } aid || inv.ListingId != null) return;
+        if (inv.Status != InvoiceStatuses.Unpaid || inv.AuctionId is not { } aid) return;
+        if (inv.ListingId is { } lid) { await ForfeitResaleAsync(inv, aid, lid, ct); return; }
         var a = await db.Auctions.FirstAsync(x => x.Id == aid, ct);
         inv.Status = InvoiceStatuses.Cancelled;
         inv.CancelledAt = Now;
@@ -141,6 +147,28 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
         }
         await notifier.NotifyAsync(inv.UserId, NotificationKinds.AuctionUpdate, $"أُلغي فوزك بشعار «{inv.Name}»",
             $"لم يُسدَّد طلب السداد {inv.Number} خلال المهلة، فخُصم الضمان ({forfeited:0.##} ريال) وأصبح الاسم ملكًا للمنظمة الدولية للإبل.", "/dashboard/invoices", ct);
+    }
+
+    /// <summary>
+    /// A resale win not paid by the deadline: the invoice is cancelled, the winner's entry guarantee is forfeited,
+    /// the name never left the seller and the listing ends unsold.
+    /// </summary>
+    private async Task ForfeitResaleAsync(Invoice inv, Guid aid, Guid lid, CancellationToken ct)
+    {
+        var l = await db.Listings.FirstAsync(x => x.Id == lid, ct);
+        inv.Status = InvoiceStatuses.Cancelled;
+        inv.CancelledAt = Now;
+        decimal forfeited = 0;
+        var dep = await db.BidDeposits.FirstOrDefaultAsync(d => d.AuctionId == aid && d.UserId == inv.UserId && (d.State == BidDepositStates.Applied || d.State == BidDepositStates.Held), ct);
+        if (dep != null) { dep.State = BidDepositStates.Forfeited; forfeited = dep.Amount; }
+        l.Status = ListingStatuses.Unsold;
+        l.SoldPrice = null;
+        l.SoldAt = null;
+        l.Payout = null;
+        await notifier.NotifyAsync(inv.UserId, NotificationKinds.AuctionUpdate, $"أُلغي فوزك بشعار «{inv.Name}»",
+            $"لم يُسدَّد طلب السداد {inv.Number} خلال المهلة، فأُلغي البيع وخُصم ضمان الدخول ({forfeited:0.##} ريال) وبقي الاسم مع مالكه.", "/dashboard/invoices", ct);
+        await notifier.NotifyAsync(l.SellerId, NotificationKinds.AuctionUpdate, $"أُلغي بيع اسمك «{inv.Name}»",
+            "لم يسدّد الفائز قيمة الاسم خلال المهلة، فبقي الاسم باسمك ويمكنك عرضه من جديد.", "/dashboard/sell", ct);
     }
 
     /// <summary>«استثمار الاسم»: sold → invoice to the winner and 30% (before VAT) earmarked for the proposer; no bids → the name goes to the proposer free.</summary>
@@ -192,10 +220,30 @@ public class AuctionEngine(IAppDbContext db, TimeProvider clock, Notifier notifi
         l.Status = ListingStatuses.Sold;
         l.SoldPrice = price;
         l.SoldAt = Now;
-        await TransferAsync(l, winner, price, ct);
-        await notifier.NotifyAsync(winner.Id, NotificationKinds.Won, $"مبارك عليك الفوز بمزاد شعار «{a.Name}»", $"بسعر {price:0.##} ريال، وخُصم منه ضمان الدخول. سدّد الفاتورة لإصدار شهادة الاسم.", "/dashboard/invoices", ct);
-        await notifier.NotifyAsync(l.SellerId, NotificationKinds.Won, $"بيع اسمك «{a.Name}» في المزاد", $"بسعر {price:0.##} ريال. يصلك {inv.OwnerShare:0.##} ريال بعد عمولة سمّها ({Money.Pct(l.CommissionRate)}%) فور سداد المشتري.", "/dashboard/sell", ct);
+        if (inv.Status == InvoiceStatuses.Paid)
+        {
+            // the entry guarantee covered the whole price: the sale completes now
+            await TransferAsync(l, winner, price, ct);
+            await money.PayOwnerShareAsync(inv, ct);
+            await notifier.NotifyAsync(winner.Id, NotificationKinds.Won, $"مبارك، أصبح «{a.Name}» باسمك", $"بسعر {price:0.##} ريال غطّاه ضمان الدخول.", "/dashboard/names", ct);
+        }
+        else
+        {
+            // the name moves to the winner only once the invoice is paid (Money.MarkInvoicePaidAsync); unpaid by the deadline → forfeited
+            var hours = await settings.PaymentDeadlineHoursAsync(ct);
+            inv.DueAt = Now.AddHours(hours);
+            await notifier.NotifyAsync(winner.Id, NotificationKinds.Won, $"مبارك عليك الفوز بمزاد شعار «{a.Name}»",
+                $"بسعر {price:0.##} ريال، وخُصم منه ضمان الدخول. سدّد الفاتورة خلال {hours} ساعة لتنتقل ملكية الاسم إليك، وإن لم تُسدَّد في المهلة يُلغى البيع ويُخصم الضمان.", "/dashboard/invoices", ct);
+        }
+        await notifier.NotifyAsync(l.SellerId, NotificationKinds.Won, $"بيع اسمك «{a.Name}» في المزاد", $"بسعر {price:0.##} ريال. يصلك {inv.OwnerShare:0.##} ريال بعد عمولة سمّها ({Money.Pct(l.CommissionRate)}%) فور سداد المشتري، وتنتقل ملكية الاسم إليه عند السداد.", "/dashboard/sell", ct);
         await NotifyLosersAsync(a, winner.Id, price, ct);
+    }
+
+    /// <summary>every entry guarantee still held on this auction back to its wallet (an auction removed before it starts). Callers hold "a:{id}".</summary>
+    public async Task RefundHeldBidDepositsAsync(Auction a, CancellationToken ct)
+    {
+        var deposits = await db.BidDeposits.Where(d => d.AuctionId == a.Id && d.State == BidDepositStates.Held).ToListAsync(ct);
+        await RefundBidDepositsAsync(a, deposits, null, ct);
     }
 
     private async Task RefundBidDepositsAsync(Auction a, List<BidDeposit> deposits, Guid? except, CancellationToken ct)
