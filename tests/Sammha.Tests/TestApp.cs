@@ -108,6 +108,16 @@ public class Api(HttpClient http)
     }
 
     public Task<T> Get<T>(string url) => Send<T>(HttpMethod.Get, url, null);
+
+    /// <summary>both sign-up steps: the details → a code to the mobile → the same details with the code</summary>
+    public async Task<JsonElement> SignUp(object body, string code = "4321")
+    {
+        var ch = await Post<JsonElement>("/api/auth/signup/start", body);
+        var o = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(body, Json))!.AsObject();
+        o["challenge"] = ch.GetProperty("challenge").GetString();
+        o["code"] = code;
+        return await SignUp(o);
+    }
     public Task<T> Post<T>(string url, object? body = null) => Send<T>(HttpMethod.Post, url, body ?? new { });
     public Task<T> Put<T>(string url, object body) => Send<T>(HttpMethod.Put, url, body);
 

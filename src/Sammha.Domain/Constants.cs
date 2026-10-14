@@ -100,7 +100,7 @@ public static class TicketPriorities
 
 public static class OtpPurposes
 {
-    public const string Login = "login", Phone = "phone", Email = "email", VerifyEmail = "verify_email";
+    public const string Login = "login", Phone = "phone", Email = "email", VerifyEmail = "verify_email", SignUp = "signup";
 }
 
 public static class PaymentPurposes

@@ -13,6 +13,11 @@ public class AuthController(ISender mediator) : ControllerBase
     [HttpGet("me")]
     public Task<UserDto?> Me(CancellationToken ct) => mediator.Send(new GetCurrentUserQuery(), ct);
 
+    /// <summary>sign-up step 1: checks the details and texts a code to the mobile number</summary>
+    [HttpPost("signup/start"), EnableRateLimiting("auth")]
+    public Task<OtpChallengeDto> StartSignUp(SignUpInput body, CancellationToken ct) => mediator.Send(new StartSignUpCommand(body), ct);
+
+    /// <summary>sign-up step 2: the same details plus the challenge and code → account and session</summary>
     [HttpPost("signup"), EnableRateLimiting("auth")]
     public Task<AuthResult> SignUp(SignUpInput body, CancellationToken ct) => mediator.Send(new SignUpCommand(body), ct);
 

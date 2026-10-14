@@ -11,7 +11,7 @@ namespace Sammha.Application.Features.Auth;
 /// <summary>Sign-up, two-step sign-in (password then one-time code) and account changes.</summary>
 public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, IPasswordHasher hasher, Sessions sessions, ISmsSender sms,
     SettingsStore settings, IOptions<OtpOptions> otpOpt)
-    : IRequestHandler<GetCurrentUserQuery, UserDto?>, IRequestHandler<SignUpCommand, AuthResult>, IRequestHandler<StartSignInCommand, OtpChallengeDto>, IRequestHandler<CompleteSignInCommand, AuthResult>, IRequestHandler<ResendOtpCommand, OtpChallengeDto>, IRequestHandler<ChangePasswordCommand, AuthResult>, IRequestHandler<RefreshSessionCommand, AuthResult>, IRequestHandler<SignOutCommand, MediatR.Unit>, IRequestHandler<UpdateProfileCommand, UserDto>, IRequestHandler<UpdateAccountCommand, UserDto>, IRequestHandler<RequestEmailChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailChangeCommand, UserDto>, IRequestHandler<RequestPhoneChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmPhoneChangeCommand, UserDto>,
+    : IRequestHandler<GetCurrentUserQuery, UserDto?>, IRequestHandler<SignUpCommand, AuthResult>, IRequestHandler<StartSignUpCommand, OtpChallengeDto>, IRequestHandler<StartSignInCommand, OtpChallengeDto>, IRequestHandler<CompleteSignInCommand, AuthResult>, IRequestHandler<ResendOtpCommand, OtpChallengeDto>, IRequestHandler<ChangePasswordCommand, AuthResult>, IRequestHandler<RefreshSessionCommand, AuthResult>, IRequestHandler<SignOutCommand, MediatR.Unit>, IRequestHandler<UpdateProfileCommand, UserDto>, IRequestHandler<UpdateAccountCommand, UserDto>, IRequestHandler<RequestEmailChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailChangeCommand, UserDto>, IRequestHandler<RequestPhoneChangeCommand, OtpChallengeDto>, IRequestHandler<ConfirmPhoneChangeCommand, UserDto>,
       IRequestHandler<UpdateAddressCommand, UserDto>, IRequestHandler<UpdatePersonalCommand, UserDto>, IRequestHandler<RequestEmailVerificationCommand, OtpChallengeDto>, IRequestHandler<ConfirmEmailVerificationCommand, UserDto>
 {
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -48,7 +48,11 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         return CountryRx().IsMatch(c) ? c : throw new DomainException($"اختر {label}");
     }
 
-    private async Task<AuthResult> SignUpAsync(SignUpInput i, CancellationToken ct)
+    private record NewOwner(string First, string Father, string Grand, string Family, DateOnly Birth, string Gender, string Nationality, string Residence,
+        string City, string NationalId, string Phone, string Email);
+
+    /// <summary>every sign-up check, in the order the form shows the fields</summary>
+    private async Task<NewOwner> CheckSignUpAsync(SignUpInput i, CancellationToken ct)
     {
         if (!(await settings.GetAsync(ct)).SignupOpen) throw new DomainException("التسجيل في المنصة متوقف مؤقتًا", 403);
         var first = Part(i.FirstName, "الاسم الأول");
@@ -70,11 +74,29 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
         if (await db.Users.AnyAsync(u => u.NationalId == nid, ct)) throw new DomainException("رقم الهوية مسجل مسبقًا، سجّل الدخول");
         if (await db.Users.AnyAsync(u => u.Phone == phone, ct)) throw new DomainException("رقم الجوال مسجل مسبقًا، سجّل الدخول");
         if (await db.Users.AnyAsync(u => u.Email == email, ct)) throw new DomainException("البريد الإلكتروني مسجل مسبقًا");
+        return new NewOwner(first, father, grand, family, birth, i.Gender!, nationality, residence, city, nid, phone, email);
+    }
+
+    /// <summary>step 1: the details are checked and a code is texted to the mobile number; nothing is created yet</summary>
+    private async Task<OtpChallengeDto> StartSignUpAsync(SignUpInput i, CancellationToken ct)
+    {
+        var n = await CheckSignUpAsync(i, ct);
+        return await IssueOtpAsync(Guid.Empty, OtpPurposes.SignUp, n.Phone, ct);
+    }
+
+    /// <summary>step 2: the code proves the mobile number belongs to the person signing up, then the account is created</summary>
+    private async Task<AuthResult> SignUpAsync(SignUpInput i, CancellationToken ct)
+    {
+        var n = await CheckSignUpAsync(i, ct);
+        if (string.IsNullOrWhiteSpace(i.Challenge) || string.IsNullOrWhiteSpace(i.Code)) throw new DomainException("أدخل رمز التحقق المرسل إلى جوالك");
+        var c = await ConsumeOtpAsync(i.Challenge, i.Code, OtpPurposes.SignUp, ct);
+        // the code was sent to this exact number
+        if (c.Target != n.Phone) throw new DomainException("تغيّر رقم الجوال بعد إرسال الرمز، اطلب رمزًا جديدًا");
         var u = new User
         {
-            FullName = $"{first} {father} {grand} {family}", FirstName = first, FatherName = father, GrandfatherName = grand, FamilyName = family,
-            BirthDate = birth, Gender = i.Gender, Nationality = nationality, ResidenceCountry = residence, ResidenceCity = city,
-            Phone = phone, Email = email, NationalId = nid, Role = Roles.Owner, CreatedAt = Now,
+            FullName = $"{n.First} {n.Father} {n.Grand} {n.Family}", FirstName = n.First, FatherName = n.Father, GrandfatherName = n.Grand, FamilyName = n.Family,
+            BirthDate = n.Birth, Gender = n.Gender, Nationality = n.Nationality, ResidenceCountry = n.Residence, ResidenceCity = n.City,
+            Phone = n.Phone, Email = n.Email, NationalId = n.NationalId, Role = Roles.Owner, CreatedAt = Now,
         };
         u.PasswordHash = hasher.Hash(i.Password!);
         db.Users.Add(u);
@@ -325,6 +347,7 @@ public partial class AuthHandlers(IAppDbContext db, TimeProvider clock, Access a
     public Task<AuthResult> Handle(SignUpCommand q, CancellationToken ct) => SignUpAsync(q.Input, ct);
     public Task<OtpChallengeDto> Handle(StartSignInCommand q, CancellationToken ct) => StartSignInAsync(q.Login, q.Password, q.Portal, ct);
     public Task<AuthResult> Handle(CompleteSignInCommand q, CancellationToken ct) => CompleteSignInAsync(q.Challenge, q.Code, ct);
+    public Task<OtpChallengeDto> Handle(StartSignUpCommand q, CancellationToken ct) => StartSignUpAsync(q.Input, ct);
     public Task<OtpChallengeDto> Handle(ResendOtpCommand q, CancellationToken ct) => ResendOtpAsync(q.Challenge, ct);
     public Task<AuthResult> Handle(ChangePasswordCommand q, CancellationToken ct) => ChangePasswordAsync(q.Current, q.Next, ct);
     public Task<AuthResult> Handle(RefreshSessionCommand q, CancellationToken ct) => sessions.RefreshAsync(q.RefreshToken, ct);

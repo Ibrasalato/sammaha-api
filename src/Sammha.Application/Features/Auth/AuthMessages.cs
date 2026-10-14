@@ -4,6 +4,8 @@ namespace Sammha.Application.Features.Auth;
 
 public record GetCurrentUserQuery : IQuery<UserDto?>;
 public record SignUpCommand(SignUpInput Input) : ICommand<AuthResult>;
+/// <summary>sign-up step 1: checks the details and texts a code to the mobile number</summary>
+public record StartSignUpCommand(SignUpInput Input) : ICommand<OtpChallengeDto>;
 public record StartSignInCommand(string Login, string Password, string Portal) : ICommand<OtpChallengeDto>;
 public record CompleteSignInCommand(string Challenge, string Code) : ICommand<AuthResult>;
 public record ResendOtpCommand(string Challenge) : ICommand<OtpChallengeDto>;

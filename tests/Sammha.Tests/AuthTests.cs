@@ -9,7 +9,7 @@ public class AuthTests(TestApp app) : IClassFixture<TestApp>
     public async Task Sign_up_then_two_step_sign_in()
     {
         var api = app.Anonymous();
-        var res = await api.Post<JsonElement>("/api/auth/signup", new
+        var res = await api.SignUp(new
         {
             nationalId = "1012345678", firstName = "عبدالله", fatherName = "محمد", grandfatherName = "سالم", familyName = "القحطاني", birthDate = "1990-05-01",
             gender = "male", nationality = "SA", residenceCountry = "SA", residenceCity = "الرياض", phoneCountry = "966", phone = "551112233", email = "a.q@example.com", password = "secret12",

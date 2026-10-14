@@ -76,7 +76,7 @@ public record AuthResult(UserDto User, string Token, DateTimeOffset ExpiresAt, s
 public record SignUpInput(string? FullName, string Phone, string Email, string? NationalId, string Password,
     string? FirstName = null, string? FatherName = null, string? GrandfatherName = null, string? FamilyName = null,
     string? BirthDate = null, string? Gender = null, string? Nationality = null, string? ResidenceCountry = null, string? ResidenceCity = null,
-    string? PhoneCountry = null);
+    string? PhoneCountry = null, string? Challenge = null, string? Code = null);
 
 /// <summary>completed later in the dashboard</summary>
 public record AddressInput(string? AddressCountry, string? AddressCity, string? District, string? PostalCode, string? Street, string? AltPhone, string? AltPhoneCountry);
