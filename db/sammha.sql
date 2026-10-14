@@ -1795,3 +1795,103 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014153451_NameTransfers'
+)
+BEGIN
+    CREATE SEQUENCE [TransferNo] AS int START WITH 1001 INCREMENT BY 1 NO CYCLE;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014153451_NameTransfers'
+)
+BEGIN
+    ALTER TABLE [PlatformSettings] ADD [TransferFee] decimal(12,2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014153451_NameTransfers'
+)
+BEGIN
+    CREATE TABLE [Transfers] (
+        [Id] uniqueidentifier NOT NULL,
+        [Number] nvarchar(20) NOT NULL,
+        [ReservedId] uniqueidentifier NOT NULL,
+        [Name] nvarchar(150) NOT NULL,
+        [Type] nvarchar(400) NOT NULL,
+        [FromId] uniqueidentifier NOT NULL,
+        [FromName] nvarchar(120) NOT NULL,
+        [ToId] uniqueidentifier NOT NULL,
+        [ToName] nvarchar(120) NOT NULL,
+        [Reason] nvarchar(20) NOT NULL,
+        [Note] nvarchar(500) NULL,
+        [Fee] decimal(12,2) NOT NULL,
+        [Status] nvarchar(20) NOT NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        [RespondedAt] datetimeoffset NULL,
+        [ReviewedAt] datetimeoffset NULL,
+        [ReviewerId] uniqueidentifier NULL,
+        [ReviewerName] nvarchar(400) NULL,
+        [ReviewNote] nvarchar(500) NULL,
+        [CompletedAt] datetimeoffset NULL,
+        [CancelledAt] datetimeoffset NULL,
+        CONSTRAINT [PK_Transfers] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014153451_NameTransfers'
+)
+BEGIN
+    CREATE INDEX [IX_Transfers_FromId] ON [Transfers] ([FromId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014153451_NameTransfers'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_Transfers_Number] ON [Transfers] ([Number]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014153451_NameTransfers'
+)
+BEGIN
+    CREATE INDEX [IX_Transfers_ReservedId] ON [Transfers] ([ReservedId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014153451_NameTransfers'
+)
+BEGIN
+    CREATE INDEX [IX_Transfers_Status] ON [Transfers] ([Status]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014153451_NameTransfers'
+)
+BEGIN
+    CREATE INDEX [IX_Transfers_ToId] ON [Transfers] ([ToId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014153451_NameTransfers'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014153451_NameTransfers', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
