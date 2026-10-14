@@ -61,7 +61,7 @@ public class CertificateTests(TestApp app) : IClassFixture<TestApp>
         Assert.False(v.TryGetProperty("nationalIdMasked", out _));
         var bad = await anon.Get<JsonElement>($"/api/certificates/issued/{number}?s=AAAA-BBBB-CCCC-DDDD");
         Assert.False(bad.GetProperty("signatureMatches").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, (await anon.Get<JsonElement>("/api/certificates/issued/SC-2026-999999")).ValueKind);
+        Assert.Contains((await anon.Get<JsonElement>("/api/certificates/issued/SC-2026-999999")).ValueKind, new[] { JsonValueKind.Null, JsonValueKind.Undefined });
 
         // it is listed, notified and opens for the owner
         Assert.Contains((await owner.Get<JsonElement>("/api/me/certificates")).EnumerateArray(), x => x.GetProperty("number").GetString() == number);

@@ -6,7 +6,7 @@ using Sammha.Domain;
 namespace Sammha.Api.Infrastructure;
 
 /// <summary>Business errors become {"message": "..."} with their status; anything else is logged and hidden.</summary>
-public class ErrorHandler(ILogger<ErrorHandler> log) : IExceptionHandler
+public class ErrorHandler(ILogger<ErrorHandler> log, IHostEnvironment env) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext ctx, Exception e, CancellationToken ct)
     {
@@ -21,6 +21,8 @@ public class ErrorHandler(ILogger<ErrorHandler> log) : IExceptionHandler
             _ => (500, "حدث خطأ غير متوقع، حاول مرة أخرى"),
         };
         if (status >= 500) log.LogError(e, "Unhandled error on {Path}", ctx.Request.Path);
+        // development and tests only: name the exception so a failing test says what broke
+        if (status >= 500 && env.IsDevelopment()) message += $" [{e.GetType().Name}: {e.Message}]";
         ctx.Response.StatusCode = status;
         await ctx.Response.WriteAsJsonAsync(new { message }, ct);
         return true;
