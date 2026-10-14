@@ -1053,6 +1053,10 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<bool>("CompoundOpen")
                         .HasColumnType("bit");
 
+                    b.Property<decimal?>("DepositAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<string>("InquiryEmails")
                         .IsRequired()
                         .HasMaxLength(400)
