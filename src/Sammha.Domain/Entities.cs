@@ -77,6 +77,11 @@ public class PlatformSettings
     /// <summary>«استثمار الاسم»</summary>
     public bool InvestmentOpen { get; set; } = true;
     public string? InvestmentClosedNote { get; set; }
+    // «نقل ملكية اسم»
+    public bool TransferOpen { get; set; } = true;
+    public string? TransferClosedNote { get; set; }
+    /// <summary>services shown as «قريبًا» (coming soon, not yet accepting): comma-separated keys of ServiceKeys</summary>
+    public string ComingSoon { get; set; } = "";
 
     // ───── general ─────
     public bool SignupOpen { get; set; } = true;

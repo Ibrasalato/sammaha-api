@@ -71,6 +71,7 @@ public class TransferHandlers(IAppDbContext db, Access access, ICurrentUser curr
     public async Task<TransferDto> Handle(CreateTransferCommand q, CancellationToken ct)
     {
         var u = await OwnerAsync(ct);
+        await settings.EnsureOpenAsync(Intakes.Transfer, ct);
         if (!TransferReasons.All.Contains(q.Reason)) throw new DomainException("اختر سبب النقل");
         var note = q.Note?.Trim();
         if (note is { Length: > 500 }) throw new DomainException("الملاحظة طويلة (500 حرف كحد أقصى)");

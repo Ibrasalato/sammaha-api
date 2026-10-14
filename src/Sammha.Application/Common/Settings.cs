@@ -40,6 +40,7 @@ public class SettingsStore(IAppDbContext db, TimeProvider clock, SettingsCache c
     public async Task EnsureOpenAsync(string intake, CancellationToken ct = default)
     {
         var s = await GetAsync(ct);
+        var soonKey = intake switch { Intakes.ResaleAuction => ServiceKeys.Resale, Intakes.InstantSale => ServiceKeys.Instant, _ => intake };
         var (open, note, label) = intake switch
         {
             Intakes.Requests => (s.RequestsOpen, s.RequestsClosedNote, "استقبال طلبات الشعارات"),
@@ -47,8 +48,10 @@ public class SettingsStore(IAppDbContext db, TimeProvider clock, SettingsCache c
             Intakes.ResaleAuction => (s.ResaleAuctionOpen, s.SaleClosedNote, "عرض الأسماء في مزاد إعادة البيع"),
             Intakes.InstantSale => (s.InstantSaleOpen, s.SaleClosedNote, "البيع الفوري للأسماء"),
             Intakes.Investment => (s.InvestmentOpen, s.InvestmentClosedNote, "استقبال طلبات استثمار الاسم"),
+            Intakes.Transfer => (s.TransferOpen, s.TransferClosedNote, "نقل ملكية الأسماء"),
             _ => (true, null, ""),
         };
+        if (ServiceKeys.Parse(s.ComingSoon).Contains(soonKey)) throw new DomainException($"{label}: الخدمة قريبًا، تابعنا لمعرفة موعد الإطلاق", 403);
         if (!open) throw new DomainException(string.IsNullOrWhiteSpace(note) ? $"{label} متوقف مؤقتًا، تابعنا لمعرفة موعد الفتح" : $"{label} متوقف مؤقتًا: {note}", 403);
     }
 
@@ -85,4 +88,13 @@ public static class Intakes
     public const string ResaleAuction = "resale";
     public const string InstantSale = "instant";
     public const string Investment = "investment";
+    public const string Transfer = "transfer";
+}
+
+/// <summary>the e-services the admin can open, close or mark «قريبًا»</summary>
+public static class ServiceKeys
+{
+    public const string Requests = "requests", Compound = "compound", Resale = "resale", Instant = "instant", Investment = "investment", Transfer = "transfer";
+    public static readonly string[] All = [Requests, Compound, Resale, Instant, Investment, Transfer];
+    public static List<string> Parse(string? csv) => (csv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(All.Contains).Distinct().ToList();
 }

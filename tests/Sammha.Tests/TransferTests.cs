@@ -64,4 +64,21 @@ public class TransferTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal("cancelled", (await to.Post<JsonElement>($"/api/me/transfers/{t3.GetProperty("id").GetGuid()}/cancel", new { })).GetProperty("status").GetString());
         Assert.Equal(b + 100, await to.Balance());
     }
+
+    [Fact]
+    public async Task Services_can_be_closed_or_coming_soon()
+    {
+        var admin = await app.SignInAsync("ibrasalato@gmail.com", "Sammha@2026", "staff");
+        var owner = await app.BidderAsync(3); // 0500000005
+        var name = (await owner.Get<JsonElement>("/api/me/names")).EnumerateArray().First();
+        var body = new { reservedId = name.GetProperty("id").GetGuid(), phone = "0500000004", reason = "gift" };
+        Assert.Contains("خدمة غير معروفة", await admin.Fails(() => admin.Patch<JsonElement>("/api/admin/settings", new { comingSoon = new[] { "teleport" } })));
+        await admin.Patch<JsonElement>("/api/admin/settings", new { comingSoon = new[] { "transfer", "investment" } });
+        var pub = await app.Anonymous().Get<JsonElement>("/api/settings");
+        Assert.Equal(["investment", "transfer"], pub.GetProperty("comingSoon").EnumerateArray().Select(x => x.GetString()).ToArray());
+        Assert.Contains("قريبًا", await owner.Fails(() => owner.Post<JsonElement>("/api/me/transfers", body)));
+        await admin.Patch<JsonElement>("/api/admin/settings", new { comingSoon = Array.Empty<string>(), transferOpen = false, transferClosedNote = "صيانة" });
+        Assert.Contains("صيانة", await owner.Fails(() => owner.Post<JsonElement>("/api/me/transfers", body)));
+        await admin.Patch<JsonElement>("/api/admin/settings", new { transferOpen = true });
+    }
 }

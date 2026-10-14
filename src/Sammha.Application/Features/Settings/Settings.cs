@@ -15,7 +15,8 @@ public record PublicSettingsDto(
     bool ResaleAuctionOpen, bool InstantSaleOpen, string? SaleClosedNote, bool InvestmentOpen, string? InvestmentClosedNote,
     bool SignupOpen, string SupportEmail, string SupportPhone, string WhatsApp,
     string? Announcement, string AnnouncementTone, bool Maintenance, string? MaintenanceNote,
-    int PasswordMinLength, int StaffIdleMinutes, decimal DepositAmount = 0, int PaymentDeadlineHours = 72, decimal TransferFee = 0);
+    int PasswordMinLength, int StaffIdleMinutes, decimal DepositAmount = 0, int PaymentDeadlineHours = 72, decimal TransferFee = 0,
+    bool TransferOpen = true, string? TransferClosedNote = null, List<string>? ComingSoon = null);
 
 public record AdminSettingsDto(
     bool RequestsOpen, string? RequestsClosedNote, bool CompoundOpen, string? CompoundClosedNote,
@@ -23,7 +24,8 @@ public record AdminSettingsDto(
     bool SignupOpen, string SupportEmail, string SupportPhone, string WhatsApp,
     bool AnnouncementOn, string? Announcement, string AnnouncementTone, bool Maintenance, string? MaintenanceNote,
     int PasswordMinLength, int MaxLoginAttempts, int LockoutMinutes, int StaffIdleMinutes,
-    DateTimeOffset UpdatedAt, string? UpdatedBy, RulesDto Rules, int PaymentDeadlineHours = 72, decimal TransferFee = 0);
+    DateTimeOffset UpdatedAt, string? UpdatedBy, RulesDto Rules, int PaymentDeadlineHours = 72, decimal TransferFee = 0,
+    bool TransferOpen = true, string? TransferClosedNote = null, List<string>? ComingSoon = null);
 
 /// <summary>fees and rules from the server configuration (read-only in the dashboard)</summary>
 public record RulesDto(decimal DepositAmount, int NamesPerRequest, decimal OpeningPrice, decimal MinIncrement, int ExtendMinutes, decimal VatRate,
@@ -36,7 +38,8 @@ public record SettingsPatch(
     bool? ResaleAuctionOpen = null, bool? InstantSaleOpen = null, string? SaleClosedNote = null, bool? InvestmentOpen = null, string? InvestmentClosedNote = null,
     bool? SignupOpen = null, string? SupportEmail = null, string? SupportPhone = null, string? WhatsApp = null,
     bool? AnnouncementOn = null, string? Announcement = null, string? AnnouncementTone = null, bool? Maintenance = null, string? MaintenanceNote = null,
-    int? PasswordMinLength = null, int? MaxLoginAttempts = null, int? LockoutMinutes = null, int? StaffIdleMinutes = null, decimal? DepositAmount = null, int? PaymentDeadlineHours = null, decimal? TransferFee = null);
+    int? PasswordMinLength = null, int? MaxLoginAttempts = null, int? LockoutMinutes = null, int? StaffIdleMinutes = null, decimal? DepositAmount = null, int? PaymentDeadlineHours = null, decimal? TransferFee = null,
+    bool? TransferOpen = null, string? TransferClosedNote = null, List<string>? ComingSoon = null);
 
 public record SettingsChangeDto(long Id, DateTimeOffset At, string UserName, string Field, string? OldValue, string? NewValue);
 
@@ -78,7 +81,7 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
         return new PublicSettingsDto(s.RequestsOpen, s.RequestsClosedNote, s.CompoundOpen, s.CompoundClosedNote, s.ResaleAuctionOpen, s.InstantSaleOpen,
             s.SaleClosedNote, s.InvestmentOpen, s.InvestmentClosedNote, s.SignupOpen, s.SupportEmail, s.SupportPhone, s.WhatsApp,
             s.AnnouncementOn ? s.Announcement : null, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote, s.PasswordMinLength, s.StaffIdleMinutes,
-            s.DepositAmount ?? rules.Value.DepositAmount, s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0);
+            s.DepositAmount ?? rules.Value.DepositAmount, s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon));
     }
 
     private AdminSettingsDto Admin(PlatformSettings s)
@@ -89,7 +92,7 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
             s.AnnouncementOn, s.Announcement, s.AnnouncementTone, s.Maintenance, s.MaintenanceNote,
             s.PasswordMinLength, s.MaxLoginAttempts, s.LockoutMinutes, s.StaffIdleMinutes, s.UpdatedAt, s.UpdatedBy,
             new RulesDto(s.DepositAmount ?? r.DepositAmount, r.NamesPerRequest, r.OpeningPrice, r.MinIncrement, r.ExtendMinutes, r.VatRate, r.InvestFee, r.InvestOwnerShare,
-                r.InvestMaxNames, r.ResaleNoticeHours, r.ResaleAuctionDays, r.ResaleCommission, r.ResaleBidDeposit, r.InstantSaleHours, r.InstantCommission), s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0);
+                r.InvestMaxNames, r.ResaleNoticeHours, r.ResaleAuctionDays, r.ResaleCommission, r.ResaleBidDeposit, r.InstantSaleHours, r.InstantCommission), s.PaymentDeadlineHours ?? 72, s.TransferFee ?? 0, s.TransferOpen, s.TransferClosedNote, ServiceKeys.Parse(s.ComingSoon));
     }
 
     public async Task<AdminSettingsDto> Handle(GetAdminSettingsQuery q, CancellationToken ct)
@@ -148,6 +151,13 @@ public class SettingsHandlers(IAppDbContext db, TimeProvider clock, Access acces
         SetS("SaleClosedNote", Note(p.SaleClosedNote), () => s.SaleClosedNote ?? "", v => s.SaleClosedNote = v);
         SetV("InvestmentOpen", p.InvestmentOpen, () => s.InvestmentOpen, v => s.InvestmentOpen = v);
         SetS("InvestmentClosedNote", Note(p.InvestmentClosedNote), () => s.InvestmentClosedNote ?? "", v => s.InvestmentClosedNote = v);
+        SetV("TransferOpen", p.TransferOpen, () => s.TransferOpen, v => s.TransferOpen = v);
+        SetS("TransferClosedNote", Note(p.TransferClosedNote), () => s.TransferClosedNote ?? "", v => s.TransferClosedNote = v);
+        if (p.ComingSoon != null)
+        {
+            if (p.ComingSoon.Any(k => !ServiceKeys.All.Contains(k))) throw new DomainException("خدمة غير معروفة");
+            SetS("ComingSoon", string.Join(",", ServiceKeys.All.Where(p.ComingSoon.Contains)), () => s.ComingSoon, v => s.ComingSoon = v);
+        }
         SetV("SignupOpen", p.SignupOpen, () => s.SignupOpen, v => s.SignupOpen = v);
         SetS("SupportEmail", Note(p.SupportEmail, 160), () => s.SupportEmail, v => s.SupportEmail = v);
         SetS("SupportPhone", Note(p.SupportPhone, 30), () => s.SupportPhone, v => s.SupportPhone = v);
