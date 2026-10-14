@@ -1015,3 +1015,182 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    DROP INDEX [IX_Users_Phone] ON [Users];
+    DECLARE @var nvarchar(max);
+    SELECT @var = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[Users]') AND [c].[name] = N'Phone');
+    IF @var IS NOT NULL EXEC(N'ALTER TABLE [Users] DROP CONSTRAINT ' + @var + ';');
+    ALTER TABLE [Users] ALTER COLUMN [Phone] nvarchar(16) NOT NULL;
+    CREATE UNIQUE INDEX [IX_Users_Phone] ON [Users] ([Phone]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    DECLARE @var1 nvarchar(max);
+    SELECT @var1 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[Users]') AND [c].[name] = N'NationalId');
+    IF @var1 IS NOT NULL EXEC(N'ALTER TABLE [Users] DROP CONSTRAINT ' + @var1 + ';');
+    ALTER TABLE [Users] ALTER COLUMN [NationalId] nvarchar(20) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [AddressCity] nvarchar(60) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [AddressCountry] nvarchar(2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [AltPhone] nvarchar(16) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [BirthDate] date NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [District] nvarchar(80) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [EmailVerifiedAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [FamilyName] nvarchar(30) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [FatherName] nvarchar(30) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [FirstName] nvarchar(30) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [Gender] nvarchar(6) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [GrandfatherName] nvarchar(30) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [Nationality] nvarchar(2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [PostalCode] nvarchar(10) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [ResidenceCity] nvarchar(60) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [ResidenceCountry] nvarchar(2) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [Street] nvarchar(120) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_Users_NationalId] ON [Users] ([NationalId]) WHERE [NationalId] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014052327_OwnerProfile'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014052327_OwnerProfile', N'10.0.13');
+END;
+
+COMMIT;
+GO
+

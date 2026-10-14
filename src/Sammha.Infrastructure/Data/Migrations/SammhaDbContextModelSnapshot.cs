@@ -1184,25 +1184,67 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<bool>("Active")
                         .HasColumnType("bit");
 
+                    b.Property<string>("AddressCity")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("AddressCountry")
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<string>("AltPhone")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<string>("AvatarUrl")
                         .HasMaxLength(-1)
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateOnly?>("BirthDate")
+                        .HasColumnType("date");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("District")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
 
+                    b.Property<DateTimeOffset?>("EmailVerifiedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<int>("FailedLogins")
                         .HasColumnType("int");
+
+                    b.Property<string>("FamilyName")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("FatherName")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Gender")
+                        .HasMaxLength(6)
+                        .HasColumnType("nvarchar(6)");
+
+                    b.Property<string>("GrandfatherName")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<DateTimeOffset?>("LastLoginAt")
                         .HasColumnType("datetimeoffset");
@@ -1211,8 +1253,12 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("NationalId")
-                        .HasMaxLength(400)
-                        .HasColumnType("nvarchar(400)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Nationality")
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
 
                     b.Property<bool>("NotifyOutbid")
                         .ValueGeneratedOnAdd()
@@ -1241,8 +1287,20 @@ namespace Sammha.Infrastructure.Data.Migrations
 
                     b.Property<string>("Phone")
                         .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("PostalCode")
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("ResidenceCity")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("ResidenceCountry")
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -1260,10 +1318,18 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.Property<Guid?>("StaffRoleId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Street")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("NationalId")
+                        .IsUnique()
+                        .HasFilter("[NationalId] IS NOT NULL");
 
                     b.HasIndex("Phone")
                         .IsUnique();
