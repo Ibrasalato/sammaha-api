@@ -38,7 +38,8 @@ public partial class CertificateHandlers(IAppDbContext db, Access access, ICerti
       IRequestHandler<SetLatinNameCommand, ReservedNameDto>
 {
     private const int DailyLimit = 30, MaxMarks = 500;
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    // Arabic stays readable (and short) in the stored snapshot
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All) };
     private static readonly Dictionary<string, string> TypeEn = new() { [NameTypes.Qaadan] = "Qa'dan (young males)", [NameTypes.Bakkar] = "Bakkar (young females)", [NameTypes.Manqiya] = "Manqiya (select herd)" };
     [GeneratedRegex(@"^[A-Za-z][A-Za-z .'\-]{3,118}[A-Za-z.]$")] private static partial Regex LatinNameRx();
 

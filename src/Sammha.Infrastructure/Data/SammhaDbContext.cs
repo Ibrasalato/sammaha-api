@@ -217,6 +217,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.Property(x => x.Signature).HasMaxLength(40);
             e.Property(x => x.RevokedBy).HasMaxLength(120);
             e.Property(x => x.RevokeReason).HasMaxLength(300);
+            e.Property(x => x.ItemsJson).HasColumnType("nvarchar(max)");
         });
         b.Entity<Delegation>(e =>
         {
