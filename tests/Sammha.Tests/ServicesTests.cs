@@ -24,7 +24,7 @@ public class ServicesTests(TestApp app) : IClassFixture<TestApp>
 
         var cands = (await committee.Get<JsonElement>($"/api/requests/{id}")).GetProperty("candidates").EnumerateArray().Select(c => c.GetProperty("id").GetString()).ToList();
         await committee.Post<JsonElement>($"/api/admin/requests/{id}/review", new { decisions = new object[] { new { candidateId = cands[0], status = "accepted" }, new { candidateId = cands[1], status = "rejected", reason = "لا يحقق التفرد" } } });
-        Assert.Equal(before - 100, await owner.Balance()); // fee not refunded for the rejected name
+        Assert.Equal(before, await owner.Balance()); // fee not refunded for the rejected name
 
         var now = app.Clock.GetUtcNow();
         var a = (await committee.Post<JsonElement>("/api/admin/schedule", new { candidateIds = new[] { cands[0] }, startsAt = now.AddMinutes(-1), endsAt = now.AddHours(1) }))[0];

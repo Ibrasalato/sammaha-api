@@ -102,7 +102,7 @@ public class IcoNameTests(TestApp app) : IClassFixture<TestApp>
         await app.SweepAsync();
         var inv2 = (await owner.Get<JsonElement>("/api/me/invoices")).EnumerateArray().First(i => i.GetProperty("auctionId").GetString() == a2id);
         await owner.PayByCard("invoice", inv2.GetProperty("id").GetString(), $"/api/me/invoices/{inv2.GetProperty("id").GetString()}/pay");
-        Assert.Equal(ownerStart - 310 + 50, await owner.Balance());
+        Assert.Equal(ownerStart + 50, await owner.Balance()); // the price by card, the entry guarantee back to the wallet
         Assert.Contains((await owner.Get<JsonElement>("/api/me/names")).EnumerateArray(), n => n.GetProperty("name").GetString() == "صقر الفلاة");
         Assert.DoesNotContain((await admin.Get<JsonElement>("/api/admin/ico-names")).EnumerateArray(), n => n.GetProperty("name").GetString() == "صقر الفلاة");
     }

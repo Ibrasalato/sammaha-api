@@ -91,10 +91,9 @@ public class AuctionFlowTests(TestApp app) : IClassFixture<TestApp>
         Assert.True(inv.GetProperty("dueAt").GetDateTimeOffset() > app.Clock.GetUtcNow());
         Assert.Equal(b1Before, await b1.Balance()); // the loser's entry guarantee came back
         var b2BeforePay = await b2.Balance();
-        await b2.TopUp(400);
         inv = await b2.PayByCard("invoice", inv.GetProperty("id").GetString(), $"/api/me/invoices/{inv.GetProperty("id").GetString()}/pay");
         Assert.Equal("paid", inv.GetProperty("status").GetString());
-        Assert.Equal(b2BeforePay + 400 - 400 + 50, await b2.Balance()); // paid in full; the winner's entry guarantee returned after paying
+        Assert.Equal(b2BeforePay + 50, await b2.Balance()); // paid in full by card; the winner's entry guarantee returned to the wallet
 
         var ownerInv = (await owner.Get<JsonElement>("/api/me/invoices")).EnumerateArray().First(i => i.GetProperty("auctionId").GetString() == a2);
         Assert.Equal(0, ownerInv.GetProperty("depositApplied").GetDecimal());
