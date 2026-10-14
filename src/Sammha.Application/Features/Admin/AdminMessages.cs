@@ -8,7 +8,8 @@ public record ReviewRequestCommand(Guid Id, List<ReviewDecision> Decisions, stri
 public record RejectRequestCommand(Guid Id, string Reason) : ICommand<RequestDto>;
 public record CancelRequestCommand(Guid Id, string Reason) : ICommand<RequestDto>;
 public record GetAwaitingScheduleQuery : IQuery<List<AwaitingDto>>;
-public record ScheduleAuctionsCommand(List<Guid> CandidateIds, DateTimeOffset StartsAt, DateTimeOffset EndsAt) : ICommand<List<AuctionDto>>;
+/// <summary>StaggerMinutes &gt; 0 releases the marks one after another: each auction starts and ends that many minutes after the previous one, in the order given</summary>
+public record ScheduleAuctionsCommand(List<Guid> CandidateIds, DateTimeOffset StartsAt, DateTimeOffset EndsAt, int StaggerMinutes = 0) : ICommand<List<AuctionDto>>;
 public record ListInvoicesQuery : IQuery<List<InvoiceDto>>;
 public record MarkInvoicePaidCommand(Guid Id) : ICommand<InvoiceDto>;
 public record ListUsersQuery : IQuery<List<UserDto>>;

@@ -36,7 +36,7 @@ public class AdminController(ISender mediator) : ControllerBase
     public Task<List<AwaitingDto>> Awaiting(CancellationToken ct) => mediator.Send(new GetAwaitingScheduleQuery(), ct);
 
     [HttpPost("schedule")]
-    public Task<List<AuctionDto>> Schedule(ScheduleBody b, CancellationToken ct) => mediator.Send(new ScheduleAuctionsCommand(b.CandidateIds, b.StartsAt, b.EndsAt), ct);
+    public Task<List<AuctionDto>> Schedule(ScheduleBody b, CancellationToken ct) => mediator.Send(new ScheduleAuctionsCommand(b.CandidateIds, b.StartsAt, b.EndsAt, b.StaggerMinutes), ct);
 
     [HttpGet("invoices")]
     public Task<List<InvoiceDto>> Invoices(CancellationToken ct) => mediator.Send(new ListInvoicesQuery(), ct);

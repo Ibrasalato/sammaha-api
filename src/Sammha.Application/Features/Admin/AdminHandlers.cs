@@ -180,21 +180,28 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
         }).ToList();
     }
 
-    private async Task<List<AuctionDto>> ScheduleAsync(List<Guid> candidateIds, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct)
+    private async Task<List<AuctionDto>> ScheduleAsync(List<Guid> candidateIds, DateTimeOffset startsAt, DateTimeOffset endsAt, int stagger, CancellationToken ct)
     {
         await access.RequireAsync(Permissions.AuctionsSchedule, ct);
         if (endsAt <= startsAt) throw new DomainException("موعد النهاية يجب أن يكون بعد البداية");
         if (endsAt <= Now) throw new DomainException("موعد النهاية في الماضي");
         if (candidateIds.Count == 0) throw new DomainException("اختر اسمًا واحدًا على الأقل");
+        if (stagger is < 0 or > 1440) throw new DomainException("الفاصل بين الشعارات من 0 إلى 1440 دقيقة");
         await using var uow = await db.BeginAsync(["schedule"], ct);
         var cands = await db.Candidates.Include(c => c.Request)
             .Where(c => candidateIds.Contains(c.Id) && c.Status == CandidateStatuses.Accepted && c.AuctionId == null && c.Request.Status == RequestStatuses.Accepted && c.Request.Kind != RequestKinds.Compound)
-            .OrderBy(c => c.Request.Number).ThenBy(c => c.Position).ToListAsync(ct);
+            .ToListAsync(ct);
+        // the order the committee chose; with a stagger each mark opens and closes after the previous one
+        var order = candidateIds.Select((id, i) => (id, i)).GroupBy(x => x.id).ToDictionary(g => g.Key, g => g.First().i);
+        cands = cands.OrderBy(c => order[c.Id]).ToList();
         var created = new List<Auction>();
         var tz = TimeZoneInfo.FindSystemTimeZoneById(R.TimeZone);
-        var when = TimeZoneInfo.ConvertTime(startsAt, tz).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-        foreach (var c in cands)
+        var baseStart = startsAt; var baseEnd = endsAt;
+        foreach (var (c, step) in cands.Select((c, i) => (c, i)))
         {
+            startsAt = baseStart.AddMinutes(stagger * step);
+            endsAt = baseEnd.AddMinutes(stagger * step);
+            var when = TimeZoneInfo.ConvertTime(startsAt, tz).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
             var a = new Auction
             {
                 Number = $"AU-{await db.NextNumberAsync("AuctionNo", ct)}",
@@ -327,7 +334,7 @@ public partial class AdminHandlers(IAppDbContext db, TimeProvider clock, Access 
     public Task<RequestDto> Handle(RejectRequestCommand q, CancellationToken ct) => RejectAsync(q.Id, q.Reason, ct);
     public Task<RequestDto> Handle(CancelRequestCommand q, CancellationToken ct) => CancelAsync(q.Id, q.Reason, ct);
     public Task<List<AwaitingDto>> Handle(GetAwaitingScheduleQuery q, CancellationToken ct) => AwaitingScheduleAsync(ct);
-    public Task<List<AuctionDto>> Handle(ScheduleAuctionsCommand q, CancellationToken ct) => ScheduleAsync(q.CandidateIds, q.StartsAt, q.EndsAt, ct);
+    public Task<List<AuctionDto>> Handle(ScheduleAuctionsCommand q, CancellationToken ct) => ScheduleAsync(q.CandidateIds, q.StartsAt, q.EndsAt, q.StaggerMinutes, ct);
     public Task<List<InvoiceDto>> Handle(ListInvoicesQuery q, CancellationToken ct) => AllInvoicesAsync(ct);
     public Task<InvoiceDto> Handle(MarkInvoicePaidCommand q, CancellationToken ct) => MarkInvoicePaidAsync(q.Id, ct);
     public Task<List<UserDto>> Handle(ListUsersQuery q, CancellationToken ct) => ListUsersAsync(ct);
