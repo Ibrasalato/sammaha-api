@@ -10,7 +10,7 @@ namespace Sammha.Application.Features.Admin;
 public record AuditMatchDto(string Name, string Type, string Source, double Score, string Relation, decimal? Price, string? PriceKind, DateTimeOffset? At);
 
 public record AuditRowDto(Guid RequestId, string Number, string Kind, string Type, string OwnerName, string RequestStatus, DateTimeOffset? SubmittedAt,
-    Guid CandidateId, string Name, string Status, string? RejectReason, string Verdict, List<AuditMatchDto> Matches, AuditMatchDto? TopPrice);
+    Guid CandidateId, string Name, string Status, string? RejectReason, string Verdict, List<AuditMatchDto> Matches, AuditMatchDto? TopPrice, Guid OwnerId);
 
 /// <summary>Committee audit of requested names: exact and similar matches (with or without «ال», singular or plural) and the highest price a similar name fetched.</summary>
 public record RequestsAuditQuery(string? Status, string? Type) : IQuery<List<AuditRowDto>>;
@@ -62,7 +62,7 @@ public class RequestAuditHandler(IAppDbContext db, Access access, IOptions<Platf
                 matches = matches.OrderByDescending(m => m.Score).ThenByDescending(m => m.Price ?? 0).Take(12).ToList();
                 var top = matches.Where(m => m.PriceKind == "sold" && m.Price > 0).OrderByDescending(m => m.Price).FirstOrDefault();
                 var verdict = matches.Any(m => m.Score >= 1) ? "exact" : matches.Count > 0 ? "similar" : "clear";
-                rows.Add(new AuditRowDto(r.Id, r.Number, r.Kind, r.Type, r.User.FullName, r.Status, r.SubmittedAt, c.Id, c.Name, c.Status, c.RejectReason, verdict, matches, top));
+                rows.Add(new AuditRowDto(r.Id, r.Number, r.Kind, r.Type, r.User.FullName, r.Status, r.SubmittedAt, c.Id, c.Name, c.Status, c.RejectReason, verdict, matches, top, r.UserId));
             }
         return rows;
     }

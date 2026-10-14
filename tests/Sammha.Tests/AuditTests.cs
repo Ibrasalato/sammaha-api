@@ -62,7 +62,7 @@ public class AuditTests(TestApp app) : IClassFixture<TestApp>
     {
         var admin = await app.SignInAsync("ibrasalato@gmail.com", "Sammha@2026", "staff");
         var all = (await admin.Get<JsonElement>("/api/admin/owners")).EnumerateArray().ToList();
-        var wasm = all.Single(o => o.GetProperty("fullName").GetString() == "مزرعة الوسم للإبل");
+        var wasm = all.Single(o => o.GetProperty("fullName").GetString() == "عبدالرحمن محمد سعد القحطاني");
         Assert.Equal("0500000003", wasm.GetProperty("phone").GetString());
         Assert.False(wasm.GetProperty("masked").GetBoolean());
         Assert.Contains(wasm.GetProperty("names").EnumerateArray(), n => n.GetProperty("name").GetString() == "الفاخر" && n.GetProperty("type").GetString() == "qaadan");
@@ -71,7 +71,7 @@ public class AuditTests(TestApp app) : IClassFixture<TestApp>
         var role = await admin.Post<JsonElement>("/api/admin/roles", new { name = "علاقات العملاء", permissions = new[] { "owners.view" } });
         await admin.Post<JsonElement>("/api/admin/users", new { fullName = "موظف العملاء", phone = "0500000081", email = "crm81@example.com", password = "Staff#2026x", role = "committee", staffRoleId = role.GetProperty("id").GetString() });
         var crm = await app.SignInAsync("0500000081", "Staff#2026x", "staff");
-        var masked = (await crm.Get<JsonElement>("/api/admin/owners")).EnumerateArray().Single(o => o.GetProperty("fullName").GetString() == "مزرعة الوسم للإبل");
+        var masked = (await crm.Get<JsonElement>("/api/admin/owners")).EnumerateArray().Single(o => o.GetProperty("fullName").GetString() == "عبدالرحمن محمد سعد القحطاني");
         Assert.Equal("05•••••003", masked.GetProperty("phone").GetString());
         Assert.True(masked.GetProperty("masked").GetBoolean());
         await Assert.ThrowsAsync<ApiException>(() => crm.Post<JsonElement>("/api/admin/owners/report", new { kind = "print", count = 3 }));

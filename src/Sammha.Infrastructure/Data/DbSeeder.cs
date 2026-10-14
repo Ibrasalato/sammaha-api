@@ -68,9 +68,18 @@ public class DbSeeder(SammhaDbContext db, IPasswordHasher hasher, IOptions<Platf
             new() { FullName = name, Phone = phone, Email = email, Role = role, PasswordHash = hash, Active = true, CreatedAt = now.AddDays(-90) };
         var owner = Mk("سعد بن ناصر العتيبي", "0500000001", "owner@demo.sa", Roles.Owner);
         var committee = Mk("لجنة الاعتماد", "0500000002", "committee@demo.sa", Roles.Committee);
-        var b1 = Mk("مزرعة الوسم للإبل", "0500000003", "wasm@demo.sa", Roles.Owner);
+        var b1 = Mk("عبدالرحمن محمد سعد القحطاني", "0500000003", "wasm@demo.sa", Roles.Owner);
         var b2 = Mk("فهد عبدالله الدوسري", "0500000004", "fahad@demo.sa", Roles.Owner);
-        var b3 = Mk("نايف سالم المري", "0500000005", "nayef@demo.sa", Roles.Owner);
+        var b3 = Mk("نايف سالم المري", "0500000005", "nayef@demo.sa", Roles.Owner); // an older account, before the sign-up details
+        // sign-up details of the sample owners (made-up IDs for testing)
+        void Profile(User u, string id, string first, string father, string grand, string family, int year, string city)
+        {
+            u.NationalId = id; u.FirstName = first; u.FatherName = father; u.GrandfatherName = grand; u.FamilyName = family;
+            u.BirthDate = new DateOnly(year, 3, 12); u.Gender = "male"; u.Nationality = "SA"; u.ResidenceCountry = "SA"; u.ResidenceCity = city;
+        }
+        Profile(owner, "1023456781", "سعد", "ناصر", "عبدالله", "العتيبي", 1984, "الرياض");
+        Profile(b1, "1034567892", "عبدالرحمن", "محمد", "سعد", "القحطاني", 1979, "خميس مشيط");
+        Profile(b2, "1045678903", "فهد", "عبدالله", "حمد", "الدوسري", 1988, "الدمام");
         db.Users.AddRange(owner, committee, b1, b2, b3);
         foreach (var u in new[] { owner, b1, b2, b3 })
             db.WalletTxs.Add(new WalletTx { UserId = u.Id, Amount = 2000, Kind = TxKinds.TopUp, Note = "رصيد تجريبي", CreatedAt = now.AddDays(-60) });

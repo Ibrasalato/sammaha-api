@@ -27,7 +27,7 @@ public record DepositRowDto(string Kind, Guid? RequestId, Guid? AuctionId, Guid 
 
 public record MarkRowDto(Guid AuctionId, string Number, string Name, string Type, string Kind, string? RequestNumber, string? ListingNumber, string OwnerName,
     string Status, DateTimeOffset StartsAt, DateTimeOffset EndsAt, decimal OpeningPrice, decimal Price, int BidCount, int Bidders, string? WinnerName,
-    bool? WonByRequester, string? InvoiceNumber, string? InvoiceStatus, decimal? Vat, string? CertCode, int Extensions);
+    bool? WonByRequester, string? InvoiceNumber, string? InvoiceStatus, decimal? Vat, string? CertCode, int Extensions, Guid OwnerId, Guid? WinnerId);
 
 public record CheckIbanQuery(string Iban) : IQuery<IbanCheck>;
 public record GetMyBankAccountQuery : IQuery<BankAccountDto?>;
@@ -454,7 +454,7 @@ public class FinanceHandlers(IAppDbContext db, Access access, Money money, Notif
             return new MarkRowDto(a.Id, a.Number, a.Name, a.Type, kind, a.RequestId != null && reqNos.TryGetValue(a.RequestId.Value, out var rn) ? rn.Number : null,
                 a.ListingId != null ? lstNos.GetValueOrDefault(a.ListingId.Value) : null, users.GetValueOrDefault(a.RequesterId, ""), status, a.StartsAt, a.EndsAt,
                 a.OpeningPrice, a.FinalPrice ?? a.CurrentPrice, a.BidCount, bidders.GetValueOrDefault(a.Id), a.WinnerId != null ? users.GetValueOrDefault(a.WinnerId.Value) : null,
-                a.WonByRequester, inv?.Number, inv?.Status, inv?.Vat, certs.GetValueOrDefault(a.Id), a.Extensions);
+                a.WonByRequester, inv?.Number, inv?.Status, inv?.Vat, certs.GetValueOrDefault(a.Id), a.Extensions, a.RequesterId, a.WinnerId);
         }).ToList();
     }
 }
