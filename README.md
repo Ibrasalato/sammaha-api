@@ -296,6 +296,9 @@ SAMMHA_TEST_DB="Server=localhost,1433;User Id=sa;Password=Sammha_dev_2026!;Trust
 - **ما لا يُسجَّل:** كلمات المرور، ورموز التحقق، والرموز المميزة، والآيبان، ومحتوى الملفات.
 - **الكتابة:** في نطاق DI مستقل، فلا يُحفظ أي تغيير لأمر فشل مع سجله.
 - **العرض:** `GET /api/admin/activity?from=&to=&category=&role=staff|owner|delegate&q=&failed=&page=&size=`
+- **سجل المالك:** `GET /api/me/activity?who=me|delegates|as_delegate&from=&to=&category=&q=&failed=`
+  - يعرض للمالك إجراءاته، وإجراءات المفوضين على حسابه، وإجراءاته مفوضًا عن غيره.
+  - لا يحتاج صلاحية موظف، ولا يراه المفوض داخل جلسة التفويض.
 
 ## تفويض إدارة الحساب
 
