@@ -42,6 +42,8 @@ namespace Sammha.Infrastructure.Data.Migrations
             modelBuilder.HasSequence<int>("TransferNo")
                 .StartsAt(1001L);
 
+            modelBuilder.HasSequence<int>("ViolationNo");
+
             modelBuilder.HasSequence<int>("WithdrawalNo")
                 .StartsAt(1001L);
 
@@ -644,6 +646,44 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.ToTable("Delegations");
                 });
 
+            modelBuilder.Entity("Sammha.Domain.Festival", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateOnly?>("EndsOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NameEn")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateOnly?>("StartsOn")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Festivals");
+                });
+
             modelBuilder.Entity("Sammha.Domain.Invoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1234,6 +1274,8 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ExternalId");
+
+                    b.HasIndex("ReservedId");
 
                     b.HasIndex("UserId");
 
@@ -2028,6 +2070,159 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("Sammha.Domain.Violation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<byte[]>("AttachmentBytes")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("AttachmentName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("AttachmentType")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("CamelChip")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CancelledByName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid?>("FestivalId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FestivalName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("IssuedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("IssuedByName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Resolution")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ResolvedByName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TypeName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FestivalId");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("TypeId");
+
+                    b.HasIndex("Status", "IssuedAt");
+
+                    b.HasIndex("UserId", "IssuedAt");
+
+                    b.ToTable("Violations");
+                });
+
+            modelBuilder.Entity("Sammha.Domain.ViolationType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AllowsNameResolution")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NameEn")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ViolationTypes");
+                });
+
             modelBuilder.Entity("Sammha.Domain.WalletTx", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2250,6 +2445,26 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .WithMany()
                         .HasForeignKey("StaffRoleId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Sammha.Domain.Violation", b =>
+                {
+                    b.HasOne("Sammha.Domain.Festival", null)
+                        .WithMany()
+                        .HasForeignKey("FestivalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sammha.Domain.ViolationType", null)
+                        .WithMany()
+                        .HasForeignKey("TypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sammha.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Sammha.Domain.Withdrawal", b =>

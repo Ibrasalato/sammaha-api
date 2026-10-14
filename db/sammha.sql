@@ -2278,3 +2278,162 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE SEQUENCE [ViolationNo] AS int START WITH 1 INCREMENT BY 1 NO CYCLE;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE TABLE [Festivals] (
+        [Id] uniqueidentifier NOT NULL,
+        [Name] nvarchar(150) NOT NULL,
+        [NameEn] nvarchar(150) NULL,
+        [Year] int NULL,
+        [StartsOn] date NULL,
+        [EndsOn] date NULL,
+        [Active] bit NOT NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        CONSTRAINT [PK_Festivals] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE TABLE [ViolationTypes] (
+        [Id] uniqueidentifier NOT NULL,
+        [Name] nvarchar(100) NOT NULL,
+        [NameEn] nvarchar(100) NULL,
+        [Amount] decimal(12,2) NOT NULL,
+        [Active] bit NOT NULL,
+        [AllowsNameResolution] bit NOT NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        CONSTRAINT [PK_ViolationTypes] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE TABLE [Violations] (
+        [Id] uniqueidentifier NOT NULL,
+        [Number] nvarchar(20) NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [TypeId] uniqueidentifier NOT NULL,
+        [TypeName] nvarchar(100) NOT NULL,
+        [Amount] decimal(12,2) NOT NULL,
+        [Description] nvarchar(2000) NOT NULL,
+        [FestivalId] uniqueidentifier NULL,
+        [FestivalName] nvarchar(150) NULL,
+        [CamelChip] nvarchar(40) NULL,
+        [AttachmentName] nvarchar(120) NULL,
+        [AttachmentType] nvarchar(40) NULL,
+        [AttachmentBytes] varbinary(max) NULL,
+        [Status] nvarchar(20) NOT NULL,
+        [IssuedById] uniqueidentifier NOT NULL,
+        [IssuedByName] nvarchar(120) NOT NULL,
+        [IssuedAt] datetimeoffset NOT NULL,
+        [PaidAt] datetimeoffset NULL,
+        [PaymentId] uniqueidentifier NULL,
+        [CancelledAt] datetimeoffset NULL,
+        [CancelReason] nvarchar(500) NULL,
+        [CancelledByName] nvarchar(120) NULL,
+        [Resolution] nvarchar(20) NULL,
+        [ResolvedAt] datetimeoffset NULL,
+        [ResolvedByName] nvarchar(120) NULL,
+        [ResolutionNote] nvarchar(500) NULL,
+        CONSTRAINT [PK_Violations] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_Violations_Festivals_FestivalId] FOREIGN KEY ([FestivalId]) REFERENCES [Festivals] ([Id]) ON DELETE NO ACTION,
+        CONSTRAINT [FK_Violations_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION,
+        CONSTRAINT [FK_Violations_ViolationTypes_TypeId] FOREIGN KEY ([TypeId]) REFERENCES [ViolationTypes] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE INDEX [IX_OwnedCamels_ReservedId] ON [OwnedCamels] ([ReservedId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_Festivals_Name] ON [Festivals] ([Name]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE INDEX [IX_Violations_FestivalId] ON [Violations] ([FestivalId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_Violations_Number] ON [Violations] ([Number]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE INDEX [IX_Violations_Status_IssuedAt] ON [Violations] ([Status], [IssuedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE INDEX [IX_Violations_TypeId] ON [Violations] ([TypeId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE INDEX [IX_Violations_UserId_IssuedAt] ON [Violations] ([UserId], [IssuedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_ViolationTypes_Name] ON [ViolationTypes] ([Name]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014202341_ViolationsFestivalsCamelLinks'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014202341_ViolationsFestivalsCamelLinks', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
