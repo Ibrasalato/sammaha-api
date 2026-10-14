@@ -22,6 +22,9 @@ namespace Sammha.Infrastructure.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasSequence<int>("AuctionNo")
+                .StartsAt(1001L);
+
             modelBuilder.HasSequence<int>("InvoiceNo");
 
             modelBuilder.HasSequence<int>("ListingNo")
@@ -31,6 +34,9 @@ namespace Sammha.Infrastructure.Data.Migrations
                 .StartsAt(1001L);
 
             modelBuilder.HasSequence<int>("TicketNo");
+
+            modelBuilder.HasSequence<int>("WithdrawalNo")
+                .StartsAt(1001L);
 
             modelBuilder.Entity("Sammha.Domain.Auction", b =>
                 {
@@ -87,6 +93,11 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
 
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<decimal>("OpeningPrice")
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
@@ -129,6 +140,8 @@ namespace Sammha.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Number");
+
                     b.HasIndex("StartsAt");
 
                     b.HasIndex("Settled", "EndsAt");
@@ -154,6 +167,66 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.HasKey("AuctionId", "UserId");
 
                     b.ToTable("AutoBids");
+                });
+
+            modelBuilder.Entity("Sammha.Domain.BankAccount", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<byte[]>("DocBytes")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("DocName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("DocType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Iban")
+                        .IsRequired()
+                        .HasMaxLength(34)
+                        .HasColumnType("nvarchar(34)");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("BankAccounts");
                 });
 
             modelBuilder.Entity("Sammha.Domain.Bid", b =>
@@ -1394,6 +1467,83 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.ToTable("Watches");
                 });
 
+            modelBuilder.Entity("Sammha.Domain.Withdrawal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<bool>("ByStaff")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Iban")
+                        .IsRequired()
+                        .HasMaxLength(34)
+                        .HasColumnType("nvarchar(34)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ProcessedBy")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TransferRef")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("Withdrawals");
+                });
+
+            modelBuilder.Entity("Sammha.Domain.BankAccount", b =>
+                {
+                    b.HasOne("Sammha.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Sammha.Domain.Candidate", b =>
                 {
                     b.HasOne("Sammha.Domain.LogoRequest", "Request")
@@ -1451,6 +1601,15 @@ namespace Sammha.Infrastructure.Data.Migrations
                         .WithMany()
                         .HasForeignKey("StaffRoleId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Sammha.Domain.Withdrawal", b =>
+                {
+                    b.HasOne("Sammha.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Sammha.Domain.LogoRequest", b =>

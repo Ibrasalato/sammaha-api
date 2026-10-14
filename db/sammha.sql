@@ -1194,3 +1194,120 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    CREATE SEQUENCE [AuctionNo] AS int START WITH 1001 INCREMENT BY 1 NO CYCLE;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    CREATE SEQUENCE [WithdrawalNo] AS int START WITH 1001 INCREMENT BY 1 NO CYCLE;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    ALTER TABLE [Auctions] ADD [Number] nvarchar(20) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    CREATE TABLE [BankAccounts] (
+        [UserId] uniqueidentifier NOT NULL,
+        [Iban] nvarchar(34) NOT NULL,
+        [BankName] nvarchar(80) NOT NULL,
+        [AccountName] nvarchar(120) NOT NULL,
+        [DocName] nvarchar(120) NOT NULL,
+        [DocType] nvarchar(40) NOT NULL,
+        [DocBytes] varbinary(max) NOT NULL,
+        [Status] nvarchar(20) NOT NULL,
+        [RejectReason] nvarchar(300) NULL,
+        [ReviewedBy] nvarchar(120) NULL,
+        [ReviewedAt] datetimeoffset NULL,
+        [UpdatedAt] datetimeoffset NOT NULL,
+        CONSTRAINT [PK_BankAccounts] PRIMARY KEY ([UserId]),
+        CONSTRAINT [FK_BankAccounts_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    CREATE TABLE [Withdrawals] (
+        [Id] uniqueidentifier NOT NULL,
+        [Number] nvarchar(20) NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [Amount] decimal(12,2) NOT NULL,
+        [Iban] nvarchar(34) NOT NULL,
+        [BankName] nvarchar(80) NOT NULL,
+        [AccountName] nvarchar(120) NOT NULL,
+        [Status] nvarchar(20) NOT NULL,
+        [ByStaff] bit NOT NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        [ProcessedAt] datetimeoffset NULL,
+        [ProcessedBy] nvarchar(120) NULL,
+        [TransferRef] nvarchar(60) NULL,
+        [Note] nvarchar(300) NULL,
+        CONSTRAINT [PK_Withdrawals] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_Withdrawals_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    CREATE INDEX [IX_Auctions_Number] ON [Auctions] ([Number]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    CREATE INDEX [IX_BankAccounts_Status] ON [BankAccounts] ([Status]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    CREATE INDEX [IX_Withdrawals_Status_CreatedAt] ON [Withdrawals] ([Status], [CreatedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    CREATE INDEX [IX_Withdrawals_UserId] ON [Withdrawals] ([UserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261014064910_CrmFinanceReports'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261014064910_CrmFinanceReports', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
