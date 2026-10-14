@@ -5,9 +5,9 @@ public class PlatformOptions
 {
     public decimal DepositAmount { get; set; } = 50;
     public decimal OpeningPrice { get; set; } = 50;
-    public decimal MinIncrement { get; set; } = 10;
+    public decimal MinIncrement { get; set; } = 500;
     /// <summary>opening price of «منقية» names; null = the same as OpeningPrice</summary>
-    public decimal? ManqiyaOpeningPrice { get; set; }
+    public decimal? ManqiyaOpeningPrice { get; set; } = 3000;
     /// <summary>default length in days offered when the committee schedules an auction</summary>
     public int AuctionDays { get; set; } = 2;
     public int ExtendMinutes { get; set; } = 2;

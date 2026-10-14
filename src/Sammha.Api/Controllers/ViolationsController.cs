@@ -64,7 +64,7 @@ public class ViolationsController(ISender mediator) : ControllerBase
     [HttpPost("admin/violations/{id:guid}/cancel"), Authorize(Policy = "staff")]
     public Task<ViolationDto> Cancel(Guid id, ViolationCancelBody b, CancellationToken ct) => mediator.Send(new CancelViolationCommand(id, b.Reason), ct);
 
-    /// <summary>«تسوية بتسجيل اسم»: the owner registered a name for the camel; closes an unpaid violation with no payment</summary>
+    /// <summary>«تسوية بربط اسم» by staff: a name was linked to the camel; closes an unpaid violation with no payment</summary>
     [HttpPost("admin/violations/{id:guid}/resolve-name"), Authorize(Policy = "staff")]
     public Task<ViolationDto> ResolveByName(Guid id, ViolationNoteBody b, CancellationToken ct) => mediator.Send(new ResolveViolationByNameCommand(id, b.Note), ct);
 
@@ -82,4 +82,10 @@ public class ViolationsController(ISender mediator) : ControllerBase
     /// <summary>after the card payment (purpose "violation"); the wallet cannot pay fines</summary>
     [HttpPost("me/violations/{id:guid}/pay"), Authorize]
     public Task<ViolationDto> Pay(Guid id, CancellationToken ct) => mediator.Send(new PayViolationCommand(id), ct);
+
+    /// <summary>settle by linking a قعود/بكرة name the owner already owns to the fined camel's chip</summary>
+    [HttpPost("me/violations/{id:guid}/link-name"), Authorize]
+    public Task<ViolationDto> LinkName(Guid id, ViolationLinkNameBody b, CancellationToken ct) => mediator.Send(new LinkNameToViolationCommand(id, b.ReservedId), ct);
 }
+
+public record ViolationLinkNameBody(Guid ReservedId);

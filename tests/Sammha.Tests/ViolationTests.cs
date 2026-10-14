@@ -230,4 +230,43 @@ public class ViolationTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal(HttpStatusCode.Forbidden, await StatusOf(() => committee.Post<JsonElement>("/api/admin/festivals", new { name = "مهرجان بلا صلاحية" })));
         Assert.Equal(HttpStatusCode.Forbidden, await StatusOf(() => committee.Post<JsonElement>($"/api/admin/violations/{id3}/ban", new { reason = "بلا صلاحية" })));
     }
+
+    [Fact]
+    public async Task Owner_settles_a_no_name_fine_by_linking_a_name_they_own_to_the_chip()
+    {
+        var admin = await Admin();
+        var type = await admin.Post<JsonElement>("/api/admin/violation-types", new { name = "جمل بلا اسم — ربط", amount = 5000, allowsNameResolution = true });
+        var strict = await admin.Post<JsonElement>("/api/admin/violation-types", new { name = "مخالفة بلا تسوية بالاسم", amount = 300 });
+        Task<JsonElement> Issue(JsonElement t, string? chip) => admin.Post<JsonElement>("/api/admin/violations", new
+        {
+            owner = "0500000003", typeId = t.GetProperty("id").GetString(), camelChip = chip, description = "المشاركة في المهرجان بجمل ليس له اسم مسجل",
+        });
+        var owner = await app.BidderAsync(1); // owns قعدان الفاخر وشامخ، منقية الوسمية
+        var names = (await owner.Get<JsonElement>("/api/me/names")).EnumerateArray().ToList();
+        string Id(string n) => names.First(x => x.GetProperty("name").GetString() == n).GetProperty("id").GetString()!;
+
+        var v = (await Issue(type, "9821000000777")).GetProperty("id").GetString();
+        string Url(string? id) => $"/api/me/violations/{id}/link-name";
+        Assert.Contains("المنقية", await owner.Fails(() => owner.Post<JsonElement>(Url(v), new { reservedId = Id("الوسمية") })));
+        var done = await owner.Post<JsonElement>(Url(v), new { reservedId = Id("الفاخر") });
+        Assert.Equal("resolved_name", done.GetProperty("status").GetString());
+        Assert.Contains("9821000000777", done.GetProperty("resolutionNote").GetString());
+        // the chip now shows on «إبلي» with the name, and nothing is charged
+        var camel = (await owner.Get<JsonElement>("/api/me/camels")).GetProperty("camels").EnumerateArray()
+            .Single(c => c.GetProperty("chipNumbers").EnumerateArray().Any(x => x.GetString() == "9821000000777"));
+        Assert.Equal("الفاخر", camel.GetProperty("reservedName").GetString());
+        Assert.Contains("غلقت", await owner.Fails(() => owner.Post<JsonElement>(Url(v), new { reservedId = Id("شامخ") })));
+
+        // the same chip again with another name, a type without name settlement, a fine without a chip: refused
+        var again = (await Issue(type, "9821000000777")).GetProperty("id").GetString();
+        Assert.Contains("مربوطة باسم آخر", await owner.Fails(() => owner.Post<JsonElement>(Url(again), new { reservedId = Id("شامخ") })));
+        var s = (await Issue(strict, "9821000000778")).GetProperty("id").GetString();
+        Assert.Contains("لا يقبل", await owner.Fails(() => owner.Post<JsonElement>(Url(s), new { reservedId = Id("شامخ") })));
+        var noChip = (await Issue(type, null)).GetProperty("id").GetString();
+        Assert.Contains("شريحة", await owner.Fails(() => owner.Post<JsonElement>(Url(noChip), new { reservedId = Id("شامخ") })));
+        // someone else's fine is not found
+        var other = await app.BidderAsync(2);
+        var e = await Assert.ThrowsAsync<ApiException>(() => other.Post<JsonElement>(Url(again), new { reservedId = Id("شامخ") }));
+        Assert.Equal(HttpStatusCode.NotFound, e.Status);
+    }
 }

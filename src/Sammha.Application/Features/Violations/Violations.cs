@@ -5,6 +5,7 @@ using Sammha.Application.Engine;
 using Sammha.Application.Features.Admin;
 using Sammha.Application.Features.Finance;
 using Sammha.Application.Features.Logos;
+using Sammha.Application.Features.Camels;
 using Sammha.Domain;
 
 namespace Sammha.Application.Features.Violations;
@@ -64,13 +65,16 @@ public record GetMyViolationsQuery : IQuery<List<ViolationDto>>;
 public record GetMyViolationAttachmentQuery(Guid Id) : IQuery<DocumentDto>;
 /// <summary>completes the fine after the card payment (purpose "violation"); the wallet cannot pay fines</summary>
 public record PayViolationCommand(Guid Id) : ICommand<ViolationDto>;
+/// <summary>the owner settles a fine by linking a قعود/بكرة name they already own to the fined camel's chip (account holder only)</summary>
+public record LinkNameToViolationCommand(Guid Id, Guid ReservedId) : ICommand<ViolationDto>;
 
-public class ViolationHandlers(IAppDbContext db, Access access, Notifier notifier, Money money, TimeProvider clock)
+public class ViolationHandlers(IAppDbContext db, Access access, Notifier notifier, Money money, TimeProvider clock, ICurrentUser current)
     : IRequestHandler<ListViolationTypesQuery, List<ViolationTypeDto>>, IRequestHandler<SaveViolationTypeCommand, ViolationTypeDto>, IRequestHandler<DeleteViolationTypeCommand, MediatR.Unit>,
       IRequestHandler<ListViolationsQuery, ViolationPageDto>, IRequestHandler<GetViolationQuery, ViolationDto>, IRequestHandler<GetViolationAttachmentQuery, DocumentDto>,
       IRequestHandler<FindViolationOwnerQuery, ViolationOwnerDto>, IRequestHandler<IssueViolationCommand, ViolationDto>, IRequestHandler<CancelViolationCommand, ViolationDto>,
       IRequestHandler<ResolveViolationByNameCommand, ViolationDto>, IRequestHandler<BanViolationCommand, ViolationDto>,
-      IRequestHandler<GetMyViolationsQuery, List<ViolationDto>>, IRequestHandler<GetMyViolationAttachmentQuery, DocumentDto>, IRequestHandler<PayViolationCommand, ViolationDto>
+      IRequestHandler<GetMyViolationsQuery, List<ViolationDto>>, IRequestHandler<GetMyViolationAttachmentQuery, DocumentDto>, IRequestHandler<PayViolationCommand, ViolationDto>,
+      IRequestHandler<LinkNameToViolationCommand, ViolationDto>
 {
     public const int MaxAttachmentBytes = 5 * 1024 * 1024;
     private const string OwnerLink = "/dashboard/violations";
@@ -357,7 +361,49 @@ public class ViolationHandlers(IAppDbContext db, Access access, Notifier notifie
         v.PaymentId = p.Id;
         v.Resolution = ViolationResolutions.PaidContinue;
         v.ResolvedAt = Now;
-        await notifier.NotifyAsync(u.Id, NotificationKinds.Violation, $"تم سداد المخالفة {v.Number}", $"سُدّد {v.Amount:0.##} ريال، ويظهر الإيصال في صفحة المخالفات.", OwnerLink, ct);
+        await notifier.NotifyAsync(u.Id, NotificationKinds.Violation, $"تم سداد المخالفة {v.Number}", $"سُدّد {v.Amount:0.##} ريال، ويظهر سند السداد في صفحة المخالفات.", OwnerLink, ct);
+        await db.SaveChangesAsync(ct);
+        await uow.CommitAsync(ct);
+        return await OwnerDtoAsync(v, ct);
+    }
+
+    public async Task<ViolationDto> Handle(LinkNameToViolationCommand c, CancellationToken ct)
+    {
+        if (current.DelegationId != null) throw DomainException.Forbidden("ربط الأسماء بالشرائح لصاحب الحساب فقط");
+        var u = await access.MeAsync(ct);
+        await using var uow = await db.BeginAsync([$"vl:{c.Id}", $"u:{u.Id}", $"n:{c.ReservedId}"], ct);
+        var v = await db.Violations.FirstOrDefaultAsync(x => x.Id == c.Id && x.UserId == u.Id, ct) ?? throw DomainException.NotFound("المخالفة غير موجودة");
+        if (v.Status != ViolationStatuses.Unpaid) throw new DomainException(v.Status == ViolationStatuses.Recorded ? "لا توجد غرامة على هذه المخالفة لتسويتها" : Closed(v));
+        if (!await db.ViolationTypes.AnyAsync(t => t.Id == v.TypeId && t.AllowsNameResolution, ct)) throw new DomainException("نوع هذه المخالفة لا يقبل التسوية بربط اسم");
+        var chip = (v.CamelChip ?? "").Trim();
+        if (chip.Length == 0) throw new DomainException("لم تُسجَّل شريحة الجمل في هذه المخالفة، تواصل مع الإدارة");
+        var r = await db.ReservedNames.FirstOrDefaultAsync(x => x.Id == c.ReservedId && x.OwnerId == u.Id, ct) ?? throw new DomainException("الاسم غير مسجل باسمك");
+        var want = CamelLinks.SexFor(r.Type) ?? throw new DomainException("المنقية لا تُربط بشريحة؛ الربط لأسماء القعدان والبكار فقط");
+        if (await db.Invoices.AnyAsync(i => i.UserId == u.Id && i.Name == r.Name && i.Status == InvoiceStatuses.Unpaid, ct)) throw new DomainException("سدّد فاتورة الاسم أولًا");
+        var mine = await db.OwnedCamels.Where(x => x.UserId == u.Id).ToListAsync(ct);
+        var camel = mine.FirstOrDefault(x => CamelLinks.Chips(x).Contains(chip, StringComparer.OrdinalIgnoreCase));
+        if (mine.Any(x => x.ReservedId == r.Id && x != camel)) throw new DomainException("الاسم مربوط بشريحة أخرى، اختر اسمًا غير مربوط");
+        if (camel == null)
+        {
+            // the registry (KACF) is not linked yet: the fined chip becomes one of the owner's camels
+            camel = new OwnedCamel { UserId = u.Id, ChipNumbers = chip, CreatedAt = Now };
+            db.OwnedCamels.Add(camel);
+        }
+        else
+        {
+            if (camel.ReservedId != null && camel.ReservedId != r.Id) throw new DomainException("هذه الشريحة مربوطة باسم آخر");
+            var sex = CamelLinks.SexOf(camel.Sex);
+            if (sex != null && sex != want) throw new DomainException(want == "male" ? "أسماء القعدان للذكور: شريحة هذا الجمل لأنثى" : "أسماء البكار للإناث: شريحة هذا الجمل لذكر");
+        }
+        camel.ReservedId = r.Id;
+        camel.LinkedAt = Now;
+        v.Status = ViolationStatuses.ResolvedName;
+        v.Resolution = ViolationResolutions.ResolvedName;
+        v.ResolvedAt = Now;
+        v.ResolvedByName = u.FullName;
+        v.ResolutionNote = $"رُبط الاسم «{r.Name}» بالشريحة {chip}";
+        await notifier.NotifyAsync(u.Id, NotificationKinds.Violation, $"سُوّيت المخالفة {v.Number} بربط اسم",
+            $"رُبط «{r.Name}» بالشريحة {chip}{AtFestival(v)}، وأُغلقت المخالفة دون سداد، ويمكنك مواصلة المشاركة.", OwnerLink, ct);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);
         return await OwnerDtoAsync(v, ct);
@@ -367,7 +413,7 @@ public class ViolationHandlers(IAppDbContext db, Access access, Notifier notifie
     private static string Closed(Violation v) => v.Status switch
     {
         ViolationStatuses.Paid => "سُدّدت هذه المخالفة وأُغلقت",
-        ViolationStatuses.ResolvedName => "سُوّيت هذه المخالفة بتسجيل اسم وأُغلقت",
+        ViolationStatuses.ResolvedName => "سُوّيت هذه المخالفة بربط اسم بالشريحة وأُغلقت",
         ViolationStatuses.Banned => "صدر قرار المنع من المشاركة في هذه المخالفة وأُغلقت",
         ViolationStatuses.Cancelled => "أُلغيت هذه المخالفة",
         _ => "لا يمكن تغيير حالة هذه المخالفة",
@@ -383,14 +429,14 @@ public class ViolationHandlers(IAppDbContext db, Access access, Notifier notifie
         await using var uow = await db.BeginAsync([$"vl:{c.Id}"], ct);
         var v = await db.Violations.FirstOrDefaultAsync(x => x.Id == c.Id, ct) ?? throw DomainException.NotFound("المخالفة غير موجودة");
         if (v.Status != ViolationStatuses.Unpaid) throw new DomainException(v.Status == ViolationStatuses.Recorded ? "لا توجد غرامة على هذه المخالفة لتسويتها" : Closed(v));
-        if (!await db.ViolationTypes.AnyAsync(t => t.Id == v.TypeId && t.AllowsNameResolution, ct)) throw new DomainException("نوع هذه المخالفة لا يقبل التسوية بتسجيل اسم");
+        if (!await db.ViolationTypes.AnyAsync(t => t.Id == v.TypeId && t.AllowsNameResolution, ct)) throw new DomainException("نوع هذه المخالفة لا يقبل التسوية بربط اسم");
         v.Status = ViolationStatuses.ResolvedName;
         v.Resolution = ViolationResolutions.ResolvedName;
         v.ResolvedAt = Now;
         v.ResolvedByName = me.FullName;
         v.ResolutionNote = note.Length == 0 ? null : note;
-        await notifier.NotifyAsync(v.UserId, NotificationKinds.Violation, $"سُوّيت المخالفة {v.Number} بتسجيل اسم",
-            $"«{v.TypeName}»{AtFestival(v)}: أُغلقت المخالفة دون سداد بعد تسجيل اسم للجمل، ويمكنك مواصلة المشاركة." + (note.Length > 0 ? $" ملاحظة: {note}" : ""), OwnerLink, ct);
+        await notifier.NotifyAsync(v.UserId, NotificationKinds.Violation, $"سُوّيت المخالفة {v.Number} بربط اسم",
+            $"«{v.TypeName}»{AtFestival(v)}: أُغلقت المخالفة دون سداد بعد ربط اسم بشريحة الجمل، ويمكنك مواصلة المشاركة." + (note.Length > 0 ? $" ملاحظة: {note}" : ""), OwnerLink, ct);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);
         return await StaffDtoAsync(v, me, ct);
