@@ -49,7 +49,7 @@ public class ExemptionTests(TestApp app) : IClassFixture<TestApp>
         Assert.Equal("pending", e.GetProperty("status").GetString());
         Assert.Equal("900115000777001", e.GetProperty("camelChip").GetString());
         Assert.StartsWith($"EX-{DateTime.UtcNow.Year}-", e.GetProperty("number").GetString());
-        Assert.Equal(JsonValueKind.Null, e.GetProperty("signature").ValueKind);
+        Assert.False(e.TryGetProperty("signature", out _)); // nulls are left out of the JSON
         var id = e.GetProperty("id").GetString();
         var number = e.GetProperty("number").GetString();
         // one open request per chip and festival
@@ -94,7 +94,7 @@ public class ExemptionTests(TestApp app) : IClassFixture<TestApp>
         var anon = app.Anonymous();
         var bare = await anon.Get<JsonElement>($"/api/exemptions/issued/{number}");
         Assert.Equal("valid", bare.GetProperty("status").GetString());
-        Assert.Equal(JsonValueKind.Null, bare.GetProperty("camelChip").ValueKind);
+        Assert.False(bare.TryGetProperty("camelChip", out _));
         var full = await anon.Get<JsonElement>($"/api/exemptions/issued/{number}?s={sig}");
         Assert.True(full.GetProperty("signatureMatches").GetBoolean());
         Assert.Equal("900115000777001", full.GetProperty("camelChip").GetString());
