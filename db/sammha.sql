@@ -2437,3 +2437,106 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015081214_Exemptions'
+)
+BEGIN
+    CREATE SEQUENCE [ExemptionNo] AS int START WITH 1 INCREMENT BY 1 NO CYCLE;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015081214_Exemptions'
+)
+BEGIN
+    CREATE TABLE [Exemptions] (
+        [Id] uniqueidentifier NOT NULL,
+        [Number] nvarchar(20) NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [CamelChip] nvarchar(40) NOT NULL,
+        [CamelType] nvarchar(20) NOT NULL,
+        [FestivalId] uniqueidentifier NULL,
+        [FestivalName] nvarchar(150) NOT NULL,
+        [Race] nvarchar(150) NULL,
+        [OwnerNote] nvarchar(500) NULL,
+        [Status] nvarchar(20) NOT NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        [Amount] decimal(12,2) NULL,
+        [StaffNote] nvarchar(500) NULL,
+        [PricedAt] datetimeoffset NULL,
+        [PricedById] uniqueidentifier NULL,
+        [PricedByName] nvarchar(120) NULL,
+        [RejectedAt] datetimeoffset NULL,
+        [RejectReason] nvarchar(500) NULL,
+        [RejectedByName] nvarchar(120) NULL,
+        [CancelledAt] datetimeoffset NULL,
+        [PaidAt] datetimeoffset NULL,
+        [PaymentId] uniqueidentifier NULL,
+        [OwnerNameAr] nvarchar(120) NULL,
+        [OwnerNameEn] nvarchar(120) NULL,
+        [NationalId] nvarchar(20) NULL,
+        [IssuedAt] datetimeoffset NULL,
+        [Signature] nvarchar(40) NULL,
+        [RevokedAt] datetimeoffset NULL,
+        [RevokedByName] nvarchar(120) NULL,
+        [RevokeReason] nvarchar(500) NULL,
+        CONSTRAINT [PK_Exemptions] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_Exemptions_Festivals_FestivalId] FOREIGN KEY ([FestivalId]) REFERENCES [Festivals] ([Id]) ON DELETE NO ACTION,
+        CONSTRAINT [FK_Exemptions_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015081214_Exemptions'
+)
+BEGIN
+    CREATE INDEX [IX_Exemptions_CamelChip_FestivalId] ON [Exemptions] ([CamelChip], [FestivalId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015081214_Exemptions'
+)
+BEGIN
+    CREATE INDEX [IX_Exemptions_FestivalId] ON [Exemptions] ([FestivalId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015081214_Exemptions'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_Exemptions_Number] ON [Exemptions] ([Number]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015081214_Exemptions'
+)
+BEGIN
+    CREATE INDEX [IX_Exemptions_Status_CreatedAt] ON [Exemptions] ([Status], [CreatedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015081214_Exemptions'
+)
+BEGIN
+    CREATE INDEX [IX_Exemptions_UserId_CreatedAt] ON [Exemptions] ([UserId], [CreatedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015081214_Exemptions'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261015081214_Exemptions', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
