@@ -12,5 +12,5 @@ public class LegacyLink
 public static class LegacyKinds
 {
     public const string Member = "member", Order = "order", Candidate = "candidate", Bidding = "bidding", Bid = "bid", Bill = "bill",
-        Name = "name", Compound = "compound", Notification = "notification", Wallet = "wallet", Transfer = "transfer", Logo = "logo", Ticket = "ticket", Exemption = "exemption";
+        Name = "name", Compound = "compound", Notification = "notification", Wallet = "wallet", Transfer = "transfer", Logo = "logo", Ticket = "ticket", Exemption = "exemption", Ban = "ban", Excluded = "excluded";
 }

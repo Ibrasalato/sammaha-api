@@ -62,7 +62,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
     private static readonly string[] Tables =
     [
         "Members", "Orders", "Biddings", "Biddings_Details", "Biddings_Winners", "Bills", "CompoundNames_Master", "CompoundNames_Details",
-        "Members_Notifications", "Name_Logo", "MemberCamels", "Black_List", "Request", "PaymentCard", "Administrators", "ContactUs", "C_Settings",
+        "Members_Notifications", "Name_Logo", "MemberCamels", "Black_List", "MemberExcluded", "Request", "PaymentCard", "Administrators", "ContactUs", "C_Settings",
     ];
 
     // ───────────────────────── inspect ─────────────────────────
@@ -167,6 +167,38 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
         var fullNames = new Dictionary<Guid, string>();
         var newUsers = new HashSet<int>();
         await MembersAsync(src, map, links, users, fullNames, newUsers);
+
+        // ── «الحظر»: Black_List (an account, with dates) and MemberExcluded (an ID number, for good) become bans, kept with their dates ──
+        var banDay = DateOnly.FromDateTime(_now.ToOffset(Riyadh).DateTime);
+        foreach (var r in await src.ReadAsync("Black_List", ct))
+        {
+            if (links.ContainsKey((LegacyKinds.Ban, r.Id))) continue;
+            if (!users.TryGetValue(r.I("BL_Member_FK") ?? 0, out var uid)) { _r.Warn("bans.withoutMember"); continue; }
+            var start = r.Dt("BL_StartDate") is { } sd ? DateOnly.FromDateTime(sd) : banDay;
+            DateOnly? end = r.Dt("BL_EndDate") is { } ed ? DateOnly.FromDateTime(ed) : null;
+            if (end < start) end = start;
+            var who = await db.Users.AsNoTracking().Where(u => u.Id == uid).Select(u => new { u.FullName, u.NationalId }).FirstAsync(ct);
+            var ban = new Ban { UserId = uid, NationalId = who.NationalId, Name = who.FullName, Reason = Sentinel, StartsOn = start, EndsOn = end, Source = BanSources.LegacyBlacklist, CreatedAt = _now, CreatedByName = Sentinel };
+            Add(ban);
+            Link(LegacyKinds.Ban, r.Id, ban.Id);
+            _r.Count(ban.InForce(banDay) ? "bans.active" : "bans.ended");
+        }
+        foreach (var r in await src.ReadAsync("MemberExcluded", ct))
+        {
+            if (links.ContainsKey((LegacyKinds.Excluded, r.Id))) continue;
+            var nid = new string((r.S("IdentityNumber") ?? "").Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+            if (nid.Length < 5) { _r.Warn("bans.excludedWithoutId"); continue; }
+            var acc = await db.Users.AsNoTracking().Where(u => u.Role == Roles.Owner && u.NationalId == nid).Select(u => new { u.Id, u.FullName }).FirstOrDefaultAsync(ct);
+            var ban = new Ban
+            {
+                UserId = acc?.Id, NationalId = Cut(nid, 20), Name = Cut(r.S("Name"), 150) ?? acc?.FullName ?? nid, Reason = Cut(r.S("Note"), 500) ?? Sentinel,
+                StartsOn = banDay, EndsOn = null, Source = BanSources.LegacyExcluded, CreatedAt = _now, CreatedByName = Sentinel,
+            };
+            Add(ban);
+            Link(LegacyKinds.Excluded, r.Id, ban.Id);
+            _r.Count("bans.excluded");
+        }
+        await FlushAsync(true);
 
         // ── load the rest ──
         var bills = await src.ReadAsync("Bills", ct);
@@ -704,9 +736,6 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
         var emails = existing.Select(u => u.Email.ToLowerInvariant()).ToHashSet();
         var nids = existing.Where(u => u.NationalId != null).Select(u => u.NationalId!).ToHashSet();
         foreach (var u in existing) fullNames[u.Id] = u.FullName;
-        var today = DateOnly.FromDateTime(_now.ToOffset(Riyadh).DateTime);
-        var blocked = (await src.ReadAsync("Black_List", _ct))
-            .Where(b => b.Dt("BL_EndDate") is not { } e || DateOnly.FromDateTime(e) >= today).Select(b => b.I("BL_Member_FK") ?? 0).ToHashSet();
 
         var created = new HashSet<Guid>();
         await foreach (var m in src.StreamAsync("Members", _ct))
@@ -753,7 +782,7 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
                 AltPhone = Phones.Normalize(m.S("MEM_AnotherContactNo_Key"), m.S("MEM_AnotherContactNo")) is { Length: <= 16 } alt ? alt : null,
                 AddressCountry = Cut(m.S("PaymentAddressCountry"), 60), AddressCity = Cut(m.S("PaymentAddressCity"), 60),
                 District = Cut(m.S("PaymentAddressState"), 60), PostalCode = Cut(m.S("PaymentAddressPostcode"), 10), Street = Cut(m.S("PaymentAddressStreet1"), 120),
-                Active = !blocked.Contains(m.Id) && !(m.I("MEM_Status_FK") is { } s && map.AccountSuspended.Contains(s)),
+                Active = !(m.I("MEM_Status_FK") is { } s && map.AccountSuspended.Contains(s)),
             };
             if (!u.Active) _r.Count("members.suspended");
             phones[phone] = (u.Id, Roles.Owner);

@@ -35,7 +35,9 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
             CREATE TABLE C_Bidding_Status (ID int, Bidding_Status nvarchar(50));
             INSERT C_Bidding_Status VALUES (1, N'جاري'), (2, N'منتهي'), (3, N'ملغي');
             CREATE TABLE Black_List (ID int, BL_Member_FK int, BL_StartDate date, BL_EndDate date);
-            INSERT Black_List VALUES (1, 3, '2024-01-01', NULL);
+            INSERT Black_List VALUES (1, 3, '2024-01-01', NULL), (2, 1, '2023-01-01', '2023-06-30');
+            CREATE TABLE MemberExcluded (Id int, IdentityNumber nvarchar(50), Name nvarchar(255), Note nvarchar(255));
+            INSERT MemberExcluded VALUES (1, '1000000002', N'ماجد', N'مستبعد بقرار اللجنة'), (2, '2999999999', N'شخص غير مسجل', NULL);
             CREATE TABLE Members (ID int, MEM_FirstName nvarchar(50), MEM_SecondName nvarchar(50), MEM_ThirdName nvarchar(50), MEM_FamilyName nvarchar(50),
               MEM_Sex_FK int, MEM_Nationality_FK int, MEM_ID_No nvarchar(50), MEM_Password nvarchar(200), MEM_DOB date, MEM_Mobile nvarchar(50), MEM_Mobile_Key nvarchar(10),
               MEM_Register_Date date, MEM_Status_FK int, MEM_Email nvarchar(100), WalletAmmount float, MEM_BankCardIBANNumber nvarchar(255), MEM_BankCardBankName nvarchar(255), MEM_BankCardUserName nvarchar(255));
@@ -178,7 +180,18 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
             Assert.Equal("SA", s.Nationality);
             Assert.Equal("male", s.Gender);
             Assert.StartsWith("member2@", m.Email);
-            Assert.False((await db.Users.SingleAsync(u => u.Phone == "0551110003")).Active);
+            // Black_List and MemberExcluded become bans with their dates; the accounts stay active (they can sign in and pay)
+            var k = await db.Users.SingleAsync(u => u.Phone == "0551110003");
+            Assert.True(k.Active);
+            var kb = await db.Bans.SingleAsync(b => b.UserId == k.Id);
+            Assert.Equal(new DateOnly(2024, 1, 1), kb.StartsOn);
+            Assert.Null(kb.EndsOn);
+            Assert.Equal(BanSources.LegacyBlacklist, kb.Source);
+            Assert.Equal(new DateOnly(2023, 6, 30), (await db.Bans.SingleAsync(b => b.UserId == s.Id)).EndsOn);
+            var excluded = await db.Bans.SingleAsync(b => b.NationalId == "1000000002");
+            Assert.Equal(m.Id, excluded.UserId);
+            Assert.Equal("مستبعد بقرار اللجنة", excluded.Reason);
+            Assert.True(await db.Bans.AnyAsync(b => b.NationalId == "2999999999" && b.UserId == null && b.Source == BanSources.LegacyExcluded));
             Assert.True(await db.Users.AnyAsync(u => u.Phone == "L-4" && u.NationalId == null));
             Assert.True(await db.BankAccounts.AnyAsync(b => b.UserId == s.Id && b.Status == BankAccountStatuses.Pending));
             Assert.Equal(0m, await db.BalanceOfAsync(m.Id));
@@ -261,6 +274,7 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
         Assert.False(again.Counts.ContainsKey("settings.fromLegacy"));
         Assert.False(again.Counts.ContainsKey("tickets"));
         Assert.DoesNotContain(again.Counts.Keys, k => k.StartsWith("exemptions."));
+        Assert.DoesNotContain(again.Counts.Keys, k => k.StartsWith("bans."));
         await using (var scope = app.Services.CreateAsyncScope())
             Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<SammhaDbContext>().Requests.CountAsync(r => r.Number == "SM-5001"));
     }

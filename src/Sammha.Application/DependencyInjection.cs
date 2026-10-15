@@ -28,6 +28,7 @@ public static class DependencyInjection
         s.AddScoped<AuctionEngine>();
         s.AddScoped<Sweeper>();
         s.AddScoped<Features.Finance.PayoutEngine>();
+        s.AddScoped<Features.Bans.BanChecker>();
 
         // CQRS: every command and query goes through MediatR
         s.AddMediatR(m =>
@@ -36,6 +37,7 @@ public static class DependencyInjection
             m.AddOpenBehavior(typeof(LoggingBehavior<,>));
             m.AddOpenBehavior(typeof(ActivityBehavior<,>));
             m.AddOpenBehavior(typeof(DelegationGuardBehavior<,>));
+            m.AddOpenBehavior(typeof(BanGuardBehavior<,>));
         });
         return s;
     }

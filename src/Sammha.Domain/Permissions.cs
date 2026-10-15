@@ -47,6 +47,8 @@ public static class Permissions
     public const string ViolationsManage = "violations.manage";
     public const string ExemptionsView = "exemptions.view";
     public const string ExemptionsManage = "exemptions.manage";
+    public const string BansView = "bans.view";
+    public const string BansManage = "bans.manage";
 
     public record Info(string Key, string Group, string Label, string Description);
 
@@ -83,6 +85,8 @@ public static class Permissions
         new(TicketsReply, "الدعم", "الرد على التذاكر", "الرد على العميل وكتابة ملاحظات داخلية"),
         new(TicketsManage, "الدعم", "إدارة التذاكر", "تغيير الحالة والأولوية والإسناد"),
         new(EventsManage, "المحتوى", "المواعيد والفعاليات", "إضافة فعاليات الإبل وتعديلها وحذفها"),
+        new(BansView, "العملاء", "عرض قائمة الحظر", "الملاك المحظورون من المشاركة ومدة الحظر وسببه"),
+        new(BansManage, "العملاء", "حظر الملاك ورفع الحظر", "حظر مالك من المزايدة والشراء والبيع وتقديم الطلبات لمدة محددة أو دائمًا، وتعديل المدة ورفع الحظر مع ذكر السبب"),
         new(OwnersView, "العملاء", "بيانات العملاء (CRM)", "قائمة الملاك وشعاراتهم حسب الفئة؛ الهوية والجوال يظهران مخفيين جزئيًا"),
         new(OwnersFull, "العملاء", "البيانات الكاملة والطباعة والتصدير", "إظهار رقم الهوية والجوال كاملين، وطباعة التقرير وتصديره (يُسجَّل في سجل التغييرات)"),
         new(UsersView, "المستخدمون", "عرض المستخدمين", "قائمة الملاك والموظفين"),

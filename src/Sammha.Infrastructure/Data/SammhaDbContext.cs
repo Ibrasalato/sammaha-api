@@ -52,6 +52,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<Violation> Violations => Set<Violation>();
     public DbSet<Festival> Festivals => Set<Festival>();
     public DbSet<Exemption> Exemptions => Set<Exemption>();
+    public DbSet<Ban> Bans => Set<Ban>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
     {
@@ -342,6 +343,20 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.Property(x => x.CancelledByName).HasMaxLength(120);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ViolationType>().WithMany().HasForeignKey(x => x.TypeId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<Ban>(e =>
+        {
+            e.Property(x => x.NationalId).HasMaxLength(20);
+            e.Property(x => x.Name).HasMaxLength(150);
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.Property(x => x.Source).HasMaxLength(30);
+            e.Property(x => x.CreatedByName).HasMaxLength(120);
+            e.Property(x => x.LiftedByName).HasMaxLength(120);
+            e.Property(x => x.LiftReason).HasMaxLength(500);
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.NationalId);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<Exemption>(e =>
         {

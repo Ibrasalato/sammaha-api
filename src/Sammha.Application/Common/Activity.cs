@@ -15,11 +15,11 @@ public interface IActivityWriter
 public static class ActivityCategories
 {
     public const string Auth = "auth", Account = "account", Requests = "requests", Auctions = "auctions", Payments = "payments", Finance = "finance",
-        Users = "users", Settings = "settings", Tickets = "tickets", Delegation = "delegation", Content = "content", Reports = "reports", Certificates = "certificates", Violations = "violations", Exemptions = "exemptions";
+        Users = "users", Settings = "settings", Tickets = "tickets", Delegation = "delegation", Content = "content", Reports = "reports", Certificates = "certificates", Violations = "violations", Exemptions = "exemptions", Bans = "bans";
     public static readonly Dictionary<string, string> Arabic = new()
     {
         [Auth] = "الدخول", [Account] = "الحساب", [Requests] = "طلبات الشعارات", [Auctions] = "المزادات", [Payments] = "المدفوعات", [Finance] = "المالية",
-        [Users] = "المستخدمون والأدوار", [Settings] = "الإعدادات", [Tickets] = "الشكاوى والبلاغات", [Delegation] = "التفويض", [Content] = "المحتوى", [Reports] = "التقارير", [Certificates] = "الشهادات", [Violations] = "المخالفات", [Exemptions] = "استثناءات المشاركة",
+        [Users] = "المستخدمون والأدوار", [Settings] = "الإعدادات", [Tickets] = "الشكاوى والبلاغات", [Delegation] = "التفويض", [Content] = "المحتوى", [Reports] = "التقارير", [Certificates] = "الشهادات", [Violations] = "المخالفات", [Exemptions] = "استثناءات المشاركة", [Bans] = "الحظر",
     };
 }
 
@@ -81,6 +81,7 @@ public static class ActivityLabels
         ["RequestExemptionCommand"] = ("طلب استثناء مشاركة بدون اسم", ActivityCategories.Exemptions), ["CancelMyExemptionCommand"] = ("سحب طلب استثناء", ActivityCategories.Exemptions),
         ["PriceExemptionCommand"] = ("تحديد غرامة استثناء", ActivityCategories.Exemptions), ["RejectExemptionCommand"] = ("رفض طلب استثناء", ActivityCategories.Exemptions),
         ["RevokeExemptionCommand"] = ("إلغاء وثيقة استثناء", ActivityCategories.Exemptions), ["PayExemptionCommand"] = ("سداد غرامة استثناء", ActivityCategories.Payments),
+        ["CreateBanCommand"] = ("حظر مالك", ActivityCategories.Bans), ["UpdateBanCommand"] = ("تعديل حظر", ActivityCategories.Bans), ["LiftBanCommand"] = ("رفع حظر", ActivityCategories.Bans),
         ["SaveDelegationCommand"] = ("حفظ تفويض", ActivityCategories.Delegation), ["RevokeDelegationCommand"] = ("إلغاء تفويض", ActivityCategories.Delegation),
         ["ActAsCommand"] = ("الدخول بتفويض", ActivityCategories.Delegation), ["StopActingCommand"] = ("الخروج من التفويض", ActivityCategories.Delegation),
     };
@@ -181,6 +182,19 @@ public class ActivityBehavior<TRequest, TResponse>(ICurrentUser current, IAppDbC
 }
 
 /// <summary>In a delegated session only the granted scopes go through; account, security, bank and delegation stay with the owner.</summary>
+/// <summary>«الحظر»: a banned owner (or a delegate acting for one) cannot bid, buy, sell or send new requests while the ban is in force</summary>
+public class BanGuardBehavior<TRequest, TResponse>(ICurrentUser current, Access access, Features.Bans.BanChecker bans) : IPipelineBehavior<TRequest, TResponse> where TRequest : notnull
+{
+    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken ct)
+    {
+        if (current.Id == null || !BanStatuses.BlockedCommands.Contains(typeof(TRequest).Name)) return await next();
+        var me = await access.MeAsync(ct);
+        if (me.Role == Roles.Owner && await bans.ActiveForAsync(me, ct) is { } b)
+            throw DomainException.Forbidden(Features.Bans.BanChecker.Message(b));
+        return await next();
+    }
+}
+
 public class DelegationGuardBehavior<TRequest, TResponse>(ICurrentUser current, Access access) : IPipelineBehavior<TRequest, TResponse> where TRequest : notnull
 {
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken ct)
