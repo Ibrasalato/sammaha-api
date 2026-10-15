@@ -45,6 +45,8 @@ public static class Permissions
     public const string NamesLogos = "names.logos";
     public const string ViolationsView = "violations.view";
     public const string ViolationsManage = "violations.manage";
+    public const string ExemptionsView = "exemptions.view";
+    public const string ExemptionsManage = "exemptions.manage";
 
     public record Info(string Key, string Group, string Label, string Description);
 
@@ -74,6 +76,8 @@ public static class Permissions
         new(NamesLatin, "سجل الأسماء", "الكتابة اللاتينية للأسماء", "تصحيح كتابة الأسماء بالحروف اللاتينية كما تظهر في الموقع الإنجليزي والشهادات"),
         new(ViolationsView, "المخالفات", "عرض المخالفات", "قائمة المخالفات والغرامات الصادرة للملاك والبحث فيها وتنزيل مرفقاتها"),
         new(ViolationsManage, "المخالفات", "إصدار المخالفات وإلغاؤها", "إصدار مخالفة لمالك من أنواع المخالفات المعتمدة مع الوصف والمرفق، وإلغاء مخالفة غير مسددة مع ذكر السبب"),
+        new(ExemptionsView, "استثناءات المشاركة", "عرض طلبات الاستثناء", "طلبات الملاك للمشاركة في المهرجانات بدون اسم، ووثائق الاستثناء الصادرة"),
+        new(ExemptionsManage, "استثناءات المشاركة", "دراسة طلبات الاستثناء", "تحديد غرامة عدم التسمية للطلب أو رفضه، وإلغاء وثيقة استثناء صادرة مع ذكر السبب"),
         new(ReportsMarks, "التقارير", "تقرير الشعارات", "كل المزادات برقمها: الطلب والمالك والفائز وقيمة الفوز والفاتورة، مع الطباعة والتصدير"),
         new(TicketsView, "الدعم", "عرض الشكاوى والبلاغات", "قائمة التذاكر وتفاصيلها"),
         new(TicketsReply, "الدعم", "الرد على التذاكر", "الرد على العميل وكتابة ملاحظات داخلية"),

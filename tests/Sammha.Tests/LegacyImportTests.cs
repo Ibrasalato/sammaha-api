@@ -54,11 +54,13 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
             CREATE TABLE CompoundNames_Details (ID int, CompDet_Master_FK int, CompDet_Name nvarchar(150), CompDet_Name_F nvarchar(150));
             CREATE TABLE Members_Notifications (ID int, MemNotf_Date nvarchar(50), MemNotf_MEM_ID_FK int, MemNotf_Description nvarchar(1000), MemNotf_IsSeen bit, MemNotf_Link nvarchar(500));
             CREATE TABLE C_RequestType (Id int, Name nchar(100));
-            INSERT C_RequestType VALUES (1, N'نقل ملكية'), (2, N'طرح للبيع');
+            INSERT C_RequestType VALUES (1, N'نقل ملكية'), (2, N'طرح للبيع'), (3, N'طلب اسم مستثنى');
+            CREATE TABLE C_RequestTypeType (Id int, ReuestTypeId int, Name nvarchar(255), PriceNoVat float, StateCode bit);
+            INSERT C_RequestTypeType VALUES (2, 3, N'استثناء فردي بكار', 5000, 0), (17, 3, N'استثناء سيف الملك', 10000, 0);
             CREATE TABLE C_RequestStatus (Id int, Name nchar(100));
-            INSERT C_RequestStatus VALUES (1, N'جديد'), (2, N'تمت الموافقة'), (3, N'مرفوض');
+            INSERT C_RequestStatus VALUES (1, N'جديد'), (2, N'تمت الموافقة'), (3, N'مرفوض'), (4, N'تم التنفيذ');
             CREATE TABLE Request (Id int, RequestTypeId int, RequestStatusId int, MemberId int, Title nvarchar(500), Name nvarchar(500), Biddings_WinnersId int, ToMemberId int,
-              DateTime datetime, LatestNote nvarchar(500), LatestNoteBy nvarchar(500), LatestUpdateDateTime datetime, BillId int, RejectResion nvarchar(500));
+              DateTime datetime, LatestNote nvarchar(500), LatestNoteBy nvarchar(500), LatestUpdateDateTime datetime, BillId int, RejectResion nvarchar(500), RequestTypeTypeId int);
             CREATE TABLE PaymentCard (ID int, CardNumber nvarchar(50));
             INSERT PaymentCard VALUES (1, '4111111111111111');
             CREATE TABLE C_Settings (ID int, Sett_GuaranteeValue int, Sett_GuaranteeValue_Withdrawn int, Sett_Fardeyya_BidStartValue int, Sett_Manqeyya_BidStartValue int,
@@ -97,7 +99,9 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
               (9009, 7, 1, 7003, 100, 0, 100, '{past}', 1, '{past}', 0, 0, NULL, 0, NULL);
             INSERT CompoundNames_Master VALUES (8001, 1, '{past2}', 100, 15, 115, 1, '{past2}');
             INSERT CompoundNames_Details VALUES (1, 8001, N'شعار الغيم البعيد الثاني', NULL), (2, 8001, N'شعار الغيم البعيد الثالث', NULL);
-            INSERT Request VALUES (1, 1, 2, 1, N'هبة', N'شعار الغيم البعيد الثالث', NULL, 2, '{past2}', NULL, N'الإدارة', '{past2}', NULL, NULL), (2, 2, 1, 1, N'بيع', N'شعار الغيم البعيد', 1, NULL, '{past2}', NULL, NULL, NULL, NULL, NULL);
+            INSERT Request VALUES (1, 1, 2, 1, N'هبة', N'شعار الغيم البعيد الثالث', NULL, 2, '{past2}', NULL, N'الإدارة', '{past2}', NULL, NULL, NULL), (2, 2, 1, 1, N'بيع', N'شعار الغيم البعيد', 1, NULL, '{past2}', NULL, NULL, NULL, NULL, NULL, NULL),
+              (3, 3, 4, 1, N'مشاركة بدون اسم', N'الشريحة 900115000123456', NULL, NULL, '{past2}', NULL, N'اللجنة', '{past2}', NULL, NULL, 2),
+              (4, 3, 3, 2, N'استثناء', N'رقم الشريحة: 900115000654321', NULL, NULL, '{past2}', NULL, N'اللجنة', '{past2}', NULL, N'الشريحة مربوطة باسم', 17);
             INSERT Members_Notifications VALUES (1, '15/03/2025 10:30:00', 1, N'تم قبول طلبك', 1, NULL), (2, 'garbage', 1, N'رسالة قديمة', 0, NULL);
             """);
     }
@@ -221,6 +225,20 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
             Assert.Equal(ReservedSources.Transfer, moved.Source);
             Assert.True(await db.Transfers.AnyAsync(t => t.Number == "NT-L1" && t.Status == TransferStatuses.Completed && t.FromId == s.Id));
 
+            // «طلب اسم مستثنى» → exemption requests; a done one carries a signed document
+            var ex = await db.Exemptions.SingleAsync(x => x.Number == "EX-L3");
+            Assert.Equal(ExemptionStatuses.Paid, ex.Status);
+            Assert.Equal("900115000123456", ex.CamelChip);
+            Assert.Equal(NameTypes.Bakkar, ex.CamelType);
+            Assert.Equal("فردي بكار", ex.FestivalName);
+            Assert.Equal(5000m, ex.Amount);
+            Assert.Equal(s.Id, ex.UserId);
+            Assert.False(string.IsNullOrEmpty(ex.Signature));
+            var rejected = await db.Exemptions.SingleAsync(x => x.Number == "EX-L4");
+            Assert.Equal(ExemptionStatuses.Rejected, rejected.Status);
+            Assert.Equal("سيف الملك", rejected.FestivalName);
+            Assert.Equal("الشريحة مربوطة باسم", rejected.RejectReason);
+
             var notes = await db.Notifications.Where(n => n.UserId == s.Id && n.Kind == "legacy").ToListAsync();
             Assert.Equal(2, notes.Count);
             Assert.Contains(notes, n => n.Read && n.CreatedAt.Year == 2025);
@@ -242,6 +260,7 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
         Assert.False(again.Counts.ContainsKey("requests"));
         Assert.False(again.Counts.ContainsKey("settings.fromLegacy"));
         Assert.False(again.Counts.ContainsKey("tickets"));
+        Assert.False(again.Counts.Keys.Any(k => k.StartsWith("exemptions.")));
         await using (var scope = app.Services.CreateAsyncScope())
             Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<SammhaDbContext>().Requests.CountAsync(r => r.Number == "SM-5001"));
     }

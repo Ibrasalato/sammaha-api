@@ -50,7 +50,7 @@ public sealed class LegacyReport
 /// second run adds nothing twice. Runs in one transaction: a dry run rolls it back after the report.
 /// Never imported: staff accounts (recreated), saved payment cards, logs and job tables.
 /// </summary>
-public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, SettingsStore settings, IOptions<PlatformOptions> rules, TimeProvider clock)
+public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, SettingsStore settings, IOptions<PlatformOptions> rules, TimeProvider clock, ICertificateSigner signer)
 {
     public const string Sentinel = "المنصة السابقة";
     private static readonly TimeSpan Riyadh = TimeSpan.FromHours(3);
@@ -473,7 +473,57 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
             _r.Count($"transfers.{status}");
             await FlushAsync(true);
         }
-        foreach (var g in oldRequests.Where(q => !Ar.Has(reqTypes.GetValueOrDefault(q.I("RequestTypeId") ?? 0), "نقل")).GroupBy(q => reqTypes.GetValueOrDefault(q.I("RequestTypeId") ?? 0) ?? "?"))
+        // ── «طلب اسم مستثنى»: taking part in a festival without a name, against a fine (the old Request table, types named «مستثنى/استثناء») ──
+        bool IsExemption(Row q) => Ar.Has(reqTypes.GetValueOrDefault(q.I("RequestTypeId") ?? 0), "مستثن", "استثناء");
+        var categories = (await src.ReadAsync("C_RequestTypeType", ct)).ToDictionary(r => r.Id, r => (Name: r.S("Name") ?? "", Price: r.D("PriceNoVat") ?? 0));
+        foreach (var q in oldRequests.Where(IsExemption).OrderBy(q => q.Dt("DateTime")))
+        {
+            if (links.ContainsKey((LegacyKinds.Exemption, q.Id))) continue;
+            if (!users.TryGetValue(q.I("MemberId") ?? 0, out var owner)) { _r.Warn("exemptions.withoutMember"); continue; }
+            var cat = q.I("RequestTypeTypeId") is { } cid && categories.TryGetValue(cid, out var cv) ? cv : (Name: "", Price: 0m);
+            // the old platform kept the chip in the request's name or title
+            var chip = ChipIn(q.S("Name")) ?? ChipIn(q.S("Title"));
+            if (chip == null) _r.Warn("exemptions.withoutChip (review)");
+            var st = reqStatus.GetValueOrDefault(q.I("RequestStatusId") ?? 0);
+            var bill = q.I("BillId") is { } bid && billById.TryGetValue(bid, out var b) ? b : null;
+            var billPaid = bill != null && bill.B("Bill_IsPaied") && !bill.B("Bill_IsRefunded") && !bill.B("Bill_IsCancled");
+            var status = billPaid || Ar.Has(st, "تنفيذ", "تم الدفع") ? ExemptionStatuses.Paid
+                : Ar.Has(st, "رفض", "مرفوض") ? ExemptionStatuses.Rejected
+                : Ar.Has(st, "ملغ", "الغاء", "الغي", "سحب") ? ExemptionStatuses.Cancelled
+                : Ar.Has(st, "مقبول", "غير مدفوع", "قبول", "موافق") ? ExemptionStatuses.Priced
+                : ExemptionStatuses.Pending;
+            decimal? amount = bill?.D("Bill_Total") is { } total and > 0 ? Math.Round(total, 2, MidpointRounding.AwayFromZero) : cat.Price > 0 ? cat.Price : null;
+            if (status == ExemptionStatuses.Priced && amount == null) status = ExemptionStatuses.Pending;
+            var at = At(q.Dt("DateTime")) ?? _now;
+            var done = At(q.Dt("LatestUpdateDateTime")) ?? at;
+            var festival = cat.Name.Length == 0 ? Sentinel : Cut(System.Text.RegularExpressions.Regex.Replace(cat.Name.Trim(), @"^(استثناء|غرامة\s*-?)\s*", ""), 150)!;
+            var e = new Exemption
+            {
+                Number = $"EX-L{q.Id}", UserId = owner, CamelChip = chip ?? "", CamelType = Ar.Has(cat.Name, "بكار", "بكره", "بكرة") ? NameTypes.Bakkar : NameTypes.Qaadan,
+                FestivalName = festival, OwnerNote = Cut(q.S("Title"), 500), Status = status, CreatedAt = at, Amount = amount,
+                StaffNote = Cut(q.S("LatestNote"), 500), PricedAt = amount != null && status != ExemptionStatuses.Pending ? done : null,
+                PricedByName = amount != null && status != ExemptionStatuses.Pending ? Cut(q.S("LatestNoteBy"), 120) ?? Sentinel : null,
+                RejectedAt = status == ExemptionStatuses.Rejected ? done : null, RejectReason = status == ExemptionStatuses.Rejected ? Cut(q.S("RejectResion") ?? q.S("LatestNote"), 500) ?? Sentinel : null,
+                RejectedByName = status == ExemptionStatuses.Rejected ? Cut(q.S("LatestNoteBy"), 120) ?? Sentinel : null,
+                CancelledAt = status == ExemptionStatuses.Cancelled ? done : null,
+            };
+            if (status == ExemptionStatuses.Paid)
+            {
+                var paidAt = At(bill?.Dt("Bill_PayDateTime")) ?? done;
+                var who = await db.Users.AsNoTracking().Where(u => u.Id == owner).Select(u => new { u.NationalId, u.FullNameEn }).FirstOrDefaultAsync(ct);
+                e.PaidAt = paidAt;
+                e.OwnerNameAr = fullNames.GetValueOrDefault(owner, "");
+                e.OwnerNameEn = who?.FullNameEn;
+                e.NationalId = who?.NationalId;
+                e.IssuedAt = DateTimeOffset.FromUnixTimeSeconds(paidAt.ToUnixTimeSeconds());
+                e.Signature = signer.Sign(e.SignedContent());
+            }
+            Add(e);
+            Link(LegacyKinds.Exemption, q.Id, e.Id);
+            _r.Count($"exemptions.{status}");
+            await FlushAsync(true);
+        }
+        foreach (var g in oldRequests.Where(q => !Ar.Has(reqTypes.GetValueOrDefault(q.I("RequestTypeId") ?? 0), "نقل") && !IsExemption(q)).GroupBy(q => reqTypes.GetValueOrDefault(q.I("RequestTypeId") ?? 0) ?? "?"))
             _r.Warn($"later.Request.type[{g.Key}]", g.Count());
 
         // ── wallets: past top-ups and refunds as history, then one adjustment so the balance equals the old balance ──
@@ -845,6 +895,15 @@ public sealed class LegacyImporter(SammhaDbContext db, IPasswordHasher hasher, S
         if (DateTime.TryParseExact(t, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var d)) return At(d);
         if (DateTime.TryParse(t, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out d)) return At(d);
         return null;
+    }
+
+    /// <summary>a camel chip number written in free text: the longest run of letters and digits with at least 6 digits</summary>
+    public static string? ChipIn(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var best = System.Text.RegularExpressions.Regex.Matches(text, "[A-Za-z0-9]+").Select(m => m.Value)
+            .Where(v => v.Count(char.IsAsciiDigit) >= 6 && v.Length <= 40).OrderByDescending(v => v.Length).FirstOrDefault();
+        return best?.ToUpperInvariant();
     }
 
     private static string? Cut(string? s, int max) => s == null ? null : s.Length <= max ? s : s[..max];

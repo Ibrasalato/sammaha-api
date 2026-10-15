@@ -77,7 +77,7 @@ public static class BidDepositStates
 
 public static class NotificationKinds
 {
-    public const string Outbid = "outbid", Won = "won", Lost = "lost", Reviewed = "reviewed", AuctionOpened = "auction_opened", AuctionUpdate = "auction_update", Refund = "refund", Ticket = "ticket", Reminder = "reminder", Delegation = "delegation", Certificate = "certificate", Transfer = "transfer", Violation = "violation";
+    public const string Outbid = "outbid", Won = "won", Lost = "lost", Reviewed = "reviewed", AuctionOpened = "auction_opened", AuctionUpdate = "auction_update", Refund = "refund", Ticket = "ticket", Reminder = "reminder", Delegation = "delegation", Certificate = "certificate", Transfer = "transfer", Violation = "violation", Exemption = "exemption";
 }
 
 public static class TicketKinds
@@ -107,6 +107,6 @@ public static class OtpPurposes
 
 public static class PaymentPurposes
 {
-    public const string TopUp = "topup", Deposit = "deposit", Invoice = "invoice", BidDeposit = "bid_deposit", Listing = "listing", Transfer = "transfer", Violation = "violation";
-    public static readonly string[] All = [TopUp, Deposit, Invoice, BidDeposit, Listing, Transfer, Violation];
+    public const string TopUp = "topup", Deposit = "deposit", Invoice = "invoice", BidDeposit = "bid_deposit", Listing = "listing", Transfer = "transfer", Violation = "violation", Exemption = "exemption";
+    public static readonly string[] All = [TopUp, Deposit, Invoice, BidDeposit, Listing, Transfer, Violation, Exemption];
 }

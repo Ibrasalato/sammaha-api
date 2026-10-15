@@ -78,6 +78,8 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
                 ?? throw new DomainException("طلب النقل غير متاح للسداد"),
             PaymentPurposes.Violation => await db.Violations.Where(v => v.Id == reference && v.UserId == u.Id && v.Status == ViolationStatuses.Unpaid && v.Amount > 0).Select(v => (decimal?)v.Amount).FirstOrDefaultAsync(ct)
                 ?? throw new DomainException("المخالفة غير متاحة للسداد"),
+            PaymentPurposes.Exemption => await db.Exemptions.Where(x => x.Id == reference && x.UserId == u.Id && x.Status == ExemptionStatuses.Priced && x.Amount > 0).Select(x => x.Amount).FirstOrDefaultAsync(ct)
+                ?? throw new DomainException("طلب الاستثناء غير متاح للسداد"),
             _ => amount >= 10 && amount <= 100_000 ? decimal.Round(amount, 2) : throw new DomainException("أقل مبلغ للشحن 10 ريال"),
         };
         var p = new Payment { UserId = u.Id, Purpose = purpose, Ref = reference, Amount = amount, CreatedAt = Now, Method = method ?? PayChannels.Card,
@@ -114,6 +116,7 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
             PaymentPurposes.BidDeposit => nameof(PayBidDepositCommand),
             PaymentPurposes.Listing => nameof(BuyListingCommand),
             PaymentPurposes.Violation => nameof(Violations.PayViolationCommand),
+            PaymentPurposes.Exemption => nameof(Exemptions.PayExemptionCommand),
             _ => nameof(TopUpCommand),
         };
         var d = await access.DelegationAsync(ct) ?? throw DomainException.Unauthorized("انتهى التفويض، سجّل الدخول من جديد");
@@ -156,7 +159,7 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
         var prefix = purpose switch
         {
             PaymentPurposes.Deposit => "r", PaymentPurposes.Invoice => "i", PaymentPurposes.BidDeposit => "a",
-            PaymentPurposes.Listing => "l", PaymentPurposes.Transfer => "t", PaymentPurposes.Violation => "vl", _ => null,
+            PaymentPurposes.Listing => "l", PaymentPurposes.Transfer => "t", PaymentPurposes.Violation => "vl", PaymentPurposes.Exemption => "ex", _ => null,
         };
         if (prefix != null && reference is { } r) keys.Add($"{prefix}:{r}");
         return keys;
@@ -204,6 +207,7 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
                 case PaymentPurposes.Listing: await sender.Send(new BuyListingCommand(reference), ct); break;
                 case PaymentPurposes.Transfer: await sender.Send(new Features.Transfers.PayTransferFeeCommand(reference), ct); break;
                 case PaymentPurposes.Violation: await sender.Send(new Violations.PayViolationCommand(reference), ct); break;
+                case PaymentPurposes.Exemption: await sender.Send(new Exemptions.PayExemptionCommand(reference), ct); break;
             }
             // the entry guarantee is paid from the wallet, not by spending the card payment: mark it used so it is not retried
             if (p.Purpose == PaymentPurposes.BidDeposit && p.UsedAt == null)
@@ -236,7 +240,8 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
                     && !db.BidDeposits.Any(d => d.AuctionId == p.Ref && d.UserId == p.UserId))
                 || (p.Purpose == PaymentPurposes.Listing && db.Listings.Any(l => l.Id == p.Ref && l.Status == ListingStatuses.Live))
                 || (p.Purpose == PaymentPurposes.Transfer && db.Transfers.Any(t => t.Id == p.Ref && t.FromId == p.UserId && t.Status == TransferStatuses.PendingPayment))
-                || (p.Purpose == PaymentPurposes.Violation && db.Violations.Any(v => v.Id == p.Ref && v.UserId == p.UserId && v.Status == ViolationStatuses.Unpaid)))
+                || (p.Purpose == PaymentPurposes.Violation && db.Violations.Any(v => v.Id == p.Ref && v.UserId == p.UserId && v.Status == ViolationStatuses.Unpaid))
+                || (p.Purpose == PaymentPurposes.Exemption && db.Exemptions.Any(x => x.Id == p.Ref && x.UserId == p.UserId && x.Status == ExemptionStatuses.Priced)))
             .OrderBy(p => p.PaidAt).Select(p => new { p.Id, p.UserId, p.Purpose, p.Ref }).Take(20).ToListAsync(ct);
         var done = 0;
         foreach (var x in due)
@@ -289,6 +294,7 @@ public class PaymentHandlers(IAppDbContext db, TimeProvider clock, Access access
         PaymentPurposes.Listing => "شراء اسم — منصة سمّها",
         PaymentPurposes.Transfer => "رسوم نقل ملكية اسم — منصة سمّها",
         PaymentPurposes.Violation => "سداد مخالفة — منصة سمّها",
+        PaymentPurposes.Exemption => "غرامة عدم تسمية (استثناء مشاركة) — منصة سمّها",
         _ => "شحن محفظة — منصة سمّها",
     };
 }

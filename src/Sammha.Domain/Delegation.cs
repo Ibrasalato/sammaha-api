@@ -56,10 +56,10 @@ public static class DelegationScopes
     public const string Requests = "requests", Invest = "invest", Bids = "bids", Payments = "payments", Sales = "sales", Tickets = "tickets";
     public static readonly (string Key, string Label, string Description)[] Catalog =
     [
-        (Requests, "طلبات الشعارات", "تقديم طلبات الشعارات والأسماء المركبة، ودفع ضمانها، وسحب اسم أو إلغاء الطلب"),
+        (Requests, "طلبات الشعارات", "تقديم طلبات الشعارات والأسماء المركبة وطلبات الاستثناء من التسمية، ودفع ضمانها، وسحب اسم أو إلغاء الطلب"),
         (Invest, "استثمار الاسم", "تقديم طلبات استثمار الاسم ودفع رسوم الدراسة"),
         (Bids, "المزايدة والشراء", "المزايدة والمزايدة الآلية والمتابعة، وضمان دخول المزاد، وشراء الأسماء المعروضة"),
-        (Payments, "المحفظة والفواتير", "شحن المحفظة وسداد الفواتير والمخالفات"),
+        (Payments, "المحفظة والفواتير", "شحن المحفظة وسداد الفواتير والمخالفات وغرامات الاستثناء"),
         (Sales, "بيع الأسماء", "عرض أسماء المالك للبيع بالمزاد أو بسعر ثابت وإلغاء العرض"),
         (Tickets, "الشكاوى والاستفسارات", "تقديم الشكاوى والاستفسارات ومتابعتها"),
     ];
@@ -69,10 +69,10 @@ public static class DelegationScopes
     /// <summary>the scope each owner command needs; commands not listed are for the owner alone</summary>
     public static readonly Dictionary<string, string> ByCommand = new()
     {
-        ["CreateRequestCommand"] = Requests, ["PayDepositCommand"] = Requests, ["CancelMyRequestCommand"] = Requests, ["WithdrawNameCommand"] = Requests, ["CreateCompoundRequestCommand"] = Requests,
+        ["CreateRequestCommand"] = Requests, ["RequestExemptionCommand"] = Requests, ["CancelMyExemptionCommand"] = Requests, ["PayDepositCommand"] = Requests, ["CancelMyRequestCommand"] = Requests, ["WithdrawNameCommand"] = Requests, ["CreateCompoundRequestCommand"] = Requests,
         ["CreateInvestmentRequestCommand"] = Invest,
         ["PlaceBidCommand"] = Bids, ["SetAutoBidCommand"] = Bids, ["CancelAutoBidCommand"] = Bids, ["ToggleWatchCommand"] = Bids, ["PayBidDepositCommand"] = Bids, ["BuyListingCommand"] = Bids,
-        ["PayInvoiceCommand"] = Payments, ["PayViolationCommand"] = Payments, ["TopUpCommand"] = Payments, ["StartCardPaymentCommand"] = Payments,
+        ["PayInvoiceCommand"] = Payments, ["PayViolationCommand"] = Payments, ["PayExemptionCommand"] = Payments, ["TopUpCommand"] = Payments, ["StartCardPaymentCommand"] = Payments,
         ["CreateListingCommand"] = Sales, ["CancelListingCommand"] = Sales,
         ["SubmitTicketCommand"] = Tickets, ["FollowUpTicketCommand"] = Tickets,
     };

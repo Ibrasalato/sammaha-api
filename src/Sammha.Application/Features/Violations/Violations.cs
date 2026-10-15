@@ -510,6 +510,7 @@ public class FestivalHandlers(IAppDbContext db, Access access, TimeProvider cloc
         await using var uow = await db.BeginAsync(["festivals"], ct);
         var f = await db.Festivals.FirstOrDefaultAsync(x => x.Id == c.Id, ct) ?? throw DomainException.NotFound("المهرجان غير موجود");
         if (await db.Violations.AnyAsync(v => v.FestivalId == f.Id, ct)) throw new DomainException("صدرت مخالفات في هذا المهرجان، أوقفه بدل حذفه");
+        if (await db.Exemptions.AnyAsync(e => e.FestivalId == f.Id, ct)) throw new DomainException("قُدّمت طلبات استثناء في هذا المهرجان، أوقفه بدل حذفه");
         db.Festivals.Remove(f);
         await db.SaveChangesAsync(ct);
         await uow.CommitAsync(ct);

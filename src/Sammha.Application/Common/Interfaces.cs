@@ -41,6 +41,7 @@ public interface IAppDbContext
     DbSet<ViolationType> ViolationTypes { get; }
     DbSet<Violation> Violations { get; }
     DbSet<Festival> Festivals { get; }
+    DbSet<Exemption> Exemptions { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     /// <summary>next value of a database sequence (RequestNo, InvoiceNo, ListingNo, TicketNo, ViolationNo…)</summary>

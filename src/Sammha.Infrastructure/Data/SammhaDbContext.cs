@@ -51,6 +51,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
     public DbSet<ViolationType> ViolationTypes => Set<ViolationType>();
     public DbSet<Violation> Violations => Set<Violation>();
     public DbSet<Festival> Festivals => Set<Festival>();
+    public DbSet<Exemption> Exemptions => Set<Exemption>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder b)
     {
@@ -70,6 +71,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
         b.HasSequence<int>("TransferNo").StartsAt(1001);
         b.HasSequence<int>("PayRequestNo").StartsAt(1);
         b.HasSequence<int>("ViolationNo").StartsAt(1);
+        b.HasSequence<int>("ExemptionNo").StartsAt(1);
 
         b.Entity<User>(e =>
         {
@@ -341,6 +343,33 @@ public class SammhaDbContext : DbContext, IAppDbContext
             e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ViolationType>().WithMany().HasForeignKey(x => x.TypeId).OnDelete(DeleteBehavior.Restrict);
         });
+        b.Entity<Exemption>(e =>
+        {
+            e.Property(x => x.Number).HasMaxLength(20);
+            e.HasIndex(x => x.Number).IsUnique();
+            e.Property(x => x.CamelChip).HasMaxLength(40);
+            e.Property(x => x.CamelType).HasMaxLength(20);
+            e.Property(x => x.FestivalName).HasMaxLength(150);
+            e.Property(x => x.Race).HasMaxLength(150);
+            e.Property(x => x.OwnerNote).HasMaxLength(500);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.StaffNote).HasMaxLength(500);
+            e.Property(x => x.PricedByName).HasMaxLength(120);
+            e.Property(x => x.RejectReason).HasMaxLength(500);
+            e.Property(x => x.RejectedByName).HasMaxLength(120);
+            e.Property(x => x.OwnerNameAr).HasMaxLength(120);
+            e.Property(x => x.OwnerNameEn).HasMaxLength(120);
+            e.Property(x => x.NationalId).HasMaxLength(20);
+            e.Property(x => x.Signature).HasMaxLength(40);
+            e.Property(x => x.RevokedByName).HasMaxLength(120);
+            e.Property(x => x.RevokeReason).HasMaxLength(500);
+            e.HasIndex(x => new { x.UserId, x.CreatedAt });
+            e.HasIndex(x => new { x.Status, x.CreatedAt });
+            e.HasIndex(x => new { x.CamelChip, x.FestivalId });
+            e.HasIndex(x => x.FestivalId);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Festival>().WithMany().HasForeignKey(x => x.FestivalId).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<ActivityLog>(e =>
         {
             e.Property(x => x.ActorName).HasMaxLength(120);
@@ -417,7 +446,7 @@ public class SammhaDbContext : DbContext, IAppDbContext
 
     public async Task<int> NextNumberAsync(string sequence, CancellationToken ct = default)
     {
-        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo" or "CertificateNo" or "TransferNo" or "PayRequestNo" or "ViolationNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
+        if (sequence is not ("RequestNo" or "InvoiceNo" or "ListingNo" or "TicketNo" or "AuctionNo" or "WithdrawalNo" or "CertificateNo" or "TransferNo" or "PayRequestNo" or "ViolationNo" or "ExemptionNo")) throw new ArgumentException("unknown sequence", nameof(sequence));
         var conn = Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await Database.OpenConnectionAsync(ct);
         await using var cmd = conn.CreateCommand();
