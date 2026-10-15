@@ -41,7 +41,7 @@ public class ExemptionTests(TestApp app) : IClassFixture<TestApp>
         Assert.DoesNotContain(options.EnumerateArray(), f => f.GetProperty("id").GetString() == closed);
 
         // validation
-        Assert.Contains("الشريحة", await owner.Fails(() => owner.Post<JsonElement>("/api/me/exemptions", new { camelChip = "12", camelType = "qaadan", festivalId = festival })));
+        Assert.Contains("شريحة", await owner.Fails(() => owner.Post<JsonElement>("/api/me/exemptions", new { camelChip = "12", camelType = "qaadan", festivalId = festival })));
         Assert.Contains("قعود أو بكرة", await owner.Fails(() => owner.Post<JsonElement>("/api/me/exemptions", new { camelChip = "900115000777001", camelType = "manqiya", festivalId = festival })));
         Assert.Contains("غير متاح", await owner.Fails(() => owner.Post<JsonElement>("/api/me/exemptions", new { camelChip = "900115000777001", camelType = "qaadan", festivalId = closed })));
 

@@ -260,7 +260,7 @@ public class LegacyImportTests(TestApp app) : IClassFixture<TestApp>, IAsyncLife
         Assert.False(again.Counts.ContainsKey("requests"));
         Assert.False(again.Counts.ContainsKey("settings.fromLegacy"));
         Assert.False(again.Counts.ContainsKey("tickets"));
-        Assert.False(again.Counts.Keys.Any(k => k.StartsWith("exemptions.")));
+        Assert.DoesNotContain(again.Counts.Keys, k => k.StartsWith("exemptions."));
         await using (var scope = app.Services.CreateAsyncScope())
             Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<SammhaDbContext>().Requests.CountAsync(r => r.Number == "SM-5001"));
     }
