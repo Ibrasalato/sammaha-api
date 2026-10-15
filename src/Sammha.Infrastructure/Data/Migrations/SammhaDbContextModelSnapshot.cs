@@ -260,6 +260,70 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.ToTable("AutoBids");
                 });
 
+            modelBuilder.Entity("Sammha.Domain.Ban", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CreatedByName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateOnly?>("EndsOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("LiftReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("LiftedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LiftedByName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NationalId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateOnly>("StartsOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("NationalId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Bans");
+                });
+
             modelBuilder.Entity("Sammha.Domain.BankAccount", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -2493,6 +2557,14 @@ namespace Sammha.Infrastructure.Data.Migrations
                     b.HasIndex("Status", "CreatedAt");
 
                     b.ToTable("Withdrawals");
+                });
+
+            modelBuilder.Entity("Sammha.Domain.Ban", b =>
+                {
+                    b.HasOne("Sammha.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Sammha.Domain.BankAccount", b =>

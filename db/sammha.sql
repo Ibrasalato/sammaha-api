@@ -2540,3 +2540,64 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015110256_Bans'
+)
+BEGIN
+    CREATE TABLE [Bans] (
+        [Id] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NULL,
+        [NationalId] nvarchar(20) NULL,
+        [Name] nvarchar(150) NOT NULL,
+        [Reason] nvarchar(500) NOT NULL,
+        [StartsOn] date NOT NULL,
+        [EndsOn] date NULL,
+        [Source] nvarchar(30) NOT NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        [CreatedByName] nvarchar(120) NOT NULL,
+        [LiftedAt] datetimeoffset NULL,
+        [LiftedByName] nvarchar(120) NULL,
+        [LiftReason] nvarchar(500) NULL,
+        CONSTRAINT [PK_Bans] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_Bans_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015110256_Bans'
+)
+BEGIN
+    CREATE INDEX [IX_Bans_CreatedAt] ON [Bans] ([CreatedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015110256_Bans'
+)
+BEGIN
+    CREATE INDEX [IX_Bans_NationalId] ON [Bans] ([NationalId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015110256_Bans'
+)
+BEGIN
+    CREATE INDEX [IX_Bans_UserId] ON [Bans] ([UserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261015110256_Bans'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261015110256_Bans', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
