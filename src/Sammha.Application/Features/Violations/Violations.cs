@@ -473,7 +473,8 @@ public class FestivalHandlers(IAppDbContext db, Access access, TimeProvider cloc
     public async Task<List<FestivalDto>> Handle(ListFestivalsQuery q, CancellationToken ct)
     {
         var u = await access.StaffAsync(ct);
-        if (!await access.CanAsync(u, Permissions.SettingsManage, ct) && !await access.CanAsync(u, Permissions.ViolationsManage, ct) && !await access.CanAsync(u, Permissions.ViolationsView, ct))
+        if (!await access.CanAsync(u, Permissions.SettingsManage, ct) && !await access.CanAsync(u, Permissions.ViolationsManage, ct) && !await access.CanAsync(u, Permissions.ViolationsView, ct)
+            && !await access.CanAsync(u, Permissions.ExemptionsView, ct) && !await access.CanAsync(u, Permissions.ExemptionsManage, ct))
             throw DomainException.Forbidden($"ليست لديك صلاحية «{Permissions.Label(Permissions.ViolationsView)}»، تواصل مع مدير النظام");
         var x = db.Festivals.AsNoTracking();
         if (q.ActiveOnly) x = x.Where(f => f.Active);
