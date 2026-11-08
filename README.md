@@ -99,6 +99,7 @@ dotnet run --project src/Sammha.Api
 | `Payments:Simulate` / `MoyasarSecretKey` / `WebhookSecret` | الدفع عبر ميسّر |
 | `Otp:FixedCode` / `Otp:AllowFixedCode` | حاليًا الرمز ثابت (4321) مؤقتًا. عند ربط مزود SMS على خادم المنظمة: احذف `FixedCode` واجعل `AllowFixedCode` = false واضبط `Integrations:SmsWebhookUrl`؛ الخادم يرفض التشغيل برمز ثابت خارج التطوير ما لم يُسمح صراحة |
 | `Integrations:*` | روابط n8n: الإشعارات، الرسائل، إيميلات الشكاوى، الفواتير |
+| `Assistant:ApiKey` | مساعد الواتساب للموظفين (n8n): مفتاح عشوائي طوله 32 حرفًا فأكثر (`openssl rand -hex 32`) يُرسله n8n في ترويسة `X-Assistant-Key` لـ `POST /api/assistant/ask`. فارغ = الخدمة مقفلة (404). للقراءة فقط، وكل إجابة محدودة بصلاحيات الموظف صاحب الرقم المسجل في حسابه |
 | `Platform:*` | قواعد الأعمال: الضمان، والسعر الافتتاحي، والعمولات، والمدد، والنسب |
 
 في متغيرات البيئة يُستبدل `:` بـ `__`، مثل `Jwt__Key`.

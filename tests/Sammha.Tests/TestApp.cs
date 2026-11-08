@@ -32,6 +32,7 @@ public class TestApp : WebApplicationFactory<Program>
         b.UseSetting("RateLimit:CheckPerMinute", "100000");
         b.UseSetting("RateLimit:RefreshPerMinute", "100000");
         b.UseSetting("Payments:Simulate", "true");
+        b.UseSetting("Assistant:ApiKey", "test-assistant-key-0123456789-abcdefghij");
         // the scenarios were written for small round amounts; production uses the old platform's 500 raise and 3000 منقية opening
         b.UseSetting("Platform:MinIncrement", "10");
         b.UseSetting("Platform:ManqiyaOpeningPrice", "50");

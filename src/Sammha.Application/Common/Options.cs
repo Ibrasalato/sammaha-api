@@ -66,3 +66,10 @@ public class CamelRegistryOptions
     public bool Enabled { get; set; }
     public string BaseUrl { get; set; } = "";
 }
+
+/// <summary>Section "Assistant": the staff WhatsApp assistant (n8n). Off until a long random ApiKey is set.</summary>
+public class AssistantOptions
+{
+    public string? ApiKey { get; set; }
+    public bool Enabled => (ApiKey?.Length ?? 0) >= 32;
+}

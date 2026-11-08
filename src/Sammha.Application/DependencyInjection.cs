@@ -15,6 +15,7 @@ public static class DependencyInjection
         s.Configure<IntegrationOptions>(cfg.GetSection("Integrations"));
         s.Configure<PaymentOptions>(cfg.GetSection("Payments"));
         s.Configure<CamelRegistryOptions>(cfg.GetSection("CamelRegistry"));
+        s.Configure<AssistantOptions>(cfg.GetSection("Assistant"));
         s.AddSingleton(TimeProvider.System);
 
         s.AddScoped<Access>();
