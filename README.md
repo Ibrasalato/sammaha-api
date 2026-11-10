@@ -96,6 +96,7 @@ dotnet run --project src/Sammha.Api
 | `Jwt:Key` | مفتاح توقيع الدخول، **32 حرفًا على الأقل** |
 | `SuperAdmin:InitialPassword` | كلمة مرور أول دخول لحساب `ibrasalato@gmail.com` |
 | `Cors:Origins` | نطاقات الواجهة المسموحة |
+| `Cors:AllowApp` | افتراضيًا true: يسمح بأصل تطبيق الجوال (`https://localhost` أندرويد و`capacitor://localhost` iOS) للـ API فقط؛ لا يدخل في عناوين الرجوع بعد الدفع |
 | `Payments:Simulate` / `MoyasarSecretKey` / `WebhookSecret` | الدفع عبر ميسّر |
 | `Otp:FixedCode` / `Otp:AllowFixedCode` | حاليًا الرمز ثابت (4321) مؤقتًا. عند ربط مزود SMS على خادم المنظمة: احذف `FixedCode` واجعل `AllowFixedCode` = false واضبط `Integrations:SmsWebhookUrl`؛ الخادم يرفض التشغيل برمز ثابت خارج التطوير ما لم يُسمح صراحة |
 | `Integrations:*` | روابط n8n: الإشعارات، الرسائل، إيميلات الشكاوى، الفواتير |

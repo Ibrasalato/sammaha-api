@@ -93,6 +93,8 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("admin", p => p.RequireRole(Roles.Admin));
 
 var origins = cfg.GetSection("Cors:Origins").Get<string[]>() ?? ["https://ibrasalato.github.io", "http://localhost:5173", "http://localhost:4173"];
+// the mobile app (Capacitor WebView): https://localhost on Android, capacitor://localhost on iOS. CORS only: payment returns still go through Cors:Origins
+if (cfg.GetValue("Cors:AllowApp", true)) origins = [.. origins, "https://localhost", "capacitor://localhost"];
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 builder.Services.AddRateLimiter(o =>
